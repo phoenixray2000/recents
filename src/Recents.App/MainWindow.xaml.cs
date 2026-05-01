@@ -30,13 +30,14 @@ public partial class MainWindow : Window
         Hide();
     }
 
-    private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    private void MinimizeBtn_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+    private void MaximizeBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (e.ButtonState == MouseButtonState.Pressed)
-        {
-            DragMove();
-        }
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
     }
+
+    private void CloseBtn_Click(object sender, RoutedEventArgs e) => Close();
 
     // 处理全局快捷键：Esc 隐藏，Ctrl+F 聚焦搜索，Enter 打开等
     private void Window_PreviewKeyDown(object sender, WpfKeyEventArgs e)

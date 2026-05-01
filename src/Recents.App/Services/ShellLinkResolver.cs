@@ -25,8 +25,13 @@ public static class ShellLinkResolver
 
             var target = string.Empty;
 
-            // 优先尝试读取本地路径
-            if (shortcut.LinkInfo?.LocalBasePath != null)
+            // 优先从 IDList 中获取（它使用 Unicode 解析，能够避免在 .NET Core 下 GBK/ANSI 路径乱码问题）
+            if (shortcut.LinkTargetIDList != null && !string.IsNullOrWhiteSpace(shortcut.LinkTargetIDList.Path))
+            {
+                target = shortcut.LinkTargetIDList.Path;
+            }
+            // 降级尝试读取 LinkInfo 本地路径
+            else if (shortcut.LinkInfo?.LocalBasePath != null)
             {
                 target = shortcut.LinkInfo.LocalBasePath;
                 if (!string.IsNullOrEmpty(shortcut.LinkInfo.CommonPathSuffix))

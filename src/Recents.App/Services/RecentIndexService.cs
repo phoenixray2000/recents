@@ -168,8 +168,8 @@ public class RecentIndexService : IDisposable
                 }
                 else
                 {
-                    // 合并：SourceKinds 位 OR，RecentTime 取 max
                     var changed = false;
+                    var recentTimeChanged = false;
 
                     if ((existing.Item.Sources & incoming.Sources) != incoming.Sources)
                     {
@@ -180,6 +180,7 @@ public class RecentIndexService : IDisposable
                     {
                         existing.Item.RecentTime = incoming.RecentTime;
                         changed = true;
+                        recentTimeChanged = true;
                     }
                     if (incoming.SizeBytes.HasValue && existing.Item.SizeBytes != incoming.SizeBytes)
                     {
@@ -198,7 +199,7 @@ public class RecentIndexService : IDisposable
                         System.Windows.Application.Current?.Dispatcher.BeginInvoke(
                             () => existing.Refresh());
                         // 如果 RecentTime 变了，重新排序（简单策略：移到顶部）
-                        if (incoming.RecentTime > existing.Item.RecentTime)
+                        if (recentTimeChanged)
                             ReSortToTop(existing);
                     }
                 }
