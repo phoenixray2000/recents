@@ -8,7 +8,7 @@ namespace Recents.App.Services;
 
 // PRD §6.1 全局热键服务
 // 用 P/Invoke RegisterHotKey / UnregisterHotKey 注册全局快捷键，
-// 注册失败时按候选链回退：Ctrl+Alt+R → Win+; → Ctrl+Shift+Space → Ctrl+Alt+Space。
+// 注册失败时按候选链回退：Alt+Shift+Z → Win+; → Ctrl+Shift+Space → Ctrl+Alt+Space。
 // 全部失败时记 Error 日志，触发 RegistrationFailed 事件（供 TrayService 显示气泡）。
 public sealed partial class HotkeyService : ObservableObject, IDisposable
 {
@@ -41,7 +41,6 @@ public sealed partial class HotkeyService : ObservableObject, IDisposable
     private static readonly (uint Mod, uint Vk, string Label)[] Candidates =
     {
         (MOD_ALT     | MOD_SHIFT | MOD_NOREPEAT, 0x5A,         "Alt+Shift+Z"), // VK_Z = 0x5A
-        (MOD_CONTROL | MOD_ALT   | MOD_NOREPEAT, VK_R,         "Ctrl+Alt+R"),
         (MOD_WIN     | MOD_NOREPEAT,              VK_SEMICOLON, "Win+;"),
         (MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, VK_SPACE,     "Ctrl+Shift+Space"),
     };

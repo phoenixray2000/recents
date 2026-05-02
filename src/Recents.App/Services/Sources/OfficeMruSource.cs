@@ -9,9 +9,15 @@ namespace Recents.App.Services.Sources;
 // PRD §6.9 Office MRU (Registry) 数据源。
 public class OfficeMruSource : IRecentSource, IDisposable
 {
+    private readonly AppSettings _settings;
     private readonly SimpleSubject<RecentChange> _subject = new();
     public string Name => "Office MRU";
     public SourceKinds Kind => SourceKinds.OfficeMru;
+    
+    public OfficeMruSource(AppSettings settings)
+    {
+        _settings = settings;
+    }
 
     public async Task InitialScanAsync(CancellationToken ct)
     {
@@ -53,11 +59,13 @@ public class OfficeMruSource : IRecentSource, IDisposable
 
                                     if (string.IsNullOrEmpty(filePath)) continue;
 
+                                    var extension = Path.GetExtension(filePath).ToLowerInvariant();
                                     var item = new RecentItem
                                     {
                                         NormalizedPath = PathNormalizer.Normalize(filePath),
                                         DisplayName = Path.GetFileName(filePath),
-                                        Extension = Path.GetExtension(filePath),
+                                        Extension = extension,
+                                        ClassificationSource = FileTypeClassifier.Classify(extension, false, _settings.ClassificationSourceGroups),
                                         RecentTime = DateTime.UtcNow,
                                         Sources = SourceKinds.OfficeMru,
                                         IsFolder = false,

@@ -202,13 +202,13 @@ public ImageSource? Icon
 
 ## 三、新增需求实施 (New Requirements)
 
-### ❌ Task-N1：侧边栏重命名与逻辑调整
+### ❌ Task-N1：侧边栏与主视图逻辑调整
 1.  **UI**: 将 `All` 改为 `All Files` (MainWindow.xaml)。
-2.  **Logic**: `MainViewModel.FilterItem` 中，当分类为 `All Files` 时，`if (vm.Item.IsFolder) return false;`。
+2.  **Logic**: `MainViewModel.FilterItem` 中，当分类为 `All Files` 时，`if (vm.Item.IsFolder) return false;` (确保该视图仅显示文件)。
 
 ### ❌ Task-N2：默认热键变更
 1.  **Config**: `AppSettings.cs` 中 `Hotkey` 默认值改为 `Alt+Shift+Z`。
-2.  **Implementation**: 确保 `HotkeyService` 首次加载时正确注册。
+2.  **Implementation**: 确保 `HotkeyService` 首次加载时优先尝试 `Alt+Shift+Z`。
 
 ### ❌ Task-N3：快捷键录制功能 (Recording Mode)
 1.  **UI**: 在 `SettingsWindow.xaml` 中，点击快捷键输入框时进入“录制”状态。
@@ -287,7 +287,7 @@ XAML 控件：Toggle（ToggleSwitch 或 CheckBox）+ 说明文字
 [ObservableProperty] private string _recordingHotkey; // 录制中的热键文本
 
 [RelayCommand] private void StartRecording();  // 进入录制模式
-[RelayCommand] private void ResetHotkey();     // 重置为默认 Ctrl+Alt+R
+[RelayCommand] private void ResetHotkey();     // 重置为默认 Alt+Shift+Z
 ```
 
 XAML：Label 显示当前热键；KeyCapture TextBox（拦截 KeyDown 事件组合，禁止单独的 Modifier 键）；"Reset" 按钮  
@@ -784,17 +784,6 @@ public event Action? OpenRequested;
 
 ---
 
-### Session 4：Jump List L2 数据源（约 2h）
-
-| 步骤 | 改动摘要 |
-|---|---|
-| 4.1 | `Recents.App.csproj` 添加 `OpenMcdf` NuGet 引用 |
-| 4.2 | `ShellLinkResolver.cs` 添加 `ResolveFromBytes(byte[])` 重载 |
-| 4.3 | `JumpListSource.cs` 完整实现：扫描 + OLECF 解析 + Watch + 错误处理 |
-| 4.4 | `App.cs` `StartSources()` 中加入 `JumpListSource` |
-| 4.5 | 测试：VS Code / Chrome / Edge 最近文件出现在列表 |
-
-**验收：** IDE / 浏览器的最近文件（通过 Jump List）出现在 Recents 列表中；单文件解析失败不影响整体。
 
 ---
 
@@ -832,10 +821,9 @@ public event Action? OpenRequested;
 | `SettingsWindow.xaml.cs` | | F-01 | |
 | `SettingsViewModel.cs` | | F-01 | |
 | `SourcesViewModel.cs` | | F-01-C | |
-| `JumpListSource.cs` | | F-07 | |
 | `OfficeMruSource.cs` | | F-08 | |
 | `OpenSavePidlMruSource.cs` | | F-09 | |
-| `ShellLinkResolver.cs` | | F-07（ResolveFromBytes） | |
+| `ShellLinkResolver.cs` | | | |
 | | | | `Converters/MidEllipsisConverter.cs` |
 | | | | `SettingsWindowSingleton.cs` |
 
@@ -855,7 +843,7 @@ public event Action? OpenRequested;
 - [ ] 窗口 1040×760，最小 760×520，调整大小有效
 - [ ] 搜索框呼出后自动聚焦
 - [ ] 热键 Badge 显示实际注册的热键（非硬编码）
-- [ ] 侧边栏：All / Favorites / Recent Folders / Documents / Images / Code 全部可见可用
+- [ ] 侧边栏：All Files / Favorites / Recent Folders / Documents / Images / Code 全部可见可用
 - [ ] Settings 导航项（设置页实现后显示，无则不显示）
 - [ ] Filter Chip 与侧边栏可叠加过滤
 - [ ] 排序下拉默认"Newest first"，切换后立即生效
@@ -891,7 +879,7 @@ public event Action? OpenRequested;
 - [ ] ↑↓：列表导航
 
 ### 热键
-- [ ] `Ctrl+Alt+R`：呼出/隐藏主窗口
+- [ ] `Alt+Shift+Z`：呼出/隐藏主窗口
 - [ ] 注册失败时自动尝试候选链
 - [ ] 所有候选失败：托盘气泡提示
 
@@ -918,6 +906,5 @@ public event Action? OpenRequested;
 - [ ] Downloads/Desktop/Documents/Pictures/Videos/Music 文件被索引
 - [ ] 文件保存后 2 秒内出现在列表顶部
 - [ ] Recent .lnk 解析的真实文件出现在列表
-- [ ] Jump List（IDE/浏览器等应用）文件出现在列表
 - [ ] 收藏状态跨重启保持
 - [ ] Rebuild index：清空后重新扫描，状态栏切 Indexing 再切 Ready

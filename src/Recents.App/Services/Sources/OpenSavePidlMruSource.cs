@@ -11,9 +11,15 @@ namespace Recents.App.Services.Sources;
 // PRD §6.10 OpenSavePidlMRU (Registry) 数据源。
 public class OpenSavePidlMruSource : IRecentSource, IDisposable
 {
+    private readonly AppSettings _settings;
     private readonly SimpleSubject<RecentChange> _subject = new();
     public string Name => "Open/Save Dialog MRU";
     public SourceKinds Kind => SourceKinds.OpenSavePidlMru;
+    
+    public OpenSavePidlMruSource(AppSettings settings)
+    {
+        _settings = settings;
+    }
 
     public async Task InitialScanAsync(CancellationToken ct)
     {
@@ -40,14 +46,17 @@ public class OpenSavePidlMruSource : IRecentSource, IDisposable
                         var path = GetPathFromPidl(data);
                         if (string.IsNullOrEmpty(path)) continue;
 
+                        var ext = Path.GetExtension(path).ToLowerInvariant();
+                        var isDir = Directory.Exists(path);
                         var item = new RecentItem
                         {
                             NormalizedPath = PathNormalizer.Normalize(path),
                             DisplayName = Path.GetFileName(path),
-                            Extension = Path.GetExtension(path),
+                            Extension = ext,
+                            ClassificationSource = FileTypeClassifier.Classify(ext, isDir, _settings.ClassificationSourceGroups),
                             RecentTime = DateTime.UtcNow,
                             Sources = SourceKinds.OpenSavePidlMru,
-                            IsFolder = Directory.Exists(path),
+                            IsFolder = isDir,
                             Exists = ExistsState.Unknown
                         };
                         _subject.OnNext(new RecentChange(RecentChangeKind.Added, item));

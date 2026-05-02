@@ -64,7 +64,7 @@ public partial class App : WpfApp
                 () => RestartSourcesAsync(rebuildIndex: false));
 
             mainWindow.SourceInitialized += (s, ev) => _hotkey.Initialize(mainWindow);
-            _hotkey.HotkeyPressed += mainWindow.ShowAndFocus;
+            _hotkey.HotkeyPressed += mainWindow.ToggleVisibility;
             _hotkey.RegistrationFailed += msg => _tray?.ShowBalloon("Hotkey conflict", msg, System.Windows.Forms.ToolTipIcon.Error);
             _singleInstance.ShowWindowRequested += () => Dispatcher.Invoke(mainWindow.ShowAndFocus);
 
@@ -139,9 +139,9 @@ public partial class App : WpfApp
         if (IsSystemSourceEnabled(SourceKinds.RecentLnk))
             _sources.Add(new RecentLnkSource(new SourceConfig { Enabled = true, RecentLookbackDays = 30 }, _settings.Current));
         if (IsSystemSourceEnabled(SourceKinds.OfficeMru))
-            _sources.Add(new OfficeMruSource());
+            _sources.Add(new OfficeMruSource(_settings.Current));
         if (IsSystemSourceEnabled(SourceKinds.OpenSavePidlMru))
-            _sources.Add(new OpenSavePidlMruSource());
+            _sources.Add(new OpenSavePidlMruSource(_settings.Current));
     }
 
     private bool IsSystemSourceEnabled(SourceKinds kind) =>

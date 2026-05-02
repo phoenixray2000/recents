@@ -157,10 +157,6 @@
                 <RadioButton Content="All Files" IsChecked="True" Style="{StaticResource SidebarNavItem}" Tag="&#xE8B9;" Checked="Nav_Checked"/>
                 <RadioButton Content="Favorites" Style="{StaticResource SidebarNavItem}" Tag="&#xE734;" Checked="Nav_Checked"/>
                 <RadioButton Content="Recent Folders" Style="{StaticResource SidebarNavItem}" Tag="&#xE8B7;" Checked="Nav_Checked"/>
-                <Separator Background="{StaticResource BorderMuted}" Margin="16,10" Height="1"/>
-                <RadioButton Content="Documents" Style="{StaticResource SidebarNavItem}" Tag="&#xE8A5;" Checked="Nav_Checked"/>
-                <RadioButton Content="Images" Style="{StaticResource SidebarNavItem}" Tag="&#xEB9F;" Checked="Nav_Checked"/>
-                <RadioButton Content="Code" Style="{StaticResource SidebarNavItem}" Tag="&#xE943;" Checked="Nav_Checked"/>
             </StackPanel>
 
             <!-- Footer Settings -->
@@ -235,6 +231,7 @@
                     <RadioButton Content="Images" Style="{StaticResource FilterPill}" Tag="Images" Checked="Chip_Checked"/>
                     <RadioButton Content="Code" Style="{StaticResource FilterPill}" Tag="Code" Checked="Chip_Checked"/>
                     <RadioButton Content="Folders" Style="{StaticResource FilterPill}" Tag="Folders" Checked="Chip_Checked"/>
+
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Background="Transparent" BorderThickness="0" Padding="8,4" Foreground="{StaticResource TextSecondary}">

@@ -104,7 +104,17 @@ public partial class RecentItemViewModel : ObservableObject
             _ = Task.Run(async () =>
             {
                 await _probeService.ProbeAsync(Item);
-                System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => Refresh());
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+                {
+                    if (Item.Exists == ExistsState.Missing)
+                    {
+                        _ = _indexService.RemoveAsync(Item.NormalizedPath);
+                    }
+                    else
+                    {
+                        Refresh();
+                    }
+                });
             });
         }
     }

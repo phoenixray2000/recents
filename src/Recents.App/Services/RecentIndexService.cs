@@ -60,9 +60,10 @@ public class RecentIndexService : IDisposable
                     _repo.Upsert(item);
                 }
 
-                if (item.Exists == ExistsState.Missing)
+                if (item.Exists == ExistsState.Missing || item.IsHidden)
                 {
-                    _repo.Delete(item.NormalizedPath);
+                    if (item.Exists == ExistsState.Missing)
+                        _repo.Delete(item.NormalizedPath);
                     continue;
                 }
 
@@ -99,8 +100,8 @@ public class RecentIndexService : IDisposable
                 return;
         }
 
-        // Missing items are never shown; stale MRU entries are removed from the index.
-        if (incoming.Exists == ExistsState.Missing)
+        // Missing or Hidden items are never shown; stale entries are removed from the index.
+        if (incoming.Exists == ExistsState.Missing || incoming.IsHidden)
         {
             await RemoveAsync(incoming.NormalizedPath);
             return;

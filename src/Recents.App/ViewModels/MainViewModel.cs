@@ -144,22 +144,7 @@ public partial class MainViewModel : ObservableObject
     {
         if (obj is not RecentItemViewModel vm) return false;
 
-        // 1. 侧边栏导航过滤 (NavCategory)
-        if (CurrentNavCategory == "Folders")
-        {
-            if (!vm.Item.IsFolder) return false;
-        }
-        else if (CurrentNavCategory == "Favorites")
-        {
-            if (!vm.Item.IsFavorite) return false;
-        }
-        else if (CurrentNavCategory == "All")
-        {
-            // All Files 仅显示文件 (PRD §17)
-            if (vm.Item.IsFolder) return false;
-        }
-
-        // 2. 顶部 Chip 类型过滤 (ChipFilter)
+        // 1. 顶部 Chip 类型过滤 (ChipFilter) - 优先级高，明确用户意图
         if (CurrentChipFilter != "All")
         {
             if (CurrentChipFilter == "Folders")
@@ -172,6 +157,25 @@ public partial class MainViewModel : ObservableObject
                 if (vm.Item.IsFolder) return false;
                 if (vm.Item.ClassificationSource != CurrentChipFilter) return false;
             }
+        }
+        else
+        {
+            // Chip 为 All 时，遵循侧边栏导航规则
+            if (CurrentNavCategory == "Folders")
+            {
+                if (!vm.Item.IsFolder) return false;
+            }
+            else if (CurrentNavCategory == "All")
+            {
+                // All Files 默认仅显示文件 (PRD §17)
+                if (vm.Item.IsFolder) return false;
+            }
+        }
+
+        // 2. 收藏过滤（如果是收藏视图，必须满足收藏状态）
+        if (CurrentNavCategory == "Favorites")
+        {
+            if (!vm.Item.IsFavorite) return false;
         }
 
         // 搜索逻辑

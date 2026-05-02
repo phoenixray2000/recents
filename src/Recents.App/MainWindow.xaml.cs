@@ -210,6 +210,18 @@ public partial class MainWindow : Window
         SearchBox.Focus();
         SearchBox.SelectAll();
     }
+
+    public void ToggleVisibility()
+    {
+        if (IsVisible && IsActive)
+        {
+            Hide();
+        }
+        else
+        {
+            ShowAndFocus();
+        }
+    }
     private void Nav_Checked(object sender, RoutedEventArgs e)
     {
         if (_viewModel == null) return;
