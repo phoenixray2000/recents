@@ -60,6 +60,13 @@ public class RecentIndexService : IDisposable
                     _repo.Upsert(item);
                 }
 
+                // A8. 排除扩展名过滤
+                if (_settingsService.Current.ExcludedExtensions.Any(ext => item.NormalizedPath.EndsWith(ext, StringComparison.OrdinalIgnoreCase)))
+                {
+                    _repo.Delete(item.NormalizedPath);
+                    continue;
+                }
+
                 if (item.Exists == ExistsState.Missing || item.IsHidden)
                 {
                     if (item.Exists == ExistsState.Missing)
@@ -99,6 +106,10 @@ public class RecentIndexService : IDisposable
                 incoming.NormalizedPath.EndsWith(@"\" + excluded, StringComparison.OrdinalIgnoreCase))
                 return;
         }
+
+        // A8. 排除扩展名过滤
+        if (_settingsService.Current.ExcludedExtensions.Any(ext => incoming.NormalizedPath.EndsWith(ext, StringComparison.OrdinalIgnoreCase)))
+            return;
 
         // Missing or Hidden items are never shown; stale entries are removed from the index.
         if (incoming.Exists == ExistsState.Missing || incoming.IsHidden)
@@ -161,8 +172,30 @@ public class RecentIndexService : IDisposable
                             ReSortToTop(existing);
                     }
                 }
+                
+                Prune();
             }
         }).ConfigureAwait(false);
+    }
+
+    private void Prune()
+    {
+        var max = _settingsService.Current.MaxRecentItems;
+        if (Items.Count <= max) return;
+
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+        {
+            lock (_mergeLock)
+            {
+                while (Items.Count > max)
+                {
+                    var oldest = Items.Last();
+                    Items.RemoveAt(Items.Count - 1);
+                    _index.Remove(oldest.Item.NormalizedPath);
+                    // 我们不从 DB 删，只从内存删，保证启动时依然按 LIMIT 加载
+                }
+            }
+        });
     }
 
     // FileSystemWatcher.Deleted 时调用
@@ -194,6 +227,21 @@ public class RecentIndexService : IDisposable
                 vm.Item.IsFavorite = isFavorite;
                 _repo.Upsert(vm.Item);
                 System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => vm.Refresh());
+            }
+        }).ConfigureAwait(false);
+    }
+
+    public async Task HideItemAsync(string normalizedPath)
+    {
+        await Task.Run(() =>
+        {
+            lock (_mergeLock)
+            {
+                if (!_index.TryGetValue(normalizedPath, out var vm)) return;
+                vm.Item.IsHidden = true;
+                _repo.Upsert(vm.Item);
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => Items.Remove(vm));
+                _index.Remove(normalizedPath);
             }
         }).ConfigureAwait(false);
     }

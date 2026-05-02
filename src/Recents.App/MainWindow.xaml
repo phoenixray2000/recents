@@ -5,6 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="clr-namespace:Recents.App.ViewModels"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        xmlns:utils="clr-namespace:Recents.App.Utils"
         mc:Ignorable="d"
         Title="Recents" Height="760" Width="1040" MinHeight="520" MinWidth="760"
         WindowStartupLocation="CenterScreen" 
@@ -21,6 +22,8 @@
     </shell:WindowChrome.WindowChrome>
 
     <Window.Resources>
+        <utils:EnumToBooleanConverter x:Key="EnumToBooleanConverter" />
+
         <!-- ListBoxItem Style -->
         <Style TargetType="ListBoxItem">
             <Setter Property="Background" Value="Transparent" />
@@ -31,12 +34,14 @@
                 <Setter.Value>
                     <ContextMenu>
                         <MenuItem Header="Open" Command="{Binding OpenCommand}"/>
+                        <MenuItem Header="Open With..." Command="{Binding OpenWithCommand}"/>
                         <MenuItem Header="Reveal in Explorer" Command="{Binding RevealCommand}"/>
                         <Separator/>
                         <MenuItem Header="Copy Full Path" Command="{Binding CopyPathCommand}"/>
                         <MenuItem Header="Copy File Name" Command="{Binding CopyFileNameCommand}"/>
                         <Separator/>
                         <MenuItem Header="Pin/Unpin" Command="{Binding TogglePinCommand}"/>
+                        <MenuItem Header="Hide from list" Command="{Binding HideFromListCommand}"/>
                         <Separator/>
                         <MenuItem Header="Remove Once" Command="{Binding RemoveOnceCommand}"/>
                     </ContextMenu>
@@ -88,7 +93,7 @@
 
         <!-- Modern ScrollBar Style -->
         <Style TargetType="ScrollBar">
-            <Setter Property="Width" Value="8" />
+            <Setter Property="Width" Value="10" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Template">
@@ -103,19 +108,13 @@
                                                 <Setter Property="Template">
                                                     <Setter.Value>
                                                         <ControlTemplate TargetType="Thumb">
-                                                            <Border Background="{StaticResource BgCard}" CornerRadius="4" Margin="2,0" />
+                                                            <Border Background="{StaticResource TextTertiary}" CornerRadius="5" Margin="2,0" Opacity="0.5" />
                                                         </ControlTemplate>
                                                     </Setter.Value>
                                                 </Setter>
                                                 <Style.Triggers>
                                                     <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter Property="Template">
-                                                            <Setter.Value>
-                                                                <ControlTemplate TargetType="Thumb">
-                                                                    <Border Background="{StaticResource RowHover}" CornerRadius="4" Margin="1,0" />
-                                                                </ControlTemplate>
-                                                            </Setter.Value>
-                                                        </Setter>
+                                                        <Setter Property="Opacity" Value="0.8" />
                                                     </Trigger>
                                                 </Style.Triggers>
                                             </Style>
@@ -174,7 +173,21 @@
             </Grid.RowDefinitions>
 
             <!-- Custom Title Bar Controls -->
-            <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Right">
+            <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Right" shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                <!-- Density Toggle -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
+                    <RadioButton Style="{StaticResource FilterPill}" Padding="8,4" Margin="2,0" Tag="Standard" 
+                                 IsChecked="{Binding CurrentDensity, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Standard}"
+                                 ToolTip="标准视图 (详细)" Click="Density_Click">
+                        <TextBlock Text="&#xEF2F;" FontFamily="Segoe Fluent Icons" FontSize="14"/>
+                    </RadioButton>
+                    <RadioButton Style="{StaticResource FilterPill}" Padding="8,4" Margin="2,0" Tag="Compact"
+                                 IsChecked="{Binding CurrentDensity, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Compact}"
+                                 ToolTip="紧凑视图 (极简)" Click="Density_Click">
+                        <TextBlock Text="&#xE8EF;" FontFamily="Segoe Fluent Icons" FontSize="14"/>
+                    </RadioButton>
+                </StackPanel>
+
                 <Button Content="&#xE921;" Style="{StaticResource WindowControlBtn}" Click="MinimizeBtn_Click"/>
                 <Button Content="&#xE922;" Style="{StaticResource WindowControlBtn}" Click="MaximizeBtn_Click"/>
                 <Button Content="&#xE8BB;" Click="CloseBtn_Click">
@@ -291,8 +304,13 @@
                          ItemsSource="{Binding ItemsView}"
                          VirtualizingPanel.IsVirtualizing="True"
                          VirtualizingPanel.VirtualizationMode="Recycling"
+                         VirtualizingPanel.ScrollUnit="Pixel"
+                         VirtualizingPanel.CacheLengthUnit="Item"
+                         VirtualizingPanel.CacheLength="10,10"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto"
                          MouseDoubleClick="ItemsList_MouseDoubleClick"
+                         PreviewMouseWheel="ItemsList_PreviewMouseWheel"
                          MouseMove="ItemsList_MouseMove">
                     <ListBox.Style>
                         <Style TargetType="ListBox">
@@ -324,25 +342,27 @@
                             <Grid.ContextMenu>
                                 <ContextMenu>
                                     <MenuItem Header="Open" Command="{Binding OpenCommand}"/>
+                                    <MenuItem Header="Open With..." Command="{Binding OpenWithCommand}"/>
                                     <MenuItem Header="Reveal in Explorer" Command="{Binding RevealCommand}"/>
                                     <Separator/>
                                     <MenuItem Header="Copy Full Path" Command="{Binding CopyPathCommand}"/>
                                     <MenuItem Header="Copy File Name" Command="{Binding CopyFileNameCommand}"/>
                                     <Separator/>
                                     <MenuItem Header="Pin/Unpin" Command="{Binding TogglePinCommand}"/>
+                                    <MenuItem Header="Hide from list" Command="{Binding HideFromListCommand}"/>
                                     <Separator/>
                                     <MenuItem Header="Remove Once" Command="{Binding RemoveOnceCommand}"/>
                                 </ContextMenu>
                             </Grid.ContextMenu>
 
                             <!-- File Icon -->
-                            <Image Grid.Column="0" Source="{Binding Icon}" Width="40" Height="40" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                            <Image Grid.Column="0" Source="{Binding Icon}" Width="40" Height="40" VerticalAlignment="Center" Margin="0,0,16,0" x:Name="FileIcon"/>
 
                             <!-- File Info -->
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                 <!-- 第一行：文件名 + 类型徽章 -->
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource TextPrimary}" TextTrimming="CharacterEllipsis" MaxWidth="320"/>
+                                    <TextBlock x:Name="NameText" Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource TextPrimary}" TextTrimming="CharacterEllipsis" MaxWidth="320"/>
                                     <!-- PRD §6.7 文件类型徽章：仅当 ClassificationSource 非 Other 且非文件夹时显示 -->
                                     <Border CornerRadius="4" Background="{StaticResource AccentBlue}"
                                             Padding="5,1" Margin="6,0,0,0" VerticalAlignment="Center"
@@ -350,7 +370,7 @@
                                         <TextBlock Text="{Binding ClassificationSource}" FontSize="10" Foreground="White" FontWeight="SemiBold"/>
                                     </Border>
                                 </StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                <StackPanel x:Name="DetailsStack" Orientation="Horizontal" Margin="0,2,0,0">
                                     <TextBlock Text="{Binding RecentTimeDisplay}" FontSize="11" Foreground="{StaticResource TextSecondary}" Margin="0,0,12,0"/>
                                     <TextBlock Text="{Binding SizeDisplay}" FontSize="11" Foreground="{StaticResource TextSecondary}" Margin="0,0,12,0"/>
                                     <TextBlock Text="{Binding DisplayPathShort}" ToolTip="{Binding DisplayPath}" FontSize="11" Foreground="{StaticResource TextTertiary}" TextTrimming="CharacterEllipsis"/>
@@ -402,6 +422,18 @@
                                 </Button>
                             </StackPanel>
                         </Grid>
+                        <DataTemplate.Triggers>
+                            <!-- Compact View Triggers -->
+                            <DataTrigger Binding="{Binding DataContext.CurrentDensity, RelativeSource={RelativeSource AncestorType=ListBox}}" Value="Compact">
+                                <Setter TargetName="ItemGrid" Property="Margin" Value="4,0"/>
+                                <Setter TargetName="FileIcon" Property="Width" Value="24"/>
+                                <Setter TargetName="FileIcon" Property="Height" Value="24"/>
+                                <Setter TargetName="FileIcon" Property="Margin" Value="0,0,12,0"/>
+                                <Setter TargetName="FileIcon" Property="Source" Value="{Binding SmallIcon}"/>
+                                <Setter TargetName="NameText" Property="FontSize" Value="12"/>
+                                <Setter TargetName="DetailsStack" Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                        </DataTemplate.Triggers>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>

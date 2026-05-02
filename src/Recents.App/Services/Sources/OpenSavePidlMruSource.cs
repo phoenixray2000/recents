@@ -48,16 +48,20 @@ public class OpenSavePidlMruSource : IRecentSource, IDisposable
 
                         var ext = Path.GetExtension(path).ToLowerInvariant();
                         var isDir = Directory.Exists(path);
+                        var exists = isDir ? Directory.Exists(path) : File.Exists(path);
+                        if (!exists) continue; // A9. 不存在的文件不显示
+
+                        var lwt = File.GetLastWriteTime(path);
                         var item = new RecentItem
                         {
                             NormalizedPath = PathNormalizer.Normalize(path),
                             DisplayName = Path.GetFileName(path),
                             Extension = ext,
                             ClassificationSource = FileTypeClassifier.Classify(ext, isDir, _settings.ClassificationSourceGroups),
-                            RecentTime = DateTime.UtcNow,
+                            RecentTime = lwt,
                             Sources = SourceKinds.OpenSavePidlMru,
                             IsFolder = isDir,
-                            Exists = ExistsState.Unknown
+                            Exists = ExistsState.Found
                         };
                         _subject.OnNext(new RecentChange(RecentChangeKind.Added, item));
                     }

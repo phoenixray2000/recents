@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Recents.App.Models;
 using Recents.App.Services;
 
 namespace Recents.App.ViewModels;
@@ -37,6 +38,9 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     private string _currentChipFilter = "All";
+
+    [ObservableProperty]
+    private AppSettings.ViewDensity _currentDensity = AppSettings.ViewDensity.Standard;
 
     [ObservableProperty]
     private bool _hasItems = true;

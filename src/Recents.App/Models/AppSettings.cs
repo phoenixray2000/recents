@@ -5,6 +5,12 @@ namespace Recents.App.Models;
 // PRD §8.3 全量应用设置，序列化到 %APPDATA%\Recents\settings.json
 public class AppSettings
 {
+    public enum ViewDensity
+    {
+        Standard,
+        Compact
+    }
+
     // General
     public bool LaunchAtStartup   { get; set; } = false;
     public bool AlwaysOnTop       { get; set; } = true;
@@ -13,6 +19,7 @@ public class AppSettings
     public bool ShowFolders       { get; set; } = true;
     public int  MaxRecentItems    { get; set; } = 200;
     public string DefaultSort     { get; set; } = "RecentTime";
+    public ViewDensity CurrentDensity { get; set; } = ViewDensity.Standard;
 
     // Hotkey（字符串表示，格式 "Ctrl+Alt+R"）
     public string Hotkey { get; set; } = "Alt+Shift+Z";

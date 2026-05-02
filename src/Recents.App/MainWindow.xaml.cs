@@ -9,6 +9,7 @@ using WpfKeyEventArgs = System.Windows.Input.KeyEventArgs;
 using WpfMouseEventArgs = System.Windows.Input.MouseEventArgs;
 using Recents.App.Services;
 using Recents.App.ViewModels;
+using Recents.App.Models;
 using Serilog;
 
 namespace Recents.App;
@@ -38,6 +39,7 @@ public partial class MainWindow : Window
         _restartSourcesAsync = restartSourcesAsync;
         DataContext = _viewModel;
         Topmost = _settings.Current.AlwaysOnTop;
+        _viewModel.CurrentDensity = _settings.Current.CurrentDensity;
         UpdateResponsiveLayout();
         
         // 首次显示时自动聚焦
@@ -168,6 +170,38 @@ public partial class MainWindow : Window
     private void ItemsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
         TryOpenSelectedItem();
+    }
+
+    private void ItemsList_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (sender is System.Windows.Controls.ListBox lb)
+        {
+            var scrollViewer = FindChild<ScrollViewer>(lb);
+            if (scrollViewer != null)
+            {
+                // 降低滚动速度（灵敏度系数 0.4），并实现平滑偏移
+                double delta = e.Delta * 0.4;
+                double newOffset = scrollViewer.VerticalOffset - delta;
+
+                if (newOffset < 0) newOffset = 0;
+                if (newOffset > scrollViewer.ScrollableHeight) newOffset = scrollViewer.ScrollableHeight;
+
+                scrollViewer.ScrollToVerticalOffset(newOffset);
+                e.Handled = true;
+            }
+        }
+    }
+
+    private static T? FindChild<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T t) return t;
+            var result = FindChild<T>(child);
+            if (result != null) return result;
+        }
+        return null;
     }
 
     private void TryOpenSelectedItem()
@@ -304,6 +338,19 @@ public partial class MainWindow : Window
             }
         }
     }
+    private void Density_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.RadioButton rb && rb.Tag is string densityStr)
+        {
+            if (Enum.TryParse<AppSettings.ViewDensity>(densityStr, out var density))
+            {
+                _viewModel.CurrentDensity = density;
+                _settings.Current.CurrentDensity = density;
+                _settings.Save();
+            }
+        }
+    }
+
     private void MoreButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement fe)

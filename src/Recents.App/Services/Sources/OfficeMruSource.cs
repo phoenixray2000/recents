@@ -60,16 +60,19 @@ public class OfficeMruSource : IRecentSource, IDisposable
                                     if (string.IsNullOrEmpty(filePath)) continue;
 
                                     var extension = Path.GetExtension(filePath).ToLowerInvariant();
+                                    if (!File.Exists(filePath)) continue; // A9. 不存在的文件不显示
+                                    var lwt = File.GetLastWriteTime(filePath);
+
                                     var item = new RecentItem
                                     {
                                         NormalizedPath = PathNormalizer.Normalize(filePath),
                                         DisplayName = Path.GetFileName(filePath),
                                         Extension = extension,
                                         ClassificationSource = FileTypeClassifier.Classify(extension, false, _settings.ClassificationSourceGroups),
-                                        RecentTime = DateTime.UtcNow,
+                                        RecentTime = lwt,
                                         Sources = SourceKinds.OfficeMru,
                                         IsFolder = false,
-                                        Exists = ExistsState.Unknown
+                                        Exists = ExistsState.Found
                                     };
                                     _subject.OnNext(new RecentChange(RecentChangeKind.Added, item));
                                 }

@@ -51,15 +51,22 @@ public partial class RecentItemViewModel : ObservableObject
             if (!_iconLoaded)
             {
                 _iconLoaded = true;
-                Task.Run(() => FileIconService.GetIcon(Item.NormalizedPath, Item.IsFolder, true))
-                    .ContinueWith(t =>
+                Task.Run(() => 
+                {
+                    // P1: 尝试获取缩略图 (PRD §6.12)
+                    var thumb = ShellService.GetThumbnail(Item.NormalizedPath, 256, 256);
+                    if (thumb != null) return thumb;
+                    
+                    return FileIconService.GetIcon(Item.NormalizedPath, Item.IsFolder, true);
+                })
+                .ContinueWith(t =>
+                {
+                    if (t.IsCompletedSuccessfully)
                     {
-                        if (t.IsCompletedSuccessfully)
-                        {
-                            _icon = t.Result;
-                            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => OnPropertyChanged(nameof(Icon)));
-                        }
-                    }, TaskScheduler.Default);
+                        _icon = t.Result;
+                        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => OnPropertyChanged(nameof(Icon)));
+                    }
+                }, TaskScheduler.Default);
             }
             return _icon;
         }
@@ -72,15 +79,22 @@ public partial class RecentItemViewModel : ObservableObject
             if (!_smallIconLoaded)
             {
                 _smallIconLoaded = true;
-                Task.Run(() => FileIconService.GetIcon(Item.NormalizedPath, Item.IsFolder, false))
-                    .ContinueWith(t =>
+                Task.Run(() => 
+                {
+                    // P1: 小图优先使用系统图标以保证清晰度，或使用小尺寸缩略图
+                    var thumb = ShellService.GetThumbnail(Item.NormalizedPath, 48, 48);
+                    if (thumb != null) return thumb;
+
+                    return FileIconService.GetIcon(Item.NormalizedPath, Item.IsFolder, false);
+                })
+                .ContinueWith(t =>
+                {
+                    if (t.IsCompletedSuccessfully)
                     {
-                        if (t.IsCompletedSuccessfully)
-                        {
-                            _smallIcon = t.Result;
-                            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => OnPropertyChanged(nameof(SmallIcon)));
-                        }
-                    }, TaskScheduler.Default);
+                        _smallIcon = t.Result;
+                        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => OnPropertyChanged(nameof(SmallIcon)));
+                    }
+                }, TaskScheduler.Default);
             }
             return _smallIcon;
         }
@@ -127,6 +141,9 @@ public partial class RecentItemViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanActionExecute))]
     private void Reveal() => FileActionService.RevealInExplorer(Item.NormalizedPath);
 
+    [RelayCommand(CanExecute = nameof(CanActionExecute))]
+    private void OpenWith() => ShellService.ShowOpenWithDialog(Item.NormalizedPath);
+
     private bool CanActionExecute() => !IsMissing;
 
     [RelayCommand]
@@ -134,6 +151,12 @@ public partial class RecentItemViewModel : ObservableObject
     {
         Item.IsFavorite = !Item.IsFavorite;
         await _indexService.UpdateFavoriteAsync(Item.NormalizedPath, Item.IsFavorite);
+    }
+
+    [RelayCommand]
+    private async Task HideFromList()
+    {
+        await _indexService.HideItemAsync(Item.NormalizedPath);
     }
 
     [RelayCommand]
