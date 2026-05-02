@@ -108,6 +108,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _settingsPath = string.Empty;
     [ObservableProperty] private string _dataPath = string.Empty;
     [ObservableProperty] private string _logPath = string.Empty;
+    [ObservableProperty] private string _statusMessage = "Ready";
 
     partial void OnLaunchAtStartupChanged(bool value)
     {
@@ -210,10 +211,19 @@ public partial class SettingsViewModel : ObservableObject
 
     private void Save() => _settings.Save();
 
-    private void SaveAndNotify()
+    private async void SaveAndNotify()
     {
         Save();
         SettingsChanged?.Invoke();
+        
+        StatusMessage = "Settings saved";
+        try 
+        {
+            await Task.Delay(2000);
+            if (StatusMessage == "Settings saved")
+                StatusMessage = "Ready";
+        }
+        catch { /* Ignore if task cancelled or other issues */ }
     }
 
     private SystemSourceInfo MakeSystemSource(SourceKinds kind, string name, string location)
