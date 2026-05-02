@@ -3,9 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:src="clr-namespace:Recents.App.Services.Sources"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
-        Title="Recents - Settings"
-        Height="660" Width="860"
-        MinHeight="560" MinWidth="760"
+        Title="Settings" Height="540" Width="700" MinHeight="480" MinWidth="600"
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource BgWindow}"
         Foreground="{StaticResource TextPrimary}"
@@ -269,36 +267,17 @@
     </Window.Resources>
 
     <Border BorderBrush="{StaticResource AccentBlue}" BorderThickness="1" Background="{StaticResource BgMain}">
-    <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="220"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
-
-        <Grid Grid.Column="0" Background="{StaticResource BgWindow}">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="60"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0">
-                <Image Width="20" Height="20" Source="pack://application:,,,/Recents;component/Resources/Icons/AppIcon.ico" Margin="0,0,12,0" RenderOptions.BitmapScalingMode="HighQuality"/>
-                <TextBlock Text="Settings" FontWeight="Bold" FontSize="16" VerticalAlignment="Center"/>
-            </StackPanel>
-        </Grid>
-
-        <Grid Grid.Column="1" Background="{StaticResource BgMain}">
+        <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="40"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
+            <!-- Title Bar Area -->
             <Grid Grid.Row="0" Background="{StaticResource BgTitleBar}">
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="24,0,0,0">
-                    <TextBlock Text="Recents Settings" Foreground="{StaticResource TextSecondary}" FontSize="12"/>
-                    <Separator Width="1" Height="12" Background="{StaticResource BorderMuted}" Margin="12,0"/>
-                    <TextBlock Text="{Binding StatusMessage}" Foreground="{StaticResource AccentBlue}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                </StackPanel>
+                <TextBlock Text="{Binding StatusMessage}" Foreground="{StaticResource AccentBlue}" 
+                           FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Margin="24,0"/>
+                
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Content="&#xE8BB;" Click="CloseBtn_Click" ToolTip="Close settings">
                         <Button.Style>
@@ -315,17 +294,19 @@
                 </StackPanel>
             </Grid>
 
-            <TabControl Grid.Row="1" Grid.ColumnSpan="2" TabStripPlacement="Left" Margin="-220,0,0,0" Background="{StaticResource BgMain}">
+            <!-- Main Content Area -->
+            <TabControl Grid.Row="1" TabStripPlacement="Left" Background="{StaticResource BgMain}" BorderThickness="0">
                 <TabControl.Resources>
                     <Style TargetType="TabItem" BasedOn="{StaticResource SettingsTabItem}"/>
                     <Style TargetType="TabPanel">
-                        <Setter Property="Width" Value="220"/>
+                        <Setter Property="Width" Value="180"/>
+                        <Setter Property="Background" Value="{StaticResource BgSidebar}"/>
                     </Style>
                 </TabControl.Resources>
 
                 <TabItem Header="General">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{StaticResource BgMain}">
-                        <StackPanel Margin="244,24,24,24">
+                        <StackPanel Margin="32,24">
                             <TextBlock Text="General" Style="{StaticResource SectionTitle}"/>
                             <CheckBox Content="Launch at startup" IsChecked="{Binding LaunchAtStartup}"/>
                             <CheckBox Content="Start minimized" IsChecked="{Binding StartMinimized}"/>
@@ -339,7 +320,7 @@
 
                 <TabItem Header="Hotkey">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{StaticResource BgMain}">
-                        <StackPanel Margin="244,24,24,24" MaxWidth="560" HorizontalAlignment="Left">
+                        <StackPanel Margin="32,24" MaxWidth="560" HorizontalAlignment="Left">
                             <TextBlock Text="Hotkey" Style="{StaticResource SectionTitle}"/>
                             <TextBlock Text="Current hotkey" Style="{StaticResource FieldLabel}"/>
                             <TextBox Text="{Binding Hotkey, UpdateSourceTrigger=PropertyChanged}" 
@@ -356,7 +337,7 @@
 
                 <TabItem Header="Sources">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{StaticResource BgMain}">
-                        <StackPanel Margin="244,24,24,24">
+                        <StackPanel Margin="32,24">
                             <TextBlock Text="Sources" Style="{StaticResource SectionTitle}"/>
                             <TextBlock Text="System sources" Style="{StaticResource FieldLabel}"/>
                             <ItemsControl ItemsSource="{Binding SystemSources}" Margin="0,0,0,20">
@@ -388,14 +369,15 @@
                             <ItemsControl ItemsSource="{Binding KnownSources}" Margin="0,0,0,20">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type src:SourceConfig}">
-                                        <CheckBox Content="{Binding DisplayName}" IsChecked="{Binding Enabled}"
-                                                  Command="{Binding DataContext.SaveSourcesCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                        <CheckBox Content="{Binding DisplayName}" IsChecked="{Binding Enabled}" 
+                                                  Command="{Binding DataContext.SaveSourcesCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                  Margin="0,0,0,8"/>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
 
                             <TextBlock Text="Custom paths" Style="{StaticResource FieldLabel}"/>
-                            <ItemsControl ItemsSource="{Binding CustomSources}">
+                            <ItemsControl ItemsSource="{Binding CustomSources}" Margin="0,0,0,12">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type src:SourceConfig}">
                                         <Border Background="{StaticResource BgCard}" BorderBrush="{StaticResource BorderMuted}"
@@ -422,9 +404,9 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                                <Button Content="Add Folder..." Command="{Binding AddFolderCommand}" Style="{StaticResource PrimarySettingsButton}"/>
-                                <Button Content="Add Network Path..." Command="{Binding AddNetworkPathCommand}" Style="{StaticResource SettingsButton}"/>
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="Add folder" Command="{Binding AddFolderCommand}" Style="{StaticResource PrimarySettingsButton}"/>
+                                <Button Content="Add network path" Command="{Binding AddNetworkPathCommand}" Style="{StaticResource SettingsButton}"/>
                             </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
@@ -432,22 +414,24 @@
 
                 <TabItem Header="List">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{StaticResource BgMain}">
-                        <StackPanel Margin="244,24,24,24" MaxWidth="560" HorizontalAlignment="Left">
+                        <StackPanel Margin="32,24" MaxWidth="560" HorizontalAlignment="Left">
                             <TextBlock Text="List" Style="{StaticResource SectionTitle}"/>
                             <TextBlock Text="Max recent items" Style="{StaticResource FieldLabel}"/>
                             <ComboBox ItemsSource="{Binding MaxRecentItemOptions}" SelectedItem="{Binding MaxRecentItems}"
-                                      Width="180" HorizontalAlignment="Left" Margin="0,0,0,14"/>
-                            <CheckBox Content="Show folders" IsChecked="{Binding ShowFolders}"/>
-                            <TextBlock Text="Default sort" Style="{StaticResource FieldLabel}" Margin="0,18,0,6"/>
+                                      Style="{StaticResource PremiumComboBox}" Margin="0,0,0,14"/>
+                            
+                            <CheckBox Content="Show folders in list" IsChecked="{Binding ShowFolders}"/>
+                            
+                            <TextBlock Text="Default sort order" Style="{StaticResource FieldLabel}" Margin="0,18,0,6"/>
                             <ComboBox ItemsSource="{Binding SortOptions}" SelectedItem="{Binding DefaultSort}"
-                                      Width="240" HorizontalAlignment="Left"/>
+                                      Style="{StaticResource PremiumComboBox}"/>
                         </StackPanel>
                     </ScrollViewer>
                 </TabItem>
 
                 <TabItem Header="Filters">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{StaticResource BgMain}">
-                        <Grid Margin="244,24,24,24" MaxWidth="680" HorizontalAlignment="Left">
+                        <Grid Margin="32,24" MaxWidth="680" HorizontalAlignment="Left">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
@@ -473,12 +457,12 @@
 
                 <TabItem Header="Cache">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{StaticResource BgMain}">
-                        <StackPanel Margin="244,24,24,24">
+                        <StackPanel Margin="32,24">
                             <TextBlock Text="Cache" Style="{StaticResource SectionTitle}"/>
                             <StackPanel Orientation="Horizontal">
                                 <Button Content="Rebuild index" Command="{Binding RebuildIndexCommand}" Style="{StaticResource PrimarySettingsButton}"/>
-                                <Button Content="Clear icon cache" Command="{Binding ClearIconCacheCommand}" Style="{StaticResource SettingsButton}"/>
                                 <Button Content="Clear hidden items" Command="{Binding ClearHiddenItemsCommand}" Style="{StaticResource SettingsButton}"/>
+                                <Button Content="Clear icon cache" Command="{Binding ClearIconCacheCommand}" Style="{StaticResource SettingsButton}"/>
                             </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
@@ -486,7 +470,7 @@
 
                 <TabItem Header="About">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{StaticResource BgMain}">
-                        <StackPanel Margin="244,24,24,24" MaxWidth="680" HorizontalAlignment="Left">
+                        <StackPanel Margin="32,24" MaxWidth="680" HorizontalAlignment="Left">
                             <TextBlock Text="About" Style="{StaticResource SectionTitle}"/>
                             <TextBlock Text="{Binding Version, StringFormat=Version {0}}" Margin="0,0,0,16"/>
                             <TextBlock Text="Settings path" Style="{StaticResource FieldLabel}"/>
@@ -502,6 +486,5 @@
                 </TabItem>
             </TabControl>
         </Grid>
-    </Grid>
     </Border>
 </Window>
