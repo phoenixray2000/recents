@@ -9,6 +9,7 @@ namespace Recents.App.Services.Sources;
 public sealed class RecentLnkSource : IRecentSource, IDisposable
 {
     private readonly SourceConfig _config;
+    private readonly AppSettings _settings;
     private readonly SimpleSubject<RecentChange> _subject = new();
     private FileSystemWatcher? _watcher;
     private Debouncer? _debouncer;
@@ -16,9 +17,10 @@ public sealed class RecentLnkSource : IRecentSource, IDisposable
 
     public SourceKinds Kind => SourceKinds.RecentLnk;
 
-    public RecentLnkSource(SourceConfig config)
+    public RecentLnkSource(SourceConfig config, AppSettings settings)
     {
         _config    = config;
+        _settings  = settings;
         _recentDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), @"Microsoft\Windows\Recent");
     }
 
@@ -107,6 +109,13 @@ public sealed class RecentLnkSource : IRecentSource, IDisposable
         var normalized = PathNormalizer.Normalize(res.TargetPath);
         if (string.IsNullOrEmpty(normalized)) return;
 
+        // A6. 不展示 Recent 文件夹中的 .lnk 本体 (PRD §6.14)
+        if (normalized.StartsWith(_recentDir, StringComparison.OrdinalIgnoreCase) && 
+            normalized.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
         var isDir = Directory.Exists(res.TargetPath);
 
         var item = new RecentItem
@@ -114,7 +123,7 @@ public sealed class RecentLnkSource : IRecentSource, IDisposable
             NormalizedPath     = normalized,
             DisplayName        = Path.GetFileName(res.TargetPath),
             Extension          = isDir ? "" : Path.GetExtension(res.TargetPath).ToLowerInvariant(),
-            FileType           = "Other",
+            ClassificationSource = FileTypeClassifier.Classify(isDir ? "" : Path.GetExtension(res.TargetPath), isDir, _settings.ClassificationSourceGroups),
             IsFolder           = isDir,
             Exists             = isDir || File.Exists(res.TargetPath) ? ExistsState.Exists : ExistsState.Missing,
             Sources            = Kind,

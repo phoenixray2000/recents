@@ -32,13 +32,24 @@ public class AppSettings
         "$Recycle.Bin",
         "node_modules",
         ".git",
-        "__pycache__"
+        "__pycache__",
+        "bin",
+        "obj",
+        ".vs",
+        ".idea",
+        ".vscode",
+        "dist",
+        "target",
+        "build",
+        "out",
+        "artifacts",
+        "publish"
     };
     public List<string> ExcludedKeywords  { get; set; } = new();
     public List<string> WhitelistedPaths  { get; set; } = new();
 
     // 文件类型分组（key=分类名, value=扩展名列表）
-    public Dictionary<string, List<string>> FileTypeGroups { get; set; } = new()
+    public Dictionary<string, List<string>> ClassificationSourceGroups { get; set; } = new()
     {
         ["Documents"] = new() { ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".pdf", ".txt", ".md", ".rtf" },
         ["Images"]    = new() { ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".heic" },
@@ -51,4 +62,7 @@ public class AppSettings
 
     // 日志级别（false=默认截断路径, true=完整路径, PRD §12）
     public bool VerboseLogging { get; set; } = false;
+
+    // 是否已显示过“关闭到托盘”提示
+    public bool ClosedToTrayNoticeShown { get; set; } = false;
 }

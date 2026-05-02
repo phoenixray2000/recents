@@ -10,7 +10,7 @@ public class RecentItem
     // 扩展名（含 .，如 ".docx"；文件夹为空字符串）
     public string      Extension           { get; set; } = string.Empty;
     // 文件类型分类（"Documents" / "Images" / ... / "Other"）
-    public string      FileType            { get; set; } = "Other";
+    public string      ClassificationSource { get; set; } = "Other";
     // 最近操作时间：max(各来源时间)
     public DateTime    RecentTime          { get; set; }
     // 原文件 LastWriteTime（可空：文件夹/未知来源可能缺失）

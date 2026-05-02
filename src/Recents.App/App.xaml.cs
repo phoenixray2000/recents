@@ -14,6 +14,7 @@ public partial class App : WpfApp
     private RecentIndexService _index = null!;
     private HotkeyService _hotkey = null!;
     private TrayService _tray = null!;
+    private StatusHintService _statusHint = null!;
     private readonly List<IRecentSource> _sources = new();
 
     protected override void OnStartup(StartupEventArgs e)
@@ -44,16 +45,18 @@ public partial class App : WpfApp
         _settings.Load();
 
         // 4. 打开索引数据库 + 预加载内存
-        _index = new RecentIndexService();
+        _index = new RecentIndexService(_settings);
         _index.OpenDatabase();
         _index.LoadFromDatabase(_settings.Current.MaxRecentItems);
 
-        // 5. 构建主窗口 & ViewModel
-        var mainVm = new MainViewModel(_index);
-        var mainWindow = new MainWindow(mainVm);
-
-        // 6. 热键
+        // 5. 热键
         _hotkey = new HotkeyService();
+
+        // 6. 构建主窗口 & ViewModel
+        _statusHint = new StatusHintService();
+        var mainVm = new MainViewModel(_index, _hotkey, _statusHint);
+        var mainWindow = new MainWindow(mainVm, _settings, _tray);
+
         mainWindow.SourceInitialized += (s, ev) => _hotkey.Initialize(mainWindow);
         _hotkey.HotkeyPressed += mainWindow.ShowAndFocus;
         _hotkey.RegistrationFailed += msg => _tray?.ShowBalloon("热键冲突", msg, System.Windows.Forms.ToolTipIcon.Error);
@@ -82,11 +85,15 @@ public partial class App : WpfApp
             if (!config.Enabled) continue;
 
             if (config.Kind == Recents.App.Models.SourceKinds.KnownFolderWatch)
-                _sources.Add(new KnownFolderWatchSource(config));
+                _sources.Add(new KnownFolderWatchSource(config, _settings.Current));
+
+            // PRD §6.3.3 L1 用户自定义本地目录
+            if (config.Kind == Recents.App.Models.SourceKinds.UserFolderWatch)
+                _sources.Add(new UserFolderWatchSource(config, _settings.Current));
         }
 
         // 加上系统 Recent.lnk 源
-        _sources.Add(new RecentLnkSource(new Recents.App.Services.Sources.SourceConfig { Enabled = true, RecentLookbackDays = 30 }));
+        _sources.Add(new RecentLnkSource(new Recents.App.Services.Sources.SourceConfig { Enabled = true, RecentLookbackDays = 30 }, _settings.Current));
 
         // 异步初始扫描并订阅变更
         Task.Run(async () =>

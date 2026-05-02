@@ -33,12 +33,11 @@ public class TrayService : IDisposable
     private ContextMenuStrip CreateMenu()
     {
         var menu = new ContextMenuStrip();
-        menu.Items.Add("显示窗口", null, (s, e) => _mainWindow.ShowAndFocus());
-        menu.Items.Add("设置 (待实现)", null, (s, e) => { });
+        menu.Items.Add("Show", null, (s, e) => _mainWindow.ShowAndFocus());
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("重新扫描", null, (s, e) => _ = _indexService.RebuildAsync());
+        menu.Items.Add("Rescan", null, (s, e) => _ = _indexService.RebuildAsync());
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("退出", null, (s, e) =>
+        menu.Items.Add("Exit", null, (s, e) =>
         {
             _notifyIcon.Visible = false;
             Application.Current.Shutdown();

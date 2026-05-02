@@ -6,10 +6,10 @@
         xmlns:vm="clr-namespace:Recents.App.ViewModels"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         mc:Ignorable="d"
-        Title="RecentDock" Height="720" Width="960" MinHeight="600" MinWidth="800"
+        Title="Recents" Height="760" Width="1040" MinHeight="520" MinWidth="760"
         WindowStartupLocation="CenterScreen" 
-        Topmost="True" ShowInTaskbar="True"
-        Background="#121214" Foreground="#F8F9FA"
+        Topmost="True" ShowInTaskbar="False"
+        Background="{StaticResource BgMain}" Foreground="{StaticResource TextPrimary}"
         FontFamily="Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI"
         WindowStyle="None" AllowsTransparency="False"
         PreviewKeyDown="Window_PreviewKeyDown"
@@ -20,80 +20,6 @@
     </shell:WindowChrome.WindowChrome>
 
     <Window.Resources>
-        <!-- Color Palette (Refined for RecentDock Mockup) -->
-        <SolidColorBrush x:Key="BgSidebar" Color="#1C1C1E" />
-        <SolidColorBrush x:Key="BgMain" Color="#1C1C1E" />
-        <SolidColorBrush x:Key="BgCard" Color="#2C2C2E" />
-        <SolidColorBrush x:Key="BgInput" Color="#2C2C2E" />
-        <SolidColorBrush x:Key="AccentBlue" Color="#3B82F6" />
-        <SolidColorBrush x:Key="BorderMuted" Color="#38393F" />
-        <SolidColorBrush x:Key="TextPrimary" Color="#FFFFFF" />
-        <SolidColorBrush x:Key="TextSecondary" Color="#A1A1AA" />
-        <SolidColorBrush x:Key="TextTertiary" Color="#71717A" />
-
-        <!-- Sidebar Button Style -->
-        <Style x:Key="SidebarNavItem" TargetType="RadioButton">
-            <Setter Property="Height" Value="40" />
-            <Setter Property="Margin" Value="0,2" />
-            <Setter Property="Padding" Value="16,0" />
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
-            <Setter Property="BorderThickness" Value="3,0,0,0" />
-            <Setter Property="BorderBrush" Value="Transparent" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="RadioButton">
-                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="{TemplateBinding Padding}">
-                                <TextBlock Text="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" 
-                                           Foreground="{TemplateBinding Foreground}"
-                                           FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center" Margin="0,0,12,0"/>
-                                <ContentPresenter VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-            <Style.Triggers>
-                <Trigger Property="IsChecked" Value="True">
-                    <Setter Property="BorderBrush" Value="{StaticResource AccentBlue}" />
-                    <Setter Property="Background" Value="#1E2B3E" />
-                    <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
-                </Trigger>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#2C2C2E" />
-                    <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
-        <!-- Filter Pill Style -->
-        <Style x:Key="FilterPill" TargetType="RadioButton">
-            <Setter Property="Height" Value="28" />
-            <Setter Property="Padding" Value="12,0" />
-            <Setter Property="Margin" Value="0,0,8,0" />
-            <Setter Property="Background" Value="{StaticResource BgInput}" />
-            <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="RadioButton">
-                        <Border Background="{TemplateBinding Background}" CornerRadius="14">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-            <Style.Triggers>
-                <Trigger Property="IsChecked" Value="True">
-                    <Setter Property="Background" Value="{StaticResource AccentBlue}" />
-                    <Setter Property="Foreground" Value="White" />
-                </Trigger>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#38393F" />
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
         <!-- ListBoxItem Style -->
         <Style TargetType="ListBoxItem">
             <Setter Property="Background" Value="Transparent" />
@@ -108,11 +34,11 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="OuterBorder" Property="Background" Value="#25262B" />
+                                <Setter TargetName="OuterBorder" Property="Background" Value="{StaticResource RowHover}" />
                                 <Setter TargetName="OuterBorder" Property="BorderBrush" Value="{StaticResource BorderMuted}" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="OuterBorder" Property="Background" Value="#1E2B3E" />
+                                <Setter TargetName="OuterBorder" Property="Background" Value="{StaticResource RowSelected}" />
                                 <Setter TargetName="OuterBorder" Property="BorderBrush" Value="{StaticResource AccentBlue}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -139,7 +65,7 @@
             </Setter>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#2D2D2D" />
+                    <Setter Property="Background" Value="{StaticResource RowHover}" />
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -161,7 +87,7 @@
                                                 <Setter Property="Template">
                                                     <Setter.Value>
                                                         <ControlTemplate TargetType="Thumb">
-                                                            <Border Background="#3E3E42" CornerRadius="4" Margin="2,0" />
+                                                            <Border Background="{StaticResource BgCard}" CornerRadius="4" Margin="2,0" />
                                                         </ControlTemplate>
                                                     </Setter.Value>
                                                 </Setter>
@@ -170,7 +96,7 @@
                                                         <Setter Property="Template">
                                                             <Setter.Value>
                                                                 <ControlTemplate TargetType="Thumb">
-                                                                    <Border Background="#555555" CornerRadius="4" Margin="1,0" />
+                                                                    <Border Background="{StaticResource RowHover}" CornerRadius="4" Margin="1,0" />
                                                                 </ControlTemplate>
                                                             </Setter.Value>
                                                         </Setter>
@@ -207,22 +133,22 @@
                 <Border Width="24" Height="24" Background="{StaticResource AccentBlue}" CornerRadius="4" Margin="0,0,12,0">
                     <TextBlock Text="&#xEA37;" FontFamily="Segoe Fluent Icons" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
-                <TextBlock Text="RecentDock" FontWeight="Bold" FontSize="16" VerticalAlignment="Center"/>
+                <TextBlock Text="Recents" FontWeight="Bold" FontSize="16" VerticalAlignment="Center"/>
             </StackPanel>
 
             <!-- Nav Items -->
             <StackPanel Grid.Row="1" Margin="0,10">
-                <RadioButton Content="All" IsChecked="True" Style="{StaticResource SidebarNavItem}" Tag="&#xE8B9;"/>
-                <RadioButton Content="Favorites" Style="{StaticResource SidebarNavItem}" Tag="&#xE734;"/>
-                <RadioButton Content="Recent Folders" Style="{StaticResource SidebarNavItem}" Tag="&#xE8B7;"/>
+                <RadioButton Content="All" IsChecked="True" Style="{StaticResource SidebarNavItem}" Tag="&#xE8B9;" Checked="Nav_Checked"/>
+                <RadioButton Content="Favorites" Style="{StaticResource SidebarNavItem}" Tag="&#xE734;" Checked="Nav_Checked" Visibility="Collapsed"/> <!-- P1 -->
+                <RadioButton Content="Recent Folders" Style="{StaticResource SidebarNavItem}" Tag="&#xE8B7;" Checked="Nav_Checked"/>
                 <Separator Background="{StaticResource BorderMuted}" Margin="16,10" Height="1"/>
-                <RadioButton Content="Documents" Style="{StaticResource SidebarNavItem}" Tag="&#xE8A5;"/>
-                <RadioButton Content="Images" Style="{StaticResource SidebarNavItem}" Tag="&#xEB9F;"/>
-                <RadioButton Content="Code" Style="{StaticResource SidebarNavItem}" Tag="&#xE943;"/>
+                <RadioButton Content="Documents" Style="{StaticResource SidebarNavItem}" Tag="&#xE8A5;" Checked="Nav_Checked"/>
+                <RadioButton Content="Images" Style="{StaticResource SidebarNavItem}" Tag="&#xEB9F;" Checked="Nav_Checked"/>
+                <RadioButton Content="Code" Style="{StaticResource SidebarNavItem}" Tag="&#xE943;" Checked="Nav_Checked"/>
             </StackPanel>
 
             <!-- Footer Settings -->
-            <RadioButton Grid.Row="2" Content="Settings" Style="{StaticResource SidebarNavItem}" Tag="&#xE713;" Margin="0,0,0,20"/>
+            <RadioButton Grid.Row="2" Content="Settings" Style="{StaticResource SidebarNavItem}" Tag="&#xE713;" Margin="0,0,0,20" Visibility="Collapsed"/>
         </Grid>
 
         <!-- Main Content -->
@@ -244,7 +170,7 @@
                         <Style TargetType="Button" BasedOn="{StaticResource WindowControlBtn}">
                             <Style.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Background" Value="#E81123" />
+                                    <Setter Property="Background" Value="{StaticResource ColorDanger}" />
                                     <Setter Property="Foreground" Value="White" />
                                 </Trigger>
                             </Style.Triggers>
@@ -263,7 +189,7 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="&#xE721;" FontFamily="Segoe Fluent Icons" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{StaticResource TextTertiary}"/>
-                        <TextBox Grid.Column="1" Background="Transparent" BorderThickness="0" Foreground="White" VerticalContentAlignment="Center" FontSize="14" Padding="0,10"
+                        <TextBox Grid.Column="1" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextPrimary}" VerticalContentAlignment="Center" FontSize="14" Padding="0,10"
                                  Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                                  x:Name="SearchBox" KeyDown="SearchBox_KeyDown" />
                         <TextBlock Grid.Column="1" Text="Search recent files..." Foreground="{StaticResource TextTertiary}" VerticalAlignment="Center" IsHitTestVisible="False">
@@ -279,7 +205,7 @@
                             </TextBlock.Style>
                         </TextBlock>
                         <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="10,0">
-                            <TextBlock Text="Ctrl + Alt + R" Foreground="{StaticResource TextTertiary}" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <TextBlock Text="{Binding HotkeyDisplay}" Foreground="{StaticResource TextTertiary}" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -288,33 +214,74 @@
             <!-- Filter Area -->
             <Grid Grid.Row="2" Margin="24,0,24,10">
                 <StackPanel Orientation="Horizontal">
-                    <RadioButton Content="All" IsChecked="True" Style="{StaticResource FilterPill}"/>
-                    <RadioButton Content="Docs" Style="{StaticResource FilterPill}"/>
-                    <RadioButton Content="Images" Style="{StaticResource FilterPill}"/>
-                    <RadioButton Content="Code" Style="{StaticResource FilterPill}"/>
-                    <RadioButton Content="Folders" Style="{StaticResource FilterPill}"/>
+                    <RadioButton Content="All" IsChecked="True" Style="{StaticResource FilterPill}" Checked="Nav_Checked"/>
+                    <RadioButton Content="Docs" Style="{StaticResource FilterPill}" Tag="Documents" Checked="Nav_Checked"/>
+                    <RadioButton Content="Images" Style="{StaticResource FilterPill}" Checked="Nav_Checked"/>
+                    <RadioButton Content="Code" Style="{StaticResource FilterPill}" Checked="Nav_Checked"/>
+                    <RadioButton Content="Folders" Style="{StaticResource FilterPill}" Checked="Nav_Checked"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Background="Transparent" BorderThickness="0" Padding="8,4" Foreground="{StaticResource TextSecondary}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+                                <EventSetter Event="Click" Handler="SortButton_Click"/>
+                            </Style>
+                        </Button.Style>
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Newest first" FontSize="12" Margin="0,0,8,0"/>
+                            <TextBlock x:Name="SortLabel" Text="Recent Time" FontSize="12" Margin="0,0,8,0"/>
                             <TextBlock Text="&#xE70D;" FontFamily="Segoe Fluent Icons" FontSize="8" VerticalAlignment="Center"/>
                         </StackPanel>
+                        <Button.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Recent Time" Click="SortItem_Click" Tag="RecentTime"/>
+                                <MenuItem Header="Display Name" Click="SortItem_Click" Tag="DisplayName"/>
+                                <!-- P1: Size and File Type sorting options hidden -->
+                                <MenuItem Header="Size" Click="SortItem_Click" Tag="Size" Visibility="Collapsed"/>
+                                <MenuItem Header="Classification" Click="SortItem_Click" Tag="ClassificationSource" Visibility="Collapsed"/>
+                            </ContextMenu>
+                        </Button.ContextMenu>
                     </Button>
-                    <Button Content="&#xE8A9;" FontFamily="Segoe Fluent Icons" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextSecondary}" Margin="8,0,0,0"/>
+                    <Button Content="&#xE8A9;" FontFamily="Segoe Fluent Icons" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextSecondary}" Margin="8,0,0,0" Visibility="Collapsed"/>
                 </StackPanel>
             </Grid>
 
             <!-- List Area -->
-            <ListBox x:Name="ItemsList" Grid.Row="3" Background="Transparent" BorderThickness="0"
-                     ItemsSource="{Binding ItemsView}"
-                     VirtualizingPanel.IsVirtualizing="True"
-                     VirtualizingPanel.VirtualizationMode="Recycling"
-                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                     MouseDoubleClick="ItemsList_MouseDoubleClick"
-                     MouseMove="ItemsList_MouseMove">
-                <ListBox.ItemTemplate>
-                    <DataTemplate DataType="{x:Type vm:RecentItemViewModel}">
+            <Grid Grid.Row="3">
+                <!-- Empty State -->
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasItems}" Value="False">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+                    <TextBlock Text="&#xE9CE;" FontFamily="Segoe Fluent Icons" FontSize="48" Foreground="{StaticResource TextTertiary}" HorizontalAlignment="Center" Margin="0,0,0,16"/>
+                    <TextBlock Text="No recent items found" FontSize="14" Foreground="{StaticResource TextTertiary}" HorizontalAlignment="Center"/>
+                </StackPanel>
+
+                <ListBox x:Name="ItemsList" Background="Transparent" BorderThickness="0"
+                         SelectionMode="Extended"
+                         ItemsSource="{Binding ItemsView}"
+                         VirtualizingPanel.IsVirtualizing="True"
+                         VirtualizingPanel.VirtualizationMode="Recycling"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         MouseDoubleClick="ItemsList_MouseDoubleClick"
+                         MouseMove="ItemsList_MouseMove">
+                    <ListBox.Style>
+                        <Style TargetType="ListBox">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasItems}" Value="False">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ListBox.Style>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:RecentItemViewModel}">
                         <Grid Margin="4">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
@@ -322,14 +289,21 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
 
-                            <!-- File Icon Placeholder -->
-                            <Border Grid.Column="0" Width="40" Height="40" Background="{StaticResource BgInput}" CornerRadius="6" Margin="0,0,16,0">
-                                <TextBlock Text="📄" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
+                            <!-- File Icon -->
+                            <Image Grid.Column="0" Source="{Binding Icon}" Width="40" Height="40" VerticalAlignment="Center" Margin="0,0,16,0"/>
 
                             <!-- File Info -->
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource TextPrimary}" TextTrimming="CharacterEllipsis"/>
+                                <!-- 第一行：文件名 + 类型徽章 -->
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource TextPrimary}" TextTrimming="CharacterEllipsis" MaxWidth="320"/>
+                                    <!-- PRD §6.7 文件类型徽章：仅当 ClassificationSource 非 Other 且非文件夹时显示 -->
+                                    <Border CornerRadius="4" Background="{StaticResource AccentBlue}"
+                                            Padding="5,1" Margin="6,0,0,0" VerticalAlignment="Center"
+                                            Visibility="{Binding BadgeVisibility}">
+                                        <TextBlock Text="{Binding ClassificationSource}" FontSize="10" Foreground="White" FontWeight="SemiBold"/>
+                                    </Border>
+                                </StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
                                     <TextBlock Text="{Binding RecentTimeDisplay}" FontSize="11" Foreground="{StaticResource TextSecondary}" Margin="0,0,12,0"/>
                                     <TextBlock Text="{Binding SizeDisplay}" FontSize="11" Foreground="{StaticResource TextSecondary}" Margin="0,0,12,0"/>
@@ -337,42 +311,59 @@
                                 </StackPanel>
                             </StackPanel>
 
-                            <!-- Action Buttons (Mockup: Open Folder, Pin, More) -->
+                            <!-- Action Buttons (Open, Reveal, Pin, More) -->
                             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                                <Button Content="&#xED25;" FontFamily="Segoe Fluent Icons" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextTertiary}" Width="32" Height="32"/>
-                                <Button Content="&#xE718;" FontFamily="Segoe Fluent Icons" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextTertiary}" Width="32" Height="32"/>
-                                <Button Content="&#xE712;" FontFamily="Segoe Fluent Icons" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextTertiary}" Width="32" Height="32"/>
+                                <Button Content="&#xED25;" ToolTip="Open" Command="{Binding OpenCommand}" 
+                                        FontFamily="Segoe Fluent Icons" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextTertiary}" Width="32" Height="32"/>
+                                <Button Content="&#xE81D;" ToolTip="Reveal in Explorer" Command="{Binding RevealCommand}"
+                                        FontFamily="Segoe Fluent Icons" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextTertiary}" Width="32" Height="32"/>
+                                <Button Content="&#xE735;" ToolTip="Toggle Pin" Command="{Binding TogglePinCommand}"
+                                        FontFamily="Segoe Fluent Icons" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextTertiary}" Width="32" Height="32">
+                                    <Button.Style>
+                                        <Style TargetType="Button">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Item.IsFavorite}" Value="True">
+                                                    <Setter Property="Foreground" Value="{StaticResource AccentBlue}"/>
+                                                    <Setter Property="Content" Value="&#xE735;"/> <!-- Filled star? No, use different icons if needed -->
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                                <Button Content="&#xE712;" ToolTip="More Actions" Click="MoreButton_Click"
+                                        FontFamily="Segoe Fluent Icons" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextTertiary}" Width="32" Height="32">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Open" Command="{Binding OpenCommand}"/>
+                                            <MenuItem Header="Reveal in Explorer" Command="{Binding RevealCommand}"/>
+                                            <Separator/>
+                                            <MenuItem Header="Copy Full Path" Command="{Binding CopyPathCommand}"/>
+                                            <MenuItem Header="Copy File Name" Command="{Binding CopyFileNameCommand}"/>
+                                            <Separator/>
+                                            <MenuItem Header="Pin/Unpin" Command="{Binding TogglePinCommand}"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
                             </StackPanel>
                         </Grid>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
 
+            </Grid>
+            
             <!-- Status Bar -->
-            <Border Grid.Row="4" Background="#1C1C1E" BorderThickness="0,1,0,0" BorderBrush="{StaticResource BorderMuted}" Padding="20,0">
+            <Border Grid.Row="4" Background="{StaticResource BgCard}" BorderThickness="0,1,0,0" BorderBrush="{StaticResource BorderMuted}" Padding="20,0">
                 <Grid>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <Ellipse Width="8" Height="8" Fill="#40C057" Margin="0,0,8,0"/>
-                        <TextBlock Text="Ready" FontSize="12" Foreground="{StaticResource TextSecondary}" Margin="0,0,12,0"/>
+                        <Ellipse Width="8" Height="8" Fill="{Binding Status.StatusColor}" Margin="0,0,8,0"/>
+                        <TextBlock Text="{Binding Status.StatusText}" FontSize="12" Foreground="{StaticResource TextSecondary}" Margin="0,0,12,0"/>
                         <Separator Width="1" Height="12" Background="{StaticResource BorderMuted}" Margin="0,0,12,0"/>
-                        <TextBlock Text="128 items" FontSize="12" Foreground="{StaticResource TextTertiary}"/>
+                        <TextBlock Text="{Binding Status.ItemCount}" FontSize="12" Foreground="{StaticResource TextTertiary}"/>
                     </StackPanel>
                     
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                        <StackPanel Orientation="Horizontal" Margin="0,0,16,0">
-                            <TextBlock Text="&#xE74A;" FontFamily="Segoe Fluent Icons" FontSize="12" Foreground="{StaticResource TextTertiary}" Margin="0,0,4,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="Navigate" FontSize="11" Foreground="{StaticResource TextTertiary}"/>
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,16,0">
-                            <Border Background="{StaticResource BgInput}" Padding="4,1" CornerRadius="2" Margin="0,0,4,0">
-                                <TextBlock Text="Enter" FontSize="10" Foreground="{StaticResource TextSecondary}"/>
-                            </Border>
-                            <TextBlock Text="Open" FontSize="11" Foreground="{StaticResource TextTertiary}"/>
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE724;" FontFamily="Segoe Fluent Icons" FontSize="12" Foreground="{StaticResource TextTertiary}" Margin="0,0,4,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="Drag to share" FontSize="11" Foreground="{StaticResource TextTertiary}"/>
-                        </StackPanel>
+                        <TextBlock Text="{Binding Status.KeyboardHint}" FontSize="11" Foreground="{StaticResource TextTertiary}"/>
                     </StackPanel>
                 </Grid>
             </Border>

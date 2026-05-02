@@ -25,7 +25,7 @@ Recents。
 首版技术栈固定为：
 
 - 语言：C#
-- 运行时：.NET 8 LTS
+- 运行时：.NET 8+ (含 .NET 10)
 - UI：WPF
 - 平台：Windows 10 1903+ / Windows 11
 - 架构：单机本地应用，单实例
@@ -127,6 +127,7 @@ Recents。
 - 缓存机制（SQLite）
 - 设置页
 - 收藏文件 / 固定文件
+- 高保真主界面控件全部功能化（见 §5.0；未实现的按钮 / 图标不得显示）
 
 ### 4.2 首版不做
 
@@ -147,88 +148,288 @@ Recents。
 
 ---
 
-## 5. 信息架构
+## 5. 信息架构与主界面设计
 
-### 5.1 主窗口
+本节按最新高保真界面图更新，是主界面实现的唯一依据。生成图中的视觉风格可参考，但产品文本统一使用 **Recents**；不得把示例图里的 `RecentDock`、示例文件名、示例路径硬编码进程序。
 
-主窗口由以下区域组成：
+### 5.0 UI 功能完整性原则
 
-1. 标题栏
-2. 搜索区
-3. 左侧导航栏
-4. 文件列表区
-5. 文件行快捷操作区
-6. 底部状态栏
+任何出现在界面上的文字、图标、按钮、徽标、状态条、快捷键提示都必须满足以下规则：
 
-建议布局：
+- **有明确含义**：用户能从 Tooltip、状态栏或上下文菜单理解其作用。
+- **有真实数据**：文件行、数量、路径、时间、大小、热键、状态均来自运行时数据。
+- **有可执行动作**：按钮和菜单项必须绑定真实命令；暂未实现的功能不得显示。
+- **有禁用原因**：因 Missing、Unknown、权限不足等无法执行的动作可以禁用，但必须有 Tooltip 说明。
+- **无装饰性假图标**：导航图标、文件图标、操作图标均须对应真实视图、文件类型、命令或状态。
+- **无运行期硬编码样例**：运行版本中不得出现 `recent_files_windows_prd.md`、`Antigravity.exe`、`SalesContract.docx` 等示例文件名 / 路径 / 时间。开发期 Mock 数据允许，**ship 前必须清空**。
+- **图标只能来自系统真实图标**（`SHGetFileInfo` / `IShellItemImageFactory`）+ 项目内通用占位图标 + Segoe Fluent Icons 矢量图。任何二次重绘、AI 头像、风格化图标、按文件名 / 类型自动生成的卡通图标均不允许（详见 §7.6）。
+- **DPI / 显示器变化必须即时响应**：切换窗口大小、显示器、DPI 后，所有元素按 §7.2 / §7.6 即时缩放，不得出现错位、模糊或裁剪。
+- **未启用 ≠ 灰色禁用**：P0 阶段未实现的功能必须**完全不显示**对应的导航项 / 按钮 / 菜单项 / 排序选项，而不是显示一个灰色禁用控件。
 
-```text
-┌────────────────────────────────────┐
-│ Recents                       ⚙  × │
-├────────────────────────────────────┤
-│ Search by name / extension / path  │
-├──────┬─────────────────────────────┤
-│ ★    │  File item                  │
-│ 🕘   │  File item                  │
-│ 📁   │  File item                  │
-│ 📄   │  File item                  │
-│ 🖼   │  File item                  │
-│ 🎬   │  File item                  │
-│ ⚙    │  File item                  │
-├──────┴─────────────────────────────┤
-│ 200 items · sorted by recent time   │
-└────────────────────────────────────┘
-```
+### 5.1 主窗口结构
 
-### 5.2 左侧导航栏
-
-左侧导航项：
-
-- All Recent
-- Favorites
-- Recent Folders
-- Documents
-- Images
-- Videos
-- Audio
-- Archives
-- Code
-- Other
-- Settings
-
-导航项可以用图标展示，鼠标悬停时显示名称。
-
-### 5.3 文件列表项
-
-每个文件项展示：
-
-- 文件图标
-- 文件名
-- 所在路径
-- 最近时间
-- 文件大小
-- 文件类型
-- 是否收藏
-- 是否存在
-- 数据来源标记（小图标，可选展示）
-- 快捷操作按钮
-
-单行建议结构：
+主窗口采用暗色、圆角、双栏布局：
 
 ```text
-[icon] SalesContract.docx             [open] [pin]
-       D:\Work\Contracts
-       Modified: 2026-05-01 13:42 · 128 KB
+┌────────────────────────────────────────────────────────────────────┐
+│ [AppIcon] Recents                                      —  □  ×      │
+├──────────────┬─────────────────────────────────────────────────────┤
+│ Sidebar      │ Search recent files...                 Ctrl+Alt+R   │
+│              ├─────────────────────────────────────────────────────┤
+│ All          │ [All] [Docs] [Images] [Code] [Folders]  Newest first│
+│ Favorites    │                                                     │
+│ Recent Folders│ [icon] filename.ext             [Open][Reveal][Pin]│
+│ Documents    │        time · size · path                 [...]     │
+│ Images       │ [icon] filename.ext             [Open][Reveal][Pin]│
+│ Code         │        time · size · path                 [...]     │
+├──────────────┴─────────────────────────────────────────────────────┤
+│ ● Ready | 128 items                         ↑↓ Navigate Enter Open │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
-如果文件不存在：
+主窗口区域：
+
+| 区域 | 必须显示内容 | 功能要求 |
+|---|---|---|
+| 标题栏 | App 图标、`Recents`、窗口控制按钮 | App 图标只作为身份标识；窗口按钮必须可用 |
+| 搜索区 | 搜索框、当前全局快捷键 Badge | 搜索框自动聚焦；Badge 显示 `HotkeyService.ActiveLabel` 实际注册成功的快捷键 |
+| 左侧导航栏 | All、Favorites、Recent Folders、Documents、Images、Code（Settings 仅在已实现时显示） | 每项必须切换到真实视图或打开真实设置页 |
+| 筛选与排序区 | 文件类型 Chip、排序下拉 | Chip、排序切换必须立即影响列表；下拉只列已实现的排序 |
+| 文件列表区 | 最近文件 / 文件夹 | 列表虚拟化；不显示 Recent 文件夹中的 .lnk，显示真实目标 |
+| 行内快捷操作区 | Open、Reveal、Pin、More | 所有按钮作用于真实路径 |
+| 底部状态栏 | Source 状态、可见数量、键盘提示 | 状态和数量必须动态更新 |
+
+### 5.2 标题栏
+
+标题栏内容：
+
+- 左侧：App 图标 + `Recents`。
+- 右侧：最小化、最大化 / 还原、关闭。
+
+要求：
+- 标题栏支持拖动窗口，使用 `WindowChrome.CaptionHeight` + `IsHitTestVisibleInChrome` 配合：搜索框、热键 Badge、窗口控制按钮、行内按钮的命中区域必须屏蔽拖动。
+- 关闭按钮默认隐藏到托盘，不退出进程。
+- **第一次按关闭时**弹一次托盘气泡：`Recents 仍在托盘运行。可在设置中改为按关闭即退出。`，并写一条 `closed_to_tray_notice_shown=true` 到 settings.json，避免重复弹。
+- 真正退出只能通过托盘菜单 `Exit` 或设置中的退出动作。
+- 标题栏不得放置无功能的装饰按钮。
+- 标题文本必须是 `Recents`。**不允许**出现 `RecentDock` 或其他旧名称（包括 `Title="..."` 在 XAML 里也不允许）。
+
+### 5.3 搜索区
+
+搜索框占据主内容顶部，视觉上是圆角输入框。
+
+默认占位文案：
 
 ```text
-[icon] SalesContract.docx
-       File missing · original path: D:\Work\Contracts\SalesContract.docx
+Search recent files...
 ```
 
-不存在文件默认灰显，不默认隐藏；用户可在设置中选择隐藏不存在文件。
+要求：
+- 窗口呼出后自动聚焦搜索框。
+- 输入后实时过滤文件名、扩展名、路径。
+- 输入为空时显示当前视图的最近列表。
+- 搜索框左侧放大镜图标仅表示搜索语义，不可点击；如果要可点击，点击后必须聚焦输入框。
+- 搜索框右侧显示快捷键 Badge，**Badge 内容必须来自 `HotkeyService.ActiveLabel`**（不允许 XAML 内硬编码 `Ctrl + Alt + R`）。
+- 如果热键注册失败，Badge 显示 `Hotkey unavailable`，点击打开 Hotkey 设置（设置页未实现时弹托盘气泡说明）。
+- 有输入内容时显示清除按钮 `×`；点击后清空搜索并恢复列表。
+
+### 5.4 左侧导航栏
+
+左侧导航栏固定显示以下导航项；**未启用的项不得显示**（不显示 ≠ 灰色禁用）：
+
+| 项目 | 图标语义 | 作用 | 启用阶段 |
+|---|---|---|---|
+| All | 层叠 / 列表 | 显示所有最近文件和文件夹 | P0 |
+| Favorites | 星标 | 显示用户固定的文件和文件夹 | P0 |
+| Recent Folders | 文件夹 | 显示最近文件夹 | P0 |
+| Documents | 文档页 | 显示 Documents 类型文件 | P0 |
+| Images | 图片 | 显示 Images 类型文件 | P0 |
+| Code | 代码符号 | 显示 Code 类型文件 | P0 |
+| Settings | 齿轮 | 打开设置页 | **仅当设置页已实现时显示**；P0 不显示 |
+
+要求：
+- 当前选中项使用蓝色左侧指示条 + 深色圆角背景。
+- 每个导航项必须有 Tooltip，文本与上表一致。
+- `Favorites` 若无收藏，点击后显示空状态，不隐藏导航项。
+- `Videos`、`Audio`、`Archives`、`Other` 不在主导航常驻显示，避免主窗口拥挤；这些分类首版可仅通过搜索和扩展名规则覆盖。
+
+### 5.5 顶部筛选 Chip
+
+在主列表顶部显示轻量筛选 Chip：
+
+```text
+All | Docs | Images | Code | Folders
+```
+
+作用：在当前导航视图内做二次快速筛选。
+
+要求：
+- `All` 表示不叠加文件类型筛选。
+- `Docs` 映射到 Documents 类型。
+- `Images` 映射到 Images 类型。
+- `Code` 映射到 Code 类型。
+- `Folders` 只显示文件夹。
+- Chip 与左侧导航可叠加；例如左侧 `Favorites` + Chip `Docs` 表示收藏中的文档。
+- 当前 Chip 使用蓝色背景。
+- 没有匹配结果时显示空状态，不保留空白列表。
+
+### 5.6 排序与视图密度
+
+右上角排序下拉默认显示：
+
+```text
+Newest first
+```
+
+排序选项（**未实现的不得出现在下拉中**）：
+
+| 排序 | 含义 | 阶段 |
+|---|---|---|
+| Newest first | 按 `RecentTime` 倒序 | P0 |
+| Name A-Z | 按 `DisplayName` 升序 | P0 |
+| Oldest first | 按 `RecentTime` 正序 | P1 |
+| Size largest | 按 `SizeBytes` 倒序，Unknown size 排最后 | P1 |
+
+排序要求：
+- 切换后立即更新列表。
+- 当前排序写入配置。
+- 未实现的排序不允许出现在下拉中。
+
+视图密度（Comfortable 64px / Compact 52px）切换：**P0 不做，对应图标不显示**；P1 启用后必须 Tooltip `Toggle compact view` / `Toggle comfortable view`，点击立即生效，状态写入配置。
+
+### 5.7 文件列表项
+
+文件列表项采用单行卡片式布局，包含：
+
+```text
+[FileIcon] DisplayName                         [Open] [Reveal] [Pin] [More]
+           RecentTime · Size · NormalizedPath
+```
+
+字段要求：
+
+| 字段 | 显示规则 |
+|---|---|
+| FileIcon | 优先显示系统图标 / 缓存图标；加载前显示通用占位图标 |
+| DisplayName | 粗体；长文件名尾部省略；必须来自真实路径 |
+| RecentTime | 格式 `yyyy-MM-dd HH:mm`；来自融合后的 `RecentTime` |
+| Size | 文件显示大小；文件夹显示 `Folder`；Unknown 显示 `Unknown size` |
+| NormalizedPath | 中段省略；Tooltip 显示完整路径 |
+| Source 状态 | 默认不在行内显示；Tooltip 展开来源列表 |
+
+行内快捷按钮：
+
+| 图标 | Tooltip | 命令 | 禁用条件 |
+|---|---|---|---|
+| 打开箭头 | Open | 默认程序打开目标路径 | Missing / Unknown 且不可达 |
+| 文件夹 | Reveal in Explorer | Explorer 选中原文件或打开文件夹 | Missing |
+| 图钉 | Pin / Unpin favorite | 切换收藏状态 | 无 |
+| 三点 | More actions | 打开右键菜单 | 无 |
+
+多选交互：
+
+- `Ctrl + 点击`：切换单行选择。
+- `Shift + 点击`：选择从锚点到当前行的连续区间。
+- 多选时行内单项按钮（Open / Reveal / Pin）禁用，批量操作通过右键菜单或拖拽完成。
+- 多选状态下三点 More 仍可用，菜单内容自动切换为多选语义（如"打开全部 N 个"、"复制 N 条路径"）。
+
+要求：
+- 按钮作用于 `NormalizedPath`，不得作用于 `.lnk`。
+- 图钉蓝色表示 `IsFavorite = true`，灰色表示未收藏。
+- **三点 More 菜单内容引用 §6.10.1 「基础项」**；P0 阶段不显示 §6.10.2 「扩展项」。
+- 行内按钮可常显或悬停显示；若常显，视觉权重必须低于文件名。
+- 窄窗口下按 §7.2 隐藏 Reveal 与 Pin 时，三点 More **必须始终包含** Reveal 与 Pin / Unpin。
+
+### 5.8 选中、悬停与文件状态
+
+状态样式：
+
+| 状态 | UI 表现 |
+|---|---|
+| Hover | 行背景略亮，显示行内快捷按钮 |
+| Selected | 蓝色描边 + 深蓝半透明背景 |
+| Favorite | Pin 图标蓝色 |
+| Missing | 整行灰显，Open / Drag 禁用 |
+| Unknown | 路径 / 大小显示 Unknown，行略灰；Tooltip 说明未确认可达 |
+| Offline UNC | 行略灰；Tooltip 显示 `Network source disconnected` |
+
+要求：
+- Missing 与 Unknown 不得混用。
+- 选中态不改变列表排序。
+- 文件状态变化后必须刷新当前行，不重建整个列表。
+
+### 5.9 底部状态栏
+
+底部状态栏左侧显示索引状态和当前可见数量：
+
+```text
+● Ready | 128 items
+```
+
+状态文本：
+
+| 状态 | 文案 | 触发条件 |
+|---|---|---|
+| Ready | `Ready` | 所有启用数据源无阻塞错误 |
+| Indexing | `Indexing...` | 后台扫描或重建索引中 |
+| Watching | `Watching sources` | FileSystemWatcher 正常运行 |
+| Partial | `Some sources unavailable` | 某些源失败或 UNC 断开 |
+| Error | `Action failed` | 最近一次用户动作失败 |
+
+要求：
+- 绿色点表示 Ready / Watching。
+- 黄色点表示 Partial / Indexing。
+- 红色点表示 Error。
+- `128 items` 必须是当前过滤后可见数量，不是数据库总量。
+
+底部状态栏右侧显示键盘提示：
+
+```text
+↑↓ Navigate   Enter Open   Drag to share
+```
+
+要求：
+- 键盘提示必须与当前焦点上下文一致。
+- 没有选中文件时不显示 `Enter Open`。
+- 当前项不可拖拽时不显示 `Drag to share`。
+- 文案不得写死；由 `StatusHintService` 根据状态输出。
+
+### 5.10 空状态、加载态、错误态
+
+空状态：
+
+```text
+No recent files found
+Try changing filters or rebuilding the index.
+```
+
+加载态：
+
+```text
+Indexing recent files...
+```
+
+错误态示例：
+
+```text
+Some sources are unavailable
+Open Settings to review source status.
+```
+
+要求：
+- 空状态按钮最多两个：`Clear filters`、`Rebuild index`。`Rebuild index` 点击后**无需确认对话框**，直接后台执行并把状态栏切到 Indexing。
+- 错误态必须可点击进入 Settings → Sources（设置页未启用时降级为 Tooltip 列出具体故障源）。
+- 不得用无意义插画占据主要空间。
+
+### 5.11 主界面功能验收标准
+
+- 界面中所有示例文字必须替换为真实数据或本节规定文案。
+- 界面中所有图标必须有 Tooltip。
+- 点击任一可见按钮必须产生正确动作或明确错误提示。
+- 任何未实现功能不得出现在主界面。
+- 任何禁用按钮必须说明原因。
+- **`.lnk` 不展示是系统硬规则**：`%APPDATA%\Microsoft\Windows\Recent` 下的 `.lnk` 仅作为解析来源，不直接进入文件列表；只有当用户索引到的**真实文件本身**就是 `.lnk` 文件（例如桌面上的某个 `xxx.lnk` 用户当文档使用），才作为文件项展示。该规则**不能被用户黑名单 / 白名单 / 排除扩展名规则关闭**（与 §6.14 用户排除规则的优先级对比见 §6.14）。
+- **项目自身的 `bin\Debug` / `bin\Release` / `obj\` 输出文件**默认排除，不允许出现在列表中。
 
 ---
 
@@ -244,6 +445,7 @@ Recents。
 - 按快捷键时，如果窗口未显示，则显示并聚焦搜索框。
 - 按快捷键时，如果窗口已显示，则隐藏窗口。
 - 窗口显示位置默认在当前鼠标所在屏幕中央。
+- `HotkeyService.ActiveLabel` 必须暴露为可绑定属性，供 §5.3 搜索框 Badge 使用。
 
 实现建议：使用 Windows API `RegisterHotKey`。封装为 `HotkeyService`。
 
@@ -252,8 +454,10 @@ Recents。
 要求：
 - 应用启动后常驻系统托盘。
 - 关闭主窗口时默认隐藏到托盘，不退出程序。
-- 托盘菜单包含：显示窗口、设置、重新扫描、开机自启、退出。
+- 托盘菜单包含：显示窗口、设置（仅当设置页已实现时显示）、重新扫描、开机自启、退出。
 - 退出必须真正结束进程并释放全局热键。
+- 托盘菜单文案首版统一英文：`Show / Settings / Rescan / Launch at startup / Exit`；中文环境下用户可在设置中切换。
+- **未实现的菜单项不得显示**，禁止出现 `Settings (待实现)` 这种占位文本。
 
 ### 6.3 最近文件来源（多源融合，**核心改动**）
 
@@ -310,6 +514,8 @@ L1 是数据底座，L2/L3 用来补充"用户操作意图"信号。每条最终
 
 继续读取 `%APPDATA%\Microsoft\Windows\Recent` 下的 .lnk，作为"显式打开"信号融合进索引。.lnk 解析见 §6.4。
 
+**列表只展示 .lnk 解析出的目标真实文件**；.lnk 本体不进入列表（§5.11）。
+
 #### 6.3.5 L2：Jump List
 
 解析以下两个目录中的复合文档（OLECF）：
@@ -344,14 +550,15 @@ HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\RecentDocs
 
 #### 6.3.7 数据源融合规则
 
-- 主键：`NormalizedPath`（统一为长路径、小写盘符、去除尾随分隔符；UNC 保留 `\\host\share\` 前缀）。
+- 主键：`NormalizedPath`（统一为长路径、大写盘符、去除尾随分隔符；UNC 保留 `\\host\share\` 前缀）。
 - 同 key 多来源：`RecentTime = max(各来源时间)`；`SourceKinds |= 各来源标志位`。
 - 文件夹来源：L1 监听目录中的所有目标路径所在父目录会被聚合到 Recent Folders；.lnk 直指文件夹时也进入 Recent Folders。
 - 删除：仅当某来源**显式**报告删除（FileSystemWatcher.Deleted）才从索引移除；其他来源消失只移除该 SourceKind 标志，不删条目。
+- **文件夹条目必须保留**：融合时不允许把 `IsFolder=true` 的条目剔除，它们用于 Recent Folders 视图（§6.24）。
 
 #### 6.3.8 重新扫描
 
-- 用户在托盘菜单或设置页可触发"Rebuild Index"，重置 SQLite 后并发跑所有数据源。
+- 用户在托盘菜单或设置页可触发"Rebuild Index"，**无需二次确认**，直接重置 SQLite 后并发跑所有数据源，状态栏切到 `Indexing...`。
 - 每条来源失败不影响其他来源。
 
 ### 6.4 .lnk 解析
@@ -364,7 +571,7 @@ HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\RecentDocs
 - 如果目标不存在，标记 Missing。
 
 实现：
-- **首选**：纯托管解析 MS-SHLLINK 二进制格式（NuGet `Securify.ShellLink` 或同类库）。无 COM 依赖、可在线程池并发批量解析、不要求 STA。
+- **首选**：纯托管解析 MS-SHLLINK 二进制格式（NuGet `Securify.ShellLink` / `securifybv.ShellLink` 或同类库）。无 COM 依赖、可在线程池并发批量解析、不要求 STA。
 - **备选**：P/Invoke `IShellLinkW + IPersistFile`。
 - **不使用** `WSH IWshRuntimeLibrary`（性能差、STA 限制、对损坏的 .lnk 容错差）。
 
@@ -374,13 +581,11 @@ HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\RecentDocs
 
 默认排序：`RecentTime` 倒序，`RecentTime = max(L1 LastWriteTime, L1 CreationTime, .lnk LastWriteTime, JumpList 时间, MRU 时间)`。
 
-备选排序（可在设置 / 列头切换）：
-- 原文件 LastWriteTime
-- 文件名 A-Z
-- 文件类型
-- 文件大小
-
-首版默认只需要 Recent Time 倒序，UI 保留排序切换的扩展位。
+备选排序（首版仅 P0：Newest first / Name A-Z；其余见 §5.6）：
+- 原文件 LastWriteTime（P1）
+- 文件名 A-Z（P0）
+- 文件类型（不在首版排序中暴露，仅作筛选）
+- 文件大小（P1）
 
 ### 6.6 搜索过滤
 
@@ -418,11 +623,12 @@ HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\RecentDocs
 要求：
 - 左侧导航支持按类型筛选。
 - 搜索与类型筛选可叠加。
+- **每条 RecentItem 在写入索引前必须按上表分类**，不允许 `FileType="Other"` 硬编码（除非真不属于任一类）。分类逻辑由 `FileTypeClassifier` 统一实现。
 
 ### 6.8 拖拽原文件
 
 要求：
-- 拖拽时 `DataObject` **同时**附 `DataFormats.FileDrop`（`string[]`）和 `Shell IDList Array`（CFSTR_SHELLIDLIST），保证微信、飞书、Outlook、浏览器、资源管理器全部兼容。
+- 拖拽时 `DataObject` **同时**附 `DataFormats.FileDrop`（`string[]`）和 `Shell IDList Array`（`CFSTR_SHELLIDLIST`），保证微信、飞书、Outlook、浏览器、资源管理器全部兼容。
 - 支持多选拖拽多个文件。
 - Missing 文件禁止拖拽（拖拽前判定，禁拖时鼠标显示禁止图标）。
 - 文件夹也支持拖拽。
@@ -439,25 +645,30 @@ HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\RecentDocs
 
 实现：`ProcessStartInfo { UseShellExecute = true }`。
 
-### 6.10 右键基础菜单
+### 6.10 右键 / More 菜单
 
-文件右键菜单必须包含：
+文件右键菜单分为「基础项」（P0 必做）和「扩展项」（P1+）两组。三点 More 按钮在 P0 阶段**只显示基础项**。
 
-- 打开
-- 打开方式
-- 打开所在位置
-- 复制完整路径
-- 复制文件名
-- 固定 / 取消固定
-- 从列表隐藏
-- 删除该 Recent 记录（仅清理 Recent .lnk；其他来源不会清，UI 上注明）
+#### 6.10.1 基础项（P0 必做）
+
+- Open
+- Reveal in Explorer
+- Copy full path
+- Copy file name
+- Pin / Unpin
+
+#### 6.10.2 扩展项（P1+，未实现时不显示）
+
+- Open With...
+- Hide from list
+- Remove from Recent
 
 说明：
-- "从列表隐藏"写入隐藏规则（`hidden_paths`），不删除原文件，**不影响其他用户**。
-- "删除该 Recent 记录"只删 `%APPDATA%\Microsoft\Windows\Recent` 中对应的 .lnk；**不动**原文件，不动 Jump List，不动 Office MRU（这些由各应用自己管理，强删风险高）。
-- "打开方式"必须作用于原始文件。
+- "Hide from list"写入隐藏规则（`hidden_paths`），不删除原文件，不影响其他用户。
+- "Remove from Recent"只删 `%APPDATA%\Microsoft\Windows\Recent` 中对应的 .lnk；**不动**原文件，不动 Jump List，不动 Office MRU（这些由各应用自己管理，强删风险高）。
+- "Open With..."必须作用于原始文件。
 
-打开方式实现：优先 `SHOpenWithDialog`（Win10/11 现代选择器），失败回退到：
+打开方式实现（P1）：优先 `SHOpenWithDialog`（Win10/11 现代选择器），失败回退到：
 
 ```text
 rundll32.exe shell32.dll,OpenAs_RunDLL "原始文件路径"
@@ -478,6 +689,7 @@ explorer.exe /select,"原始文件路径"
 - UI 永远不被图标加载阻塞。
 - UNC 路径文件不预拉取真实图标，仅用占位图标，可视进入再异步拉取，超时 3s 放弃。
 - Missing 文件使用灰色默认图标。
+- **图标来源严格遵守 §7.6 硬规则**：不允许任何二次重绘 / AI 头像 / 风格化图标。
 
 ### 6.12 快速预览信息
 
@@ -507,7 +719,9 @@ explorer.exe /select,"原始文件路径"
 - `Ctrl + Shift + C`：复制文件名
 - `Ctrl + O`：打开所在位置
 - `Ctrl + F`：聚焦搜索框
-- `Delete`：隐藏该条记录，需二次确认或撤销提示
+- `Delete`：隐藏该条记录（P1，未实现时该键不绑定）
+
+P0 阶段必须实现：`Esc / Enter / ↑↓ / Ctrl+C / Ctrl+Shift+C / Ctrl+O / Ctrl+F`。
 
 ### 6.14 排除规则
 
@@ -535,7 +749,16 @@ $Recycle.Bin
 node_modules
 .git
 __pycache__
+bin\Debug
+bin\Release
+obj\Debug
+obj\Release
 ```
+
+要求：
+- 默认排除规则在首次运行时写入 settings.json，用户可后续修改。
+- **§5.11 ".lnk 不展示" 是系统硬规则，优先级高于本节用户规则**：用户即便从黑名单删除 `.lnk`，列表中也不会出现来自 `%APPDATA%\Microsoft\Windows\Recent` 的 .lnk（其作为解析来源照常工作）。
+- 项目自身的 `bin\Debug` / `bin\Release` / `obj\` 默认排除，避免开发期把构建产物索引进列表。
 
 ### 6.15 黑名单路径
 
@@ -641,7 +864,7 @@ CREATE INDEX idx_extension   ON recent_items(extension);
 ### 6.21 开机自启
 
 要求：
-- 设置页提供开机自启开关。
+- 设置页提供开机自启开关（P1）。
 - 当前用户级别自启，不需要管理员权限。
 - 实现：写 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 下 `Recents` 值。
 - 启动参数 `--minimized` 让进程直接进入托盘。
@@ -655,13 +878,14 @@ CREATE INDEX idx_extension   ON recent_items(extension);
    - Show on active monitor
    - Hide when focus lost
    - Always on top
+   - Close button behavior（隐藏到托盘 / 退出）
 
 2. **Hotkey**
    - Current hotkey
    - Record new hotkey
    - Reset to default
 
-3. **Sources**（**新增**）
+3. **Sources**
    - 默认已知文件夹（Downloads / Desktop / Documents / Pictures / Videos / Music），各自可启用 / 禁用
    - "Add Folder…" 添加自定义本地目录
    - "Add Network Path…" 添加 UNC 路径，例 `\\10.0.0.100\claw\`
@@ -710,6 +934,8 @@ CREATE INDEX idx_extension   ON recent_items(extension);
 展示逻辑：
 - 双击文件夹用 Explorer 打开。
 - 文件夹支持拖拽。
+- **展示各子目录（文件的直接父目录）**，不做更高级别的父目录聚合。
+- **`IsFolder=true` 的条目必须保留在索引中**（融合时不可剔除），否则 Recent Folders 视图无数据。
 
 ---
 
@@ -717,70 +943,181 @@ CREATE INDEX idx_extension   ON recent_items(extension);
 
 ### 7.1 总体风格
 
-参考用户提供的 Trickster 和 Recent Files 截图。
+UI 以最新高保真界面图为视觉参考：暗色、现代、紧凑、Windows 桌面效率工具风格。视觉目标是"可长期常驻、可快速扫视、可拖拽操作"，不得做成网页后台或普通文件管理器。
 
-风格关键词：
-- 轻量
-- 快速
-- 紧凑
-- 桌面工具感
+关键词：
 - 暗色优先
-- 可长期常驻
+- 圆角窗口
+- 轻微毛玻璃 / 阴影层次
+- 清晰的文件列表层级
+- 低干扰行内操作
+- 蓝色作为唯一主强调色
 
-默认主题：暗色。
-
-### 7.2 窗口尺寸
+### 7.2 窗口尺寸与响应式
 
 默认尺寸：
 
 ```text
-宽度：520px
-高度：680px
+宽度：1040px
+高度：760px
 ```
 
 最小尺寸：
 
 ```text
-宽度：420px
-高度：480px
+宽度：760px
+高度：520px
 ```
 
-窗口支持拖动和调整大小。
+响应式规则：
+- 宽度 ≥ 900px：显示完整左侧导航文字。
+- 宽度 760–899px：左侧导航折叠为图标模式，Tooltip 显示文字。
+- 宽度不足以显示所有行内按钮时，保留 `Open` 和 `More`，隐藏 `Reveal` 与 `Pin` 到 More 菜单中。
+- 列表始终启用虚拟化，窗口缩放不得造成滚动卡顿。
+- 低于最小尺寸不允许（拖动手柄硬限）。
+
+DPI 与多显示器：
+- `app.manifest` 已声明 `PerMonitorV2`。
+- 窗口在不同 DPI 显示器之间拖动时，行高、图标尺寸、字号、内边距按新 DPI **即时**重算，不允许出现一次错位再补救。
+- 4K 与 1080p 混用是基础场景，必须实测。
 
 ### 7.3 窗口行为
 
 - 默认置顶。
-- 默认不显示在任务栏，可在设置中切换。
+- 默认不显示在任务栏（`ShowInTaskbar="False"`），可在设置中切换。
 - 默认失焦不自动隐藏，可在设置中开启。
-- Esc 隐藏窗口。
+- `Esc` 隐藏窗口。
 - 点击托盘图标显示窗口。
-- 高 DPI / 多显示器：app.manifest 声明 `PerMonitorV2`；窗口位置用鼠标当前所在显示器的 work area 居中。
+- 窗口位置使用鼠标当前所在显示器的 work area 居中。
 
-### 7.4 颜色
+### 7.4 颜色 Token
 
-暗色主题建议：
+暗色主题使用以下设计 Token。**§7.4 是颜色实现的真理源**；高保真设计图仅作视觉参考，与本节有差异时以本节为准；如设计图实测吸色与本节差异 > 1 个色阶（Δ ≥ 16），需提交修订请求并更新本节后再实现：
 
 ```text
-背景：#2F2F2F
-面板：#3A3A3A
-列表项悬停：#454545
-选中项：#505050
-主文字：#F2F2F2
-副文字：#B8B8B8
-强调色：#00D7FF
-边框：#4A4A4A
-危险色：#D9534F
-离线/未知：#7A7A7A
+WindowBackground：#101216
+TitleBarBackground：#151922
+SidebarBackground：#141821
+PanelBackground：#191D26
+PanelElevated：#202633
+SearchBackground：#252A34
+RowBackground：#191D26
+RowHover：#222836
+RowSelected：#1E3556
+RowSelectedBorder：#3B82F6
+Divider：#2B313D
+PrimaryText：#F3F4F6
+SecondaryText：#A7ADBA
+TertiaryText：#7E8491
+Accent：#3B82F6
+AccentHover：#60A5FA
+Success：#63C554
+Warning：#F5B642
+Danger：#E15B64
+Disabled：#5D6470
 ```
 
-### 7.5 字体
+要求：
+- 主强调色只用于选中态、活动 Chip、活动导航条、Pin 已收藏态。
+- 文件路径、时间、大小使用 SecondaryText 或 TertiaryText。
+- 不使用高饱和荧光青作为大面积文本色，避免阅读疲劳。
 
-默认 Windows 系统字体 `Segoe UI`，中文环境自然回退到 `Microsoft YaHei UI`。
+### 7.5 字体与字号
 
-### 7.6 长路径与本地化
+默认字体：
 
-- app.manifest 声明 `<longPathAware>true</longPathAware>` + `dpiAwareness=PerMonitorV2`。
-- 所有路径处理走 Unicode；UI 显示长路径中段省略 `D:\very\long\…\Contracts\file.docx`。
+```text
+Segoe UI
+Microsoft YaHei UI
+```
+
+字号：
+
+| 元素 | 字号 | 字重 |
+|---|---:|---:|
+| App 标题 | 15 | Semibold |
+| 搜索框 | 18 | Regular |
+| 导航文字 | 14 | Regular |
+| 文件名 | 15 | Semibold |
+| 元信息 | 12.5 | Regular |
+| 状态栏 | 12 | Regular |
+| Tooltip | 12 | Regular |
+
+### 7.6 图标规范（硬规则）
+
+图标来源**只允许**：
+
+1. 文件图标：Windows Shell 系统图标或系统缩略图（`SHGetFileInfo` 占位 + `IShellItemImageFactory` 真实缩略图）。
+2. 导航 / 操作图标：Segoe Fluent Icons、Segoe MDL2 Assets 或项目内 SVG 矢量图。
+3. 缺省文件图标：项目内通用占位图标。
+
+**禁止**：
+
+- 任何二次重绘、风格化、AI 生成、按文件名 / 类型自动生成的卡通图标 / 头像图标。
+- 为 `.exe` 文件强行显示机器人 / 风格化角色图标，**除非该 EXE 自身资源里就是该图标**（即调用 `SHGetFileInfo` / `IShellItemImageFactory` 返回的就是该图标）。
+- 使用 emoji 作为功能图标。
+- 使用与功能无关的装饰图标。
+
+导航与操作图标若用项目内 SVG，色值必须来自 §7.4 Token，不得与系统主题冲突。
+
+### 7.7 间距与圆角
+
+建议值：
+
+```text
+Window corner radius：12
+Panel corner radius：10
+Search box radius：8
+Chip radius：16
+Row radius：6
+Sidebar item radius：6
+Outer padding：12
+Sidebar width：180
+Sidebar icon-only width：56
+Row horizontal padding：12
+Row vertical padding：8
+```
+
+### 7.8 文案规范
+
+固定 UI 文案：
+
+| 位置 | 文案 |
+|---|---|
+| App 标题 | `Recents` |
+| 搜索占位 | `Search recent files...` |
+| 默认排序 | `Newest first` |
+| 状态正常 | `Ready` |
+| 重建索引 | `Rebuild index` |
+| 清除筛选 | `Clear filters` |
+| 打开 | `Open` |
+| 打开所在位置 | `Reveal in Explorer` |
+| 收藏 | `Pin` |
+| 取消收藏 | `Unpin` |
+| 更多 | `More actions` |
+| 托盘菜单显示 | `Show` |
+| 托盘菜单退出 | `Exit` |
+| 托盘菜单重扫 | `Rescan` |
+| 关闭按钮气泡 | `Recents 仍在托盘运行。可在设置中改为按关闭即退出。` |
+
+要求：
+- 主界面文案默认英文，保证简洁；中文文件名、路径按原文显示。
+- 不能出现开发占位文案，例如 `TODO`、`Button`、`TextBlock`、`Search by extension/file name`。
+- **不能出现与当前产品名不一致的标题**，例如 `RecentDock`。
+- **不能出现"待实现"、"敬请期待"等占位文本**。
+
+### 7.9 长路径与本地化
+
+- `app.manifest` 声明 `<longPathAware>true</longPathAware>` + `dpiAwareness=PerMonitorV2`。
+- 所有路径处理走 Unicode。
+- UI 显示长路径中段省略，例如：
+
+```text
+D:\very\long\…\Contracts\file.docx
+```
+
+- Tooltip 显示完整路径。
+- 路径复制必须复制完整路径，不复制省略后的 UI 文本。
 
 ---
 
@@ -794,7 +1131,7 @@ public class RecentItem
     public string NormalizedPath { get; set; }   // 主键
     public string DisplayName { get; set; }
     public string Extension { get; set; }
-    public string FileType { get; set; }
+    public string FileType { get; set; }         // 由 FileTypeClassifier 填充
     public DateTime RecentTime { get; set; }
     public DateTime? TargetModifiedTime { get; set; }
     public long? SizeBytes { get; set; }
@@ -831,7 +1168,9 @@ public class SourceConfig
 {
     public string Id { get; set; }                  // GUID
     public SourceKinds Kind { get; set; }
-    public string Path { get; set; }                // 本地或 UNC
+    public string Path { get; set; }                // 本地或 UNC（KnownFolder 留空，由 KnownFolderGuid 解析）
+    public string KnownFolderGuid { get; set; }     // 已知文件夹 GUID（仅 KnownFolderWatch）
+    public string DisplayName { get; set; }         // 设置页 Sources 列表展示
     public bool Enabled { get; set; } = true;
     public int RecentLookbackDays { get; set; } = 30;
 }
@@ -849,11 +1188,13 @@ public class AppSettings
     public bool ShowFolders { get; set; } = true;
     public int MaxRecentItems { get; set; } = 200;
     public string Hotkey { get; set; } = "Ctrl+Alt+R";
+    public bool ClosedToTrayNoticeShown { get; set; } = false;  // §5.2 关闭气泡只弹一次
+    public bool VerboseLogging { get; set; } = false;
 
     public List<SourceConfig> Sources { get; set; } = new();
 
     public List<string> ExcludedExtensions { get; set; } = new();
-    public List<string> ExcludedPaths { get; set; } = new();
+    public List<string> ExcludedPaths { get; set; } = new();   // 默认含 bin\Debug / obj\
     public List<string> ExcludedKeywords { get; set; } = new();
     public List<string> WhitelistedPaths { get; set; } = new();
     public Dictionary<string, List<string>> FileTypeGroups { get; set; } = new();
@@ -888,6 +1229,7 @@ Recents/
         AppSettings.cs
       Services/
         RecentIndexService.cs        // SQLite 索引 + 融合
+        StatusHintService.cs         // 底部状态栏文案动态输出
         Sources/
           IRecentSource.cs
           KnownFolderWatchSource.cs  // L1 默认已知文件夹
@@ -1009,7 +1351,7 @@ Recents/
 - 不上传文件路径。
 - 不读取文件内容。
 - 不删除原始文件。
-- "删除 Recent 记录"只删除 `%APPDATA%\Microsoft\Windows\Recent` 中的 .lnk，不动 Jump List、不动 Office MRU、不动注册表 MRU。
+- "Remove from Recent"只删除 `%APPDATA%\Microsoft\Windows\Recent` 中的 .lnk，不动 Jump List、不动 Office MRU、不动注册表 MRU。
 - 不识别 OneDrive / Google Drive 登录态，不读其元数据；用户挂载到本地的文件夹按普通文件夹处理（但跳过占位符的耗资源调用，见 §6.19）。
 - 单实例（命名 Mutex `Global\Recents.SingleInstance`），第二次启动转发显示窗口请求并退出。
 
@@ -1023,12 +1365,35 @@ Recents/
 - [ ] `Ctrl + Alt + R` 可以呼出 / 隐藏窗口。
 - [ ] 默认热键被占用时，自动回退候选并提示。
 - [ ] 窗口打开后搜索框自动聚焦。
+- [ ] 搜索框右侧 Badge 显示实际注册成功的快捷键（来自 `HotkeyService.ActiveLabel`，非硬编码）。
 - [ ] 启动后所有 L1 数据源均开始监听（Downloads/Desktop/Documents/Pictures/Videos/Music + Recent + Jump List + Office MRU）。
 - [ ] 文件列表按最近时间倒序展示。
 - [ ] 多源命中同一路径时，仅展示一条，且 Tooltip 列出所有来源。
 - [ ] 显示文件图标、名称、路径、时间、大小。
 
-### 14.2 数据源覆盖（关键）
+### 14.2 主界面 UI 验收（按高保真图）
+
+- [ ] 标题栏显示 `Recents`，**XAML / 二进制 / 可执行体内不存在 `RecentDock` 字符串**。
+- [ ] 左侧导航 `All / Favorites / Recent Folders / Documents / Images / Code` 均可点击并进入真实视图。
+- [ ] **`Settings` 导航项仅在设置页已实现时出现；P0 阶段验收要求"不显示 Settings"**。
+- [ ] 顶部 Chip `All / Docs / Images / Code / Folders` 均可点击并改变列表过滤结果。
+- [ ] `Newest first` 下拉可切换排序，且排序立即生效；下拉只列已实现的排序选项。
+- [ ] **P0 视图密度按钮不显示**；若 P1 已启用，必须 Comfortable / Compact 即时切换。
+- [ ] 每个文件行右侧的 `Open / Reveal / Pin / More` 均可执行真实动作。
+- [ ] Pin 图标蓝色只表示真实收藏状态，不得作为装饰高亮。
+- [ ] 三点菜单打开的菜单项与 §6.10.1 一致；P0 不显示 §6.10.2 扩展项。
+- [ ] 底部 `Ready | n items` 中的 `n` 是当前过滤后可见数量。
+- [ ] 底部键盘提示随焦点和选择状态变化，不显示不可用操作。
+- [ ] 所有可见图标均有 Tooltip。
+- [ ] 未实现功能不得显示为假按钮、假图标或假菜单项。
+- [ ] 列表不得硬编码示例文件名、示例路径、示例时间。
+- [ ] **列表不出现 `%APPDATA%\Microsoft\Windows\Recent` 中的 .lnk 条目**（除非用户索引到的真实文件本身就是 .lnk）。
+- [ ] **列表不出现项目自身的 `bin\Debug` / `bin\Release` / `obj\` 输出文件**。
+- [ ] **关闭按钮首次按下时弹一次"已隐藏到托盘"气泡**，第二次起不再弹。
+- [ ] **拖动到 4K 与 1080p 显示器之间，UI 元素即时按 DPI 缩放，无错位**。
+- [ ] **`.exe` 文件图标必须来自系统真实资源**，无任何二次重绘 / 风格化。
+
+### 14.3 数据源覆盖（关键）
 
 - [ ] **从浏览器下载文件到 Downloads，2 秒内出现在列表顶部**（这是 Recent 文件夹方案漏掉的核心场景）。
 - [ ] 在 VS Code 中打开 / 保存文件，相应文件出现在列表（来源标 KnownFolderWatch 或 RecentLnk 之一即可）。
@@ -1037,22 +1402,27 @@ Recents/
 - [ ] 添加 `\\10.0.0.100\claw\` 为自定义 UNC 来源后，远端写入的文件能进列表。
 - [ ] UNC 网络断开时，已索引的远端文件标 Unknown 灰显，UI 不卡顿；网络恢复后自动重新可达。
 
-### 14.3 文件操作
+### 14.4 文件操作
 
 - [ ] 双击文件可用默认程序打开。
-- [ ] 右键可打开文件 / 打开方式 / 打开所在位置 / 复制完整路径。
-- [ ] 拖拽到微信、飞书、Outlook、Edge、Explorer 五处目标 App 时均传递原始文件路径。
-- [ ] Missing 文件灰显，禁止拖拽。
+- [ ] 右键可打开文件 / 打开方式 / 打开所在位置 / 复制完整路径（"打开方式"P1）。
+- [ ] 行内 Open 按钮与双击行为一致。
+- [ ] 行内 Reveal 按钮能在 Explorer 中选中原文件。
+- [ ] 行内 Pin / Unpin 能写入并读取真实收藏状态。
+- [ ] 拖拽到微信、飞书、Outlook、Edge、Explorer 五处目标 App 时均传递原始文件路径（DataObject 同时附 FileDrop + Shell IDList Array）。
+- [ ] Missing 文件灰显，禁止拖拽，Open 按钮禁用并显示原因 Tooltip。
 
-### 14.4 搜索与筛选
+### 14.5 搜索与筛选
 
 - [ ] 输入文件名子串可筛选。
 - [ ] 输入 `.docx` 或 `pdf`（首字符为 `.`）按扩展名精确筛选。
 - [ ] 输入路径片段可筛选。
 - [ ] 左侧文件类型筛选可用。
-- [ ] 搜索和类型筛选可叠加。
+- [ ] 顶部 Chip 筛选可用。
+- [ ] 搜索、左侧导航、顶部 Chip、排序可叠加。
+- [ ] 筛选无结果时显示空状态和 `Clear filters` 动作。
 
-### 14.5 设置
+### 14.6 设置（P1）
 
 - [ ] 可设置开机自启。
 - [ ] 可设置最大显示数量。
@@ -1062,9 +1432,9 @@ Recents/
 - [ ] 可在 **Sources** 添加 / 移除 UNC 路径。
 - [ ] 可设置排除扩展名 / 路径 / 关键词。
 - [ ] 可设置白名单路径。
-- [ ] 可重建索引（SQLite）。
+- [ ] 可重建索引（SQLite，无需二次确认）。
 
-### 14.6 性能
+### 14.7 性能
 
 - [ ] 快捷键呼出 < 100ms。
 - [ ] 搜索输入无明显卡顿（1 万条规模）。
@@ -1078,38 +1448,55 @@ Recents/
 
 ### P0（第一阶段必做）
 
+P0 必须交付一个"界面上没有假功能"的可用版本。**若某个功能未完成，对应按钮 / 菜单 / 导航项 / 排序选项必须完全不显示，不允许灰色禁用占位**。
+
 - WPF .NET 8 项目骨架 + app.manifest（PerMonitorV2 + longPathAware）
 - 单实例 Mutex
 - 托盘常驻
-- 全局快捷键（含候选回退）
-- 主窗口暗色 UI
-- **`IRecentSource` 抽象 + `RecentIndexService` SQLite 索引融合**
+- 全局快捷键（含候选回退）+ Badge 显示 `HotkeyService.ActiveLabel`
+- 主窗口暗色 UI，必须包含：标题栏（标题 `Recents`）、搜索框、左侧导航、Chip 筛选、排序下拉、文件列表、底部状态栏
+- 关闭按钮首次按下提示气泡，写入 `ClosedToTrayNoticeShown`
+- 左侧导航：All / Favorites / Recent Folders / Documents / Images / Code（**P0 不显示 Settings**）
+- 顶部 Chip：All / Docs / Images / Code / Folders
+- 排序：`Newest first` + `Name A-Z`，下拉只列这两项
+- 视图密度切换：**P0 不做，对应图标不显示**
+- 文件行操作：Open / Reveal / Pin / More
+- Pin / Favorites 基础能力：写入 SQLite `is_favorite` 并可在 Favorites 视图读取
+- More 菜单：§6.10.1 基础项（Open / Reveal in Explorer / Copy full path / Copy file name / Pin / Unpin）
+- 底部状态栏：Ready / Indexing / Partial / Error + 当前可见数量 + 动态键盘提示（`StatusHintService`）
+- **`IRecentSource` 抽象 + `RecentIndexService` SQLite 索引融合**（含 `IsFolder=true` 条目保留）
 - **L1 数据源：KnownFolderWatchSource（Downloads / Desktop / Documents / Pictures / Videos / Music）**
-- L1 数据源：RecentLnkSource（含纯托管 .lnk 解析）
+- L1 数据源：RecentLnkSource（含纯托管 .lnk 解析；列表中**不展示 .lnk 本体**，仅归并到目标真实文件）
 - 主窗口列表（虚拟化）
-- 双击打开
 - 搜索过滤
-- 拖拽原始文件（FileDrop + Shell IDList Array）
+- 双击打开
+- 拖拽原始文件（**FileDrop + Shell IDList Array 同时附**）
+- 文件图标占位加载：按扩展名显示系统通用图标；真实缩略图可放 P1
+- 默认排除规则首次运行写入 settings.json，含 `bin\Debug` / `bin\Release` / `obj\` / `node_modules` 等
+- 键盘：`Esc / Enter / ↑↓ / Ctrl+C / Ctrl+Shift+C / Ctrl+O / Ctrl+F`
+- `FileTypeClassifier` 在数据源写入索引前完成分类，禁止 `FileType="Other"` 全量硬编码
 
 ### P1
 
-- 右键菜单
-- 文件图标（占位 + 异步真实图标 + 缓存）
-- 文件类型筛选
+- 完整右键菜单（含 §6.10.2 扩展项：Open With... / Hide from list / Remove from Recent）
+- 文件图标真实缩略图（占位 + 异步真实图标 + 缓存）
+- 设置页完整实现（含 Settings 导航项启用、General / Hotkey / Sources / List / Filters / Cache / About）
+- 文件类型筛选配置化
 - L1 数据源：UserFolderWatchSource（自定义本地目录）
 - L1 数据源：UncFolderWatchSource（UNC 路径，含断网重连）
 - L2 数据源：JumpListSource、OfficeMruSource
-- 设置页（含 Sources Tab）
+- 排序：Oldest first / Size largest
+- 视图密度按钮（Comfortable / Compact）
 - 开机自启
+- `Delete` 键隐藏记录
 
 ### P2
 
-- 收藏固定
-- 最近文件夹（Quick Access、TypedPaths）
+- 最近文件夹增强（Quick Access、TypedPaths）
 - L3 数据源：OpenSavePidlMruSource、CustomDestinationsSource、RecentDocs
-- 黑白名单路径
-- 排除规则 UI
-- 快速预览信息
+- 黑白名单路径 UI 完善
+- 排除规则 UI 完善
+- 快速预览信息增强
 - 键盘快捷操作完善
 - Verbose logging 开关
 
@@ -1131,28 +1518,63 @@ Recents/
 10. 代码结构按 Services / ViewModels / Models / Views 分层，数据源都放 `Services/Sources/`。
 11. 路径处理统一走 `PathNormalizer`，禁止散落 `ToLower()`、`TrimEnd('\\')` 等就地处理。
 12. 所有外部 IO 必须可单元测试（数据源接口注入、文件系统抽象）。
+13. 文件类型分类统一走 `FileTypeClassifier`，禁止 `FileType="Other"` 在各数据源中硬编码。
+14. UI 文案统一从 §7.8 表中取，禁止散落字符串字面量。
+15. **TargetFramework 固定为 `net8.0-windows` 或更高（如 `net10.0-windows`）**，未经 PRD 修订不得随意更改。
 
 ---
 
 ## 17. 第一阶段实现范围
 
-第一阶段（P0）必须实现：
+第一阶段（P0）必须实现一个可日常使用的版本，且界面不得遗留无意义文字、无功能图标、硬编码样例文件。
+
+必须实现：
 
 - 创建 WPF .NET 8 项目，app.manifest 配置 DPI 与长路径
 - 单实例 Mutex
-- 主窗口暗色 UI（含搜索框、列表虚拟化）
-- 托盘常驻（显示 / 退出 / 重建索引）
+- 主窗口暗色 UI，按 §5 和 §7 实现：
+  - 标题栏显示 `Recents`，关闭按钮首次按下提示气泡
+  - 搜索框占位 `Search recent files...`
+  - 搜索框右侧 Badge 显示 `HotkeyService.ActiveLabel`（数据绑定，非硬编码）
+  - 左侧导航 `All / Favorites / Recent Folders / Documents / Images / Code`（**不显示 Settings**）
+  - 顶部 Chip：All / Docs / Images / Code / Folders
+  - 排序下拉：仅 `Newest first` 和 `Name A-Z`
+  - 文件列表虚拟化
+  - 行内 Open / Reveal / Pin / More
+  - 底部状态栏 Ready / Indexing / Partial / Error + 可见数量 + 动态键盘提示
+- 托盘常驻（`Show / Rescan / Exit`，不显示 `Settings`，不显示"待实现"项）
 - `Ctrl + Alt + R` 呼出 / 隐藏 + 候选回退
-- `IRecentSource` 抽象 + SQLite 索引融合
+- `IRecentSource` 抽象 + SQLite 索引融合（**保留文件夹条目**）
 - **`KnownFolderWatchSource` 监听 Downloads / Desktop / Documents / Pictures / Videos / Music**
-- `RecentLnkSource` 解析 `%APPDATA%\Microsoft\Windows\Recent` 的 .lnk
+- `RecentLnkSource` 解析 `%APPDATA%\Microsoft\Windows\Recent` 的 .lnk → 归并到目标真实文件，**列表中不展示 .lnk 本体**
+- `FileTypeClassifier` 给每条记录分类，不允许 FileType 全量为 "Other"
 - 显示最近 200 个文件，时间倒序
 - 搜索文件名 / 扩展名 / 路径
+- 左侧导航与顶部 Chip 的叠加筛选
 - 双击打开原文件
-- 拖拽原文件（FileDrop + Shell IDList Array）
-- 右键打开 / 打开所在位置 / 复制路径
+- 拖拽原文件（FileDrop + Shell IDList Array **同时附**）
+- 行内 Open：默认程序打开原文件
+- 行内 Reveal：Explorer 选中原文件或打开文件夹
+- 行内 Pin：收藏 / 取消收藏，写入 SQLite
+- More 菜单：§6.10.1 基础项
+- 文件图标：P0 至少显示系统通用图标；异步真实缩略图可留到 P1
+- 默认排除规则首次运行写入 settings.json，含 `bin\Debug` / `bin\Release` / `obj\` / `node_modules` 等
+- 键盘：`Esc / Enter / ↑↓ / Ctrl+C / Ctrl+Shift+C / Ctrl+O / Ctrl+F`
 
-第一阶段**不做**：设置页 UI、收藏、白名单 / 黑名单 UI、开机自启、Jump List、Office MRU、UNC 自定义来源、图标真实缩略图（仅占位图标）。
+P0 阶段如未实现以下能力，对应 UI **不得显示**（不得灰色禁用，必须完全不渲染）：
+
+- Settings 导航项（设置页未实现）
+- 视图密度按钮
+- Open With...
+- Hide from list
+- Remove from Recent
+- UNC 来源添加
+- Jump List / Office MRU 来源状态
+- 黑名单 / 白名单 UI
+- 开机自启开关
+- Oldest first / Size largest 排序选项
+
+第一阶段**不做**：完整设置页、白名单 / 黑名单 UI、开机自启、Jump List、Office MRU、UNC 自定义来源、图标真实缩略图。
 
 > 第一阶段就必须解决"下载文件不出现"问题：`KnownFolderWatchSource` 是核心，**不允许把 Downloads 监听挪到后续阶段**。
 

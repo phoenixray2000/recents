@@ -10,6 +10,7 @@ namespace Recents.App.Services.Sources;
 public sealed class KnownFolderWatchSource : IRecentSource, IDisposable
 {
     private readonly SourceConfig _config;
+    private readonly AppSettings _settings;
     private readonly SimpleSubject<RecentChange> _subject = new();
     private readonly List<FileSystemWatcher> _watchers = new();
     private Debouncer? _debouncer;
@@ -17,9 +18,10 @@ public sealed class KnownFolderWatchSource : IRecentSource, IDisposable
 
     public SourceKinds Kind => SourceKinds.KnownFolderWatch;
 
-    public KnownFolderWatchSource(SourceConfig config)
+    public KnownFolderWatchSource(SourceConfig config, AppSettings settings)
     {
         _config = config;
+        _settings = settings;
     }
 
     public async Task InitialScanAsync(CancellationToken ct)
@@ -152,7 +154,7 @@ public sealed class KnownFolderWatchSource : IRecentSource, IDisposable
                 NormalizedPath     = normalized,
                 DisplayName        = Path.GetFileName(fullPath),
                 Extension          = isDir ? "" : Path.GetExtension(fullPath).ToLowerInvariant(),
-                FileType           = "Other", // 分类逻辑在 ViewModel 或聚合时做，目前填默认
+                ClassificationSource = FileTypeClassifier.Classify(isDir ? "" : Path.GetExtension(fullPath), isDir, _settings.ClassificationSourceGroups),
                 IsFolder           = isDir,
                 Exists             = ExistsState.Exists,
                 Sources            = Kind,

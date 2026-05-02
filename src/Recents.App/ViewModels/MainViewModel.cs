@@ -11,19 +11,80 @@ namespace Recents.App.ViewModels;
 public partial class MainViewModel : ObservableObject
 {
     private readonly RecentIndexService _indexService;
+    private readonly HotkeyService _hotkeyService;
+    private readonly StatusHintService _statusHint;
 
     [ObservableProperty]
     private string _searchText = string.Empty;
 
+    public string HotkeyDisplay => _hotkeyService.ActiveLabel;
+    
+    public StatusHintService Status => _statusHint;
+
+    public enum SortOption
+    {
+        RecentTime,
+        DisplayName,
+        Size,
+        ClassificationSource
+    }
+
+    [ObservableProperty]
+    private SortOption _currentSort = SortOption.RecentTime;
+
+    [ObservableProperty]
+    private string _currentCategory = "All";
+
+    [ObservableProperty]
+    private bool _hasItems = true;
+
     // UI 绑定的过滤后视图
     public ICollectionView ItemsView { get; }
 
-    public MainViewModel(RecentIndexService indexService)
+    public MainViewModel(RecentIndexService indexService, HotkeyService hotkeyService, StatusHintService statusHint)
     {
         _indexService = indexService;
+        _hotkeyService = hotkeyService;
+        _statusHint = statusHint;
 
         ItemsView = CollectionViewSource.GetDefaultView(_indexService.Items);
         ItemsView.Filter = FilterItem;
+        
+        // 初始同步计数
+        _statusHint.UpdateCount(_indexService.Items.Count);
+        HasItems = _indexService.Items.Count > 0;
+        
+        _indexService.Items.CollectionChanged += (s, e) => 
+        {
+            _statusHint.UpdateCount(_indexService.Items.Count);
+            HasItems = _indexService.Items.Count > 0;
+        };
+
+        ApplySort();
+    }
+
+    partial void OnCurrentCategoryChanged(string value) => ItemsView.Refresh();
+
+    partial void OnCurrentSortChanged(SortOption value) => ApplySort();
+
+    private void ApplySort()
+    {
+        ItemsView.SortDescriptions.Clear();
+        switch (CurrentSort)
+        {
+            case SortOption.RecentTime:
+                ItemsView.SortDescriptions.Add(new SortDescription("Item.RecentTime", ListSortDirection.Descending));
+                break;
+            case SortOption.DisplayName:
+                ItemsView.SortDescriptions.Add(new SortDescription("Item.DisplayName", ListSortDirection.Ascending));
+                break;
+            case SortOption.Size:
+                ItemsView.SortDescriptions.Add(new SortDescription("Item.SizeBytes", ListSortDirection.Descending));
+                break;
+            case SortOption.ClassificationSource:
+                ItemsView.SortDescriptions.Add(new SortDescription("Item.Extension", ListSortDirection.Ascending));
+                break;
+        }
     }
 
     partial void OnSearchTextChanged(string value)
@@ -34,8 +95,27 @@ public partial class MainViewModel : ObservableObject
 
     private bool FilterItem(object obj)
     {
-        if (string.IsNullOrWhiteSpace(SearchText)) return true;
         if (obj is not RecentItemViewModel vm) return false;
+
+        // B6. 分类过滤
+        if (CurrentCategory == "Folders")
+        {
+            if (!vm.Item.IsFolder) return false;
+        }
+        else if (CurrentCategory != "All")
+        {
+            // 只有非文件夹才参与类型分类
+            if (vm.Item.IsFolder) return false;
+            if (vm.Item.ClassificationSource != CurrentCategory) return false;
+        }
+        else
+        {
+            // "All" 模式下默认不显示文件夹，除非是搜索模式
+            if (vm.Item.IsFolder && string.IsNullOrEmpty(SearchText)) return false;
+        }
+
+        // 搜索逻辑
+        if (string.IsNullOrWhiteSpace(SearchText)) return true;
 
         var tokens = SearchText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (tokens.Length == 0) return true;

@@ -31,7 +31,7 @@
 
 | 组件 | 版本 | 用途 | 安装地址 |
 |---|---|---|---|
-| .NET 8 Desktop Runtime | 8.0 LTS | 终端用户运行 Recents | https://dotnet.microsoft.com/download/dotnet/8.0 |
+| .NET 8+ Desktop Runtime | 8.0+ | 终端用户运行 Recents | https://dotnet.microsoft.com/download/dotnet/8.0 |
 
 > 开发机安装 .NET 8 SDK 即自动包含 Desktop Runtime，终端用户机只需 Desktop Runtime。
 
@@ -43,7 +43,7 @@
 
 | 组件 | 推荐版本 | 用途 |
 |---|---|---|
-| .NET 8 SDK | 8.0.100 或更新 | 编译 / `dotnet build` |
+| .NET 8+ SDK | 8.0.100 或更新 | 编译 / `dotnet build` |
 | Git for Windows | 2.40+ | 源码版本控制 |
 
 ### 3.2 IDE（任选其一）
