@@ -11,6 +11,7 @@
         Foreground="{StaticResource TextPrimary}"
         FontFamily="Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI"
         WindowStyle="None"
+        Icon="pack://application:,,,/Recents;component/Resources/Icons/AppIcon.ico"
         ResizeMode="CanResize">
 
     <shell:WindowChrome.WindowChrome>
@@ -270,10 +271,7 @@
             </Grid.RowDefinitions>
 
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0">
-                <Border Width="24" Height="24" Background="{StaticResource AccentBlue}" CornerRadius="4" Margin="0,0,12,0">
-                    <TextBlock Text="&#xE713;" FontFamily="Segoe Fluent Icons" FontSize="14" Foreground="White"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                </Border>
+                <Image Width="20" Height="20" Source="pack://application:,,,/Recents;component/Resources/Icons/AppIcon.ico" Margin="0,0,12,0" RenderOptions.BitmapScalingMode="HighQuality"/>
                 <TextBlock Text="Settings" FontWeight="Bold" FontSize="16" VerticalAlignment="Center"/>
             </StackPanel>
         </Grid>
@@ -316,6 +314,7 @@
                         <StackPanel Margin="244,24,24,24">
                             <TextBlock Text="General" Style="{StaticResource SectionTitle}"/>
                             <CheckBox Content="Launch at startup" IsChecked="{Binding LaunchAtStartup}"/>
+                            <CheckBox Content="Start minimized" IsChecked="{Binding StartMinimized}"/>
                             <CheckBox Content="Hide when focus lost" IsChecked="{Binding HideOnFocusLost}"/>
                             <CheckBox Content="Always on top" IsChecked="{Binding AlwaysOnTop}"/>
                             <TextBlock Text="Close button behavior" Style="{StaticResource FieldLabel}" Margin="0,18,0,6"/>

@@ -16,7 +16,7 @@ public class TrayService : IDisposable
 
         _notifyIcon = new NotifyIcon
         {
-            Icon = System.Drawing.SystemIcons.Application,
+            Icon = System.Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath!) ?? System.Drawing.SystemIcons.Application,
             Text = "Recents",
             Visible = true,
             ContextMenuStrip = CreateMenu()

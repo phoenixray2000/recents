@@ -48,12 +48,15 @@ public partial class App : WpfApp
 
             _index = new RecentIndexService(_settings);
             _index.OpenDatabase();
-            _index.LoadFromDatabase(_settings.Current.MaxRecentItems);
-
+            
             _hotkey = new HotkeyService();
             _statusHint = new StatusHintService();
+            _statusHint.SetStatus(StatusHintService.AppStatus.Initializing);
 
             var mainVm = new MainViewModel(_index, _hotkey, _statusHint);
+
+            _ = _index.LoadFromDatabaseAsync(_settings.Current.MaxRecentItems);
+
             _tray = new TrayService(() => RestartSourcesAsync(rebuildIndex: true));
 
             var mainWindow = new MainWindow(
@@ -63,7 +66,10 @@ public partial class App : WpfApp
                 () => RestartSourcesAsync(rebuildIndex: true),
                 () => RestartSourcesAsync(rebuildIndex: false));
 
-            mainWindow.SourceInitialized += (s, ev) => _hotkey.Initialize(mainWindow);
+            // 强制创建窗口句柄（即使窗口不显示），以确保全局热键能成功注册
+            new System.Windows.Interop.WindowInteropHelper(mainWindow).EnsureHandle();
+            _hotkey.Initialize(mainWindow);
+            
             _hotkey.HotkeyPressed += mainWindow.ToggleVisibility;
             _hotkey.RegistrationFailed += msg => _tray?.ShowBalloon("Hotkey conflict", msg, System.Windows.Forms.ToolTipIcon.Error);
             _singleInstance.ShowWindowRequested += () => Dispatcher.Invoke(mainWindow.ShowAndFocus);
@@ -71,10 +77,18 @@ public partial class App : WpfApp
             _tray.SetMainWindow(mainWindow);
             mainWindow.SetTrayService(_tray);
 
-            _ = RestartSourcesAsync(rebuildIndex: false);
-
-            if (!e.Args.Contains("--minimized"))
+            if (!e.Args.Contains("--minimized") && !_settings.Current.StartMinimized)
                 mainWindow.Show();
+
+            // 启动后延迟 1 秒再开始扫描，并切换状态
+            _ = Task.Delay(1000).ContinueWith(_ => {
+                _statusHint.SetStatus(StatusHintService.AppStatus.Indexing);
+                RestartSourcesAsync(rebuildIndex: false).ContinueWith(__ => {
+                    _statusHint.SetStatus(StatusHintService.AppStatus.Watching);
+                    // 扫描结束后，强制关闭初始化状态（即使依然没有文件，也要展示空状态了）
+                    Dispatcher.Invoke(() => mainVm.IsInitializing = false);
+                });
+            });
         }
         catch (Exception ex)
         {
@@ -102,7 +116,7 @@ public partial class App : WpfApp
 
             RegisterSources();
 
-            foreach (var source in _sources)
+            var tasks = _sources.Select(async source =>
             {
                 _sourceSubscriptions.Add(source.Watch().Subscribe(new RecentChangeObserver(_index)));
 
@@ -114,7 +128,9 @@ public partial class App : WpfApp
                 {
                     Log.Error(ex, "Source {Kind} initialization failed", source.Kind);
                 }
-            }
+            });
+
+            await Task.WhenAll(tasks);
         }
         finally
         {

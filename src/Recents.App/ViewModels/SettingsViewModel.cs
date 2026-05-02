@@ -75,6 +75,7 @@ public partial class SettingsViewModel : ObservableObject
         _hideOnFocusLost = settings.Current.HideOnFocusLost;
         _alwaysOnTop = settings.Current.AlwaysOnTop;
         _closeToTray = settings.Current.CloseToTray;
+        _startMinimized = settings.Current.StartMinimized;
         _hotkey = settings.Current.Hotkey;
         _maxRecentItems = settings.Current.MaxRecentItems;
         _showFolders = settings.Current.ShowFolders;
@@ -95,6 +96,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _hideOnFocusLost;
     [ObservableProperty] private bool _alwaysOnTop;
     [ObservableProperty] private bool _closeToTray;
+    [ObservableProperty] private bool _startMinimized;
     [ObservableProperty] private string _hotkey = "Alt+Shift+Z";
     [ObservableProperty] private int _maxRecentItems;
     [ObservableProperty] private bool _showFolders;
@@ -117,6 +119,7 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnHideOnFocusLostChanged(bool value) { _settings.Current.HideOnFocusLost = value; SaveAndNotify(); }
     partial void OnAlwaysOnTopChanged(bool value) { _settings.Current.AlwaysOnTop = value; SaveAndNotify(); }
     partial void OnCloseToTrayChanged(bool value) { _settings.Current.CloseToTray = value; SaveAndNotify(); }
+    partial void OnStartMinimizedChanged(bool value) { _settings.Current.StartMinimized = value; SaveAndNotify(); }
     partial void OnHotkeyChanged(string value) { _settings.Current.Hotkey = value; SaveAndNotify(); }
     partial void OnMaxRecentItemsChanged(int value) { _settings.Current.MaxRecentItems = value; SaveAndNotify(); }
     partial void OnShowFoldersChanged(bool value) { _settings.Current.ShowFolders = value; SaveAndNotify(); }

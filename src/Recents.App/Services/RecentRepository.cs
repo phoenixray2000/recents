@@ -34,7 +34,7 @@ internal sealed class RecentRepository : IDisposable
 
     private void TryOpenOrRebuild()
     {
-        _conn = new SqliteConnection($"Data Source={_dbPath}");
+        _conn = new SqliteConnection($"Data Source={_dbPath};Pooling=False");
         _conn.Open();
         EnsureSchema();
         using var cmd = _conn.CreateCommand();
@@ -49,13 +49,16 @@ internal sealed class RecentRepository : IDisposable
     {
         _conn?.Dispose();
         _conn = null;
+        SqliteConnection.ClearAllPools();
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
         if (File.Exists(_dbPath))
         {
             var bak = _dbPath + $".bak.{DateTime.Now:yyyyMMddHHmmss}";
             File.Move(_dbPath, bak, overwrite: true);
             Log.Warning("RecentRepository: 损坏的数据库已备份到 {Bak}", bak);
         }
-        _conn = new SqliteConnection($"Data Source={_dbPath}");
+        _conn = new SqliteConnection($"Data Source={_dbPath};Pooling=False");
         _conn.Open();
         EnsureSchema();
     }
@@ -86,6 +89,8 @@ internal sealed class RecentRepository : IDisposable
                 exists_state         INTEGER NOT NULL,
                 is_folder            INTEGER NOT NULL,
                 is_favorite          INTEGER NOT NULL,
+                favorite_time        INTEGER,
+                favorite_order       INTEGER NOT NULL DEFAULT 0,
                 is_hidden            INTEGER NOT NULL,
                 source_kinds         INTEGER NOT NULL,
                 icon_cache_key       TEXT,
@@ -93,6 +98,29 @@ internal sealed class RecentRepository : IDisposable
             );
             CREATE INDEX IF NOT EXISTS idx_recent_time ON recent_items(recent_time DESC);
             CREATE INDEX IF NOT EXISTS idx_extension   ON recent_items(extension);
+
+            CREATE TABLE IF NOT EXISTS favorites (
+                normalized_path      TEXT PRIMARY KEY,
+                display_name         TEXT NOT NULL,
+                extension            TEXT,
+                category_source      TEXT,
+                recent_time          INTEGER NOT NULL,
+                target_modified_time INTEGER,
+                size_bytes           INTEGER,
+                exists_state         INTEGER NOT NULL,
+                is_folder            INTEGER NOT NULL,
+                is_favorite          INTEGER NOT NULL,
+                favorite_time        INTEGER,
+                favorite_order       INTEGER NOT NULL DEFAULT 0,
+                is_hidden            INTEGER NOT NULL,
+                source_kinds         INTEGER NOT NULL,
+                icon_cache_key       TEXT,
+                last_seen_time       INTEGER NOT NULL
+            );
+
+            -- 迁移逻辑：如果 favorites 表为空，则从 recent_items 导入旧的收藏项
+            INSERT OR IGNORE INTO favorites 
+            SELECT * FROM recent_items WHERE is_favorite = 1;
             """;
         cmd.ExecuteNonQuery();
     }
@@ -106,7 +134,7 @@ internal sealed class RecentRepository : IDisposable
             SELECT normalized_path, display_name, extension,
                    category_source AS classification_source,
                    recent_time, target_modified_time, size_bytes,
-                   exists_state, is_folder, is_favorite, is_hidden,
+                   exists_state, is_folder, is_favorite, favorite_time, favorite_order, is_hidden,
                    source_kinds, icon_cache_key, last_seen_time
             FROM recent_items
             ORDER BY recent_time DESC
@@ -117,23 +145,48 @@ internal sealed class RecentRepository : IDisposable
             yield return ReadItem(reader);
     }
 
-    // UPSERT 一条记录
-    public void Upsert(RecentItem item)
+    public IEnumerable<RecentItem> LoadFavorites()
+    {
+        if (_conn is null) yield break;
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "SELECT * FROM favorites ORDER BY favorite_order ASC, favorite_time DESC";
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+            yield return ReadItem(reader);
+    }
+
+    public void Upsert(RecentItem item) => UpsertToTable(item, "recent_items");
+
+    public void Delete(string normalizedPath)
+    {
+        if (_conn is null) return;
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM recent_items WHERE normalized_path = $path;";
+        cmd.Parameters.AddWithValue("$path", normalizedPath);
+        cmd.ExecuteNonQuery();
+    }
+
+    public void UpsertFavorite(RecentItem item)
+    {
+        UpsertToTable(item, "favorites");
+    }
+
+    private void UpsertToTable(RecentItem item, string tableName)
     {
         if (_conn is null) return;
         try
         {
             using var cmd = _conn.CreateCommand();
-            cmd.CommandText = """
-                INSERT INTO recent_items
+            cmd.CommandText = $"""
+                INSERT INTO {tableName}
                     (normalized_path, display_name, extension, category_source,
                      recent_time, target_modified_time, size_bytes,
-                     exists_state, is_folder, is_favorite, is_hidden,
+                     exists_state, is_folder, is_favorite, favorite_time, favorite_order, is_hidden,
                      source_kinds, icon_cache_key, last_seen_time)
                 VALUES
                     ($path, $name, $ext, $ftype,
                      $rt, $mt, $size,
-                     $es, $isf, $isfav, $ish,
+                     $es, $isf, $isfav, $ftm, $ford, $ish,
                      $sk, $ick, $lst)
                 ON CONFLICT(normalized_path) DO UPDATE SET
                     display_name         = excluded.display_name,
@@ -145,6 +198,8 @@ internal sealed class RecentRepository : IDisposable
                     exists_state         = excluded.exists_state,
                     is_folder            = excluded.is_folder,
                     is_favorite          = excluded.is_favorite,
+                    favorite_time        = excluded.favorite_time,
+                    favorite_order       = excluded.favorite_order,
                     is_hidden            = excluded.is_hidden,
                     source_kinds         = excluded.source_kinds,
                     icon_cache_key       = excluded.icon_cache_key,
@@ -160,6 +215,8 @@ internal sealed class RecentRepository : IDisposable
             cmd.Parameters.AddWithValue("$es",    (int)item.Exists);
             cmd.Parameters.AddWithValue("$isf",   item.IsFolder   ? 1 : 0);
             cmd.Parameters.AddWithValue("$isfav", item.IsFavorite ? 1 : 0);
+            cmd.Parameters.AddWithValue("$ftm",   item.FavoriteTime.HasValue ? ToEpochMs(item.FavoriteTime.Value) : DBNull.Value);
+            cmd.Parameters.AddWithValue("$ford",  item.FavoriteOrder);
             cmd.Parameters.AddWithValue("$ish",   item.IsHidden   ? 1 : 0);
             cmd.Parameters.AddWithValue("$sk",    (int)item.Sources);
             cmd.Parameters.AddWithValue("$ick",   item.IconCacheKey ?? (object)DBNull.Value);
@@ -168,25 +225,68 @@ internal sealed class RecentRepository : IDisposable
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "RecentRepository: Upsert 失败 {Path}", item.NormalizedPath);
+            Log.Warning(ex, "RecentRepository: UpsertToTable({Table}) 失败 {Path}", tableName, item.NormalizedPath);
         }
     }
 
-    // 删除单条记录
-    public void Delete(string normalizedPath)
+    // 背景扫描发现项时的 UPSERT：保留收藏状态、隐藏状态，并合并来源位掩码
+    public void UpsertDiscovery(RecentItem item)
     {
         if (_conn is null) return;
         try
         {
             using var cmd = _conn.CreateCommand();
-            cmd.CommandText = "DELETE FROM recent_items WHERE normalized_path = $path;";
-            cmd.Parameters.AddWithValue("$path", normalizedPath);
+            cmd.CommandText = """
+                INSERT INTO recent_items
+                    (normalized_path, display_name, extension, category_source,
+                     recent_time, target_modified_time, size_bytes,
+                     exists_state, is_folder, is_favorite, favorite_time, favorite_order, is_hidden,
+                     source_kinds, icon_cache_key, last_seen_time)
+                VALUES
+                    ($path, $name, $ext, $ftype,
+                     $rt, $mt, $size,
+                     $es, $isf, 0, NULL, 0, 0,
+                     $sk, $ick, $lst)
+                ON CONFLICT(normalized_path) DO UPDATE SET
+                    display_name         = excluded.display_name,
+                    extension            = excluded.extension,
+                    category_source      = excluded.category_source,
+                    recent_time          = MAX(recent_time, excluded.recent_time),
+                    target_modified_time = COALESCE(excluded.target_modified_time, target_modified_time),
+                    size_bytes           = COALESCE(excluded.size_bytes, size_bytes),
+                    exists_state         = excluded.exists_state,
+                    is_folder            = excluded.is_folder,
+                    source_kinds         = source_kinds | excluded.source_kinds,
+                    icon_cache_key       = COALESCE(excluded.icon_cache_key, icon_cache_key),
+                    last_seen_time       = excluded.last_seen_time;
+                """;
+            cmd.Parameters.AddWithValue("$path",  item.NormalizedPath);
+            cmd.Parameters.AddWithValue("$name",  item.DisplayName);
+            cmd.Parameters.AddWithValue("$ext",   item.Extension);
+            cmd.Parameters.AddWithValue("$ftype", item.ClassificationSource);
+            cmd.Parameters.AddWithValue("$rt",    ToEpochMs(item.RecentTime));
+            cmd.Parameters.AddWithValue("$mt",    item.TargetModifiedTime.HasValue ? ToEpochMs(item.TargetModifiedTime.Value) : DBNull.Value);
+            cmd.Parameters.AddWithValue("$size",  item.SizeBytes.HasValue ? item.SizeBytes.Value : DBNull.Value);
+            cmd.Parameters.AddWithValue("$es",    (int)item.Exists);
+            cmd.Parameters.AddWithValue("$isf",   item.IsFolder ? 1 : 0);
+            cmd.Parameters.AddWithValue("$sk",    (int)item.Sources);
+            cmd.Parameters.AddWithValue("$ick",   item.IconCacheKey ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("$lst",   ToEpochMs(item.LastSeenTime));
             cmd.ExecuteNonQuery();
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "RecentRepository: Delete 失败 {Path}", normalizedPath);
+            Log.Warning(ex, "RecentRepository: UpsertDiscovery 失败 {Path}", item.NormalizedPath);
         }
+    }
+
+    public void DeleteFavorite(string normalizedPath)
+    {
+        if (_conn is null) return;
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM favorites WHERE normalized_path = $path;";
+        cmd.Parameters.AddWithValue("$path", normalizedPath);
+        cmd.ExecuteNonQuery();
     }
 
     // 清空全表（Rebuild Index 使用）
@@ -218,10 +318,12 @@ internal sealed class RecentRepository : IDisposable
         Exists               = (ExistsState)r.GetInt32(7),
         IsFolder             = r.GetInt32(8)  != 0,
         IsFavorite           = r.GetInt32(9)  != 0,
-        IsHidden             = r.GetInt32(10) != 0,
-        Sources              = (SourceKinds)r.GetInt32(11),
-        IconCacheKey         = r.IsDBNull(12) ? null : r.GetString(12),
-        LastSeenTime         = FromEpochMs(r.GetInt64(13)),
+        FavoriteTime         = r.IsDBNull(10) ? null : FromEpochMs(r.GetInt64(10)),
+        FavoriteOrder        = r.GetInt32(11),
+        IsHidden             = r.GetInt32(12) != 0,
+        Sources              = (SourceKinds)r.GetInt32(13),
+        IconCacheKey         = r.IsDBNull(14) ? null : r.GetString(14),
+        LastSeenTime         = FromEpochMs(r.GetInt64(15)),
     };
 
     private static long     ToEpochMs(DateTime dt) =>

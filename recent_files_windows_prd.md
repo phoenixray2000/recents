@@ -171,40 +171,39 @@ Recents。
 主窗口采用暗色、圆角、双栏布局：
 
 ```text
-┌────────────────────────────────────────────────────────────────────┐
-│ [AppIcon] Recents                                      —  □  ×      │
-├──────────────┬─────────────────────────────────────────────────────┤
-│ Sidebar      │ Search recent files...                 Ctrl+Alt+R   │
-│              ├─────────────────────────────────────────────────────┤
-│ All          │ [All] [Docs] [Images] [Code] [Folders]  Newest first│
-│ Favorites    │                                                     │
-│ Recent Folders│ [icon] filename.ext             [Open][Reveal][Pin]│
-│ Documents    │        time · size · path                 [...]     │
-│ Images       │ [icon] filename.ext             [Open][Reveal][Pin]│
-│ Code         │        time · size · path                 [...]     │
-├──────────────┴─────────────────────────────────────────────────────┤
-│ ● Ready | 128 items                         ↑↓ Navigate Enter Open │
-└────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┬──────────────┐
+│ [AppIcon] Recents                           —  □  ×     │              │
+├─────────────────────────────────────────────────────────┤  FAVORITES   │
+│ Search recent files...                      Alt+Shift+Z │              │
+├─────────────────────────────────────────────────────────┤ [icon] file  │
+│ [All] [Docs] [Images] [Code] [Folders]    Newest first  │        time  │
+├─────────────────────────────────────────────────────────┤ [icon] file  │
+│ [icon] filename.ext                  [Open][Reveal][Pin]│        time  │
+│        time · size · path                      [...]    │              │
+│ [icon] filename.ext                  [Open][Reveal][Pin]│              │
+│        time · size · path                      [...]    │              │
+├─────────────────────────────────────────────────────────┤              │
+│ ● Ready | 128 items              ↑↓ Navigate Enter Open │              │
+└─────────────────────────────────────────────────────────┴──────────────┘
 ```
 
 主窗口区域：
 
 | 区域 | 必须显示内容 | 功能要求 |
 |---|---|---|
-| 标题栏 | App 图标、`Recents`、窗口控制按钮 | App 图标只作为身份标识；窗口按钮必须可用 |
-| 搜索区 | 搜索框、当前全局快捷键 Badge | 搜索框自动聚焦；Badge 显示 `HotkeyService.ActiveLabel` 实际注册成功的快捷键 |
-| 左侧导航栏 | All Files、Favorites、Recent Folders、Documents、Images、Code（Settings 仅在已实现时显示） | 每项必须切换到真实视图或打开真实设置页 |
-| 筛选与排序区 | 文件类型 Chip、排序下拉 | Chip、排序切换必须立即影响列表；下拉只列已实现的排序 |
-| 文件列表区 | 最近文件 / 文件夹 | 列表虚拟化；不显示 Recent 文件夹中的 .lnk，显示真实目标 |
-| 行内快捷操作区 | Open、Reveal、Pin、More | 所有按钮作用于真实路径 |
-| 底部状态栏 | Source 状态、可见数量、键盘提示 | 状态和数量必须动态更新 |
+| 标题栏 | App 图标、`Recents`、设置按钮、收藏开关、窗口控制按钮 | 设置按钮打开配置；收藏开关控制右侧抽屉 |
+| 搜索区 | 搜索框、当前全局快捷键 Badge | 搜索框自动聚焦；显示实际热键 |
+| 筛选与排序区 | 文件类型 Chip、排序下拉 | 立即筛选/排序当前列表 |
+| 文件列表区 | 最近文件 / 文件夹 | 使用共享模板，支持拖拽和右键菜单 |
+| 收藏抽屉 (Drawer) | 收藏的文件和文件夹 | **右侧展开**，显示独立持久化的收藏清单。当抽屉打开时，窗口宽度自动增加 280px，以确保主内容区域布局不被挤压（Preserve dimensions）。 |
+| 底部状态栏 | 状态、可见数量、键盘提示 | 动态更新 |
 
 ### 5.2 标题栏
 
 标题栏内容：
 
-- 左侧：App 图标 + `Recents`。
-- 右侧：最小化、最大化 / 还原、关闭。
+- 左侧：App 图标 + `Recents` + 设置按钮。
+- 右侧：收藏开关（Drawer 开关）、最小化、最大化 / 还原、关闭。
 
 要求：
 - 标题栏支持拖动窗口，使用 `WindowChrome.CaptionHeight` + `IsHitTestVisibleInChrome` 配合：搜索框、热键 Badge、窗口控制按钮、行内按钮的命中区域必须屏蔽拖动。
@@ -290,7 +289,10 @@ Newest first
 - 当前排序写入配置。
 - 未实现的排序不允许出现在下拉中。
 
-视图密度（Comfortable 64px / Compact 52px）切换：**P0 不做，对应图标不显示**；P1 启用后必须 Tooltip `Toggle compact view` / `Toggle comfortable view`，点击立即生效，状态写入配置。
+**平滑滚动优化**：
+- 列表支持平滑滚动，灵敏度经过优化（0.4x 灵敏度），提供丝滑的扫视体验。
+
+视图密度（Standard / Compact）切换：采用 ▭ (U+25AD) 和 ═ (U+2550) 图标，放置在主界面筛选区右侧 "Newest first" 排序按钮的左侧。点击立即生效，状态写入配置。
 
 ### 5.7 文件列表项
 
@@ -329,11 +331,9 @@ Newest first
 - 多选状态下三点 More 仍可用，菜单内容自动切换为多选语义（如"打开全部 N 个"、"复制 N 条路径"）。
 
 要求：
-- 按钮作用于 `NormalizedPath`，不得作用于 `.lnk`。
-- 图钉蓝色表示 `IsFavorite = true`，灰色表示未收藏。
-- **三点 More 菜单内容引用 §6.10.1 「基础项」**；P0 阶段不显示 §6.10.2 「扩展项」。
 - 行内按钮可常显或悬停显示；若常显，视觉权重必须低于文件名。
 - 窄窗口下按 §7.2 隐藏 Reveal 与 Pin 时，三点 More **必须始终包含** Reveal 与 Pin / Unpin。
+- **收藏独立逻辑**：收藏夹逻辑与主列表解耦。收藏后的条目将完整元数据保存到独立表中，即使主列表条目被修剪（Prune）或暂时从 DB 移除，收藏项依然保留。
 
 ### 5.8 选中、悬停与文件状态
 
@@ -397,6 +397,10 @@ Newest first
 No recent files found
 Try changing filters or rebuilding the index.
 ```
+
+空状态包含两个快速操作按钮：
+- `Clear filters`: 清除搜索框、筛选 Chip 和侧边栏分类，恢复全量列表。
+- `Rebuild index`: 触发 SQLite 索引重扫。
 
 加载态：
 
@@ -536,6 +540,7 @@ HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\RecentDocs
 - 文件夹来源：L1 监听目录中的所有目标路径所在父目录会被聚合到 Recent Folders；.lnk 直指文件夹时也进入 Recent Folders。
 - 删除：仅当某来源**显式**报告删除（FileSystemWatcher.Deleted）才从索引移除；其他来源消失只移除该 SourceKind 标志，不删条目。
 - **文件夹条目必须保留**：融合时不允许把 `IsFolder=true` 的条目剔除，它们用于 Recent Folders 视图（§6.24）。
+- **保护用户态**：后台扫描触发的更新使用 `UpsertDiscovery` 策略，仅更新文件元数据（大小、时间、来源掩码），**严禁覆盖**用户手动设置的 `is_favorite`、`favorite_time`、`is_hidden` 等状态位。同时，通过位或运算（OR）合并 `source_kinds`。
 
 #### 6.3.8 重新扫描
 
@@ -779,24 +784,52 @@ SQLite schema（核心表）：
 
 ```sql
 CREATE TABLE recent_items (
-    normalized_path TEXT PRIMARY KEY,
-    display_name TEXT NOT NULL,
-    extension TEXT,
-    file_type TEXT,
-    recent_time INTEGER NOT NULL,        -- unix epoch ms
+    normalized_path      TEXT PRIMARY KEY,
+    display_name         TEXT NOT NULL,
+    extension            TEXT,
+    category_source      TEXT,               -- 对应 DB 字段 category_source
+    recent_time          INTEGER NOT NULL,   -- unix epoch ms
     target_modified_time INTEGER,
-    size_bytes INTEGER,
-    exists_state INTEGER NOT NULL,       -- 0=Missing,1=Exists,2=Unknown
-    is_folder INTEGER NOT NULL,
-    is_favorite INTEGER NOT NULL,
-    is_hidden INTEGER NOT NULL,
-    source_kinds INTEGER NOT NULL,       -- bitmask
-    icon_cache_key TEXT,
-    last_seen_time INTEGER NOT NULL
+    size_bytes           INTEGER,
+    exists_state         INTEGER NOT NULL,   -- 0=Missing,1=Exists,2=Unknown
+    is_folder            INTEGER NOT NULL,
+    is_favorite          INTEGER NOT NULL,
+    favorite_time        INTEGER,
+    favorite_order       INTEGER NOT NULL DEFAULT 0,
+    is_hidden            INTEGER NOT NULL,
+    source_kinds         INTEGER NOT NULL,   -- bitmask
+    icon_cache_key       TEXT,
+    last_seen_time       INTEGER NOT NULL
 );
+
+-- 独立收藏表：解耦存储，保证收藏项的持久性
+CREATE TABLE favorites (
+    normalized_path      TEXT PRIMARY KEY,
+    display_name         TEXT NOT NULL,
+    extension            TEXT,
+    category_source      TEXT,
+    recent_time          INTEGER NOT NULL,
+    target_modified_time INTEGER,
+    size_bytes           INTEGER,
+    exists_state         INTEGER NOT NULL,
+    is_folder            INTEGER NOT NULL,
+    is_favorite          INTEGER NOT NULL,
+    favorite_time        INTEGER,
+    favorite_order       INTEGER NOT NULL DEFAULT 0,
+    is_hidden            INTEGER NOT NULL,
+    source_kinds         INTEGER NOT NULL,
+    icon_cache_key       TEXT,
+    last_seen_time       INTEGER NOT NULL
+);
+
 CREATE INDEX idx_recent_time ON recent_items(recent_time DESC);
 CREATE INDEX idx_extension   ON recent_items(extension);
 ```
+
+**连接健壮性策略**：
+1. **禁用连接池**：为了防止在数据库自动重建（TryRebuild）时因句柄锁定导致 `File.Move` 失败，连接字符串强制使用 `Pooling=False`。
+2. **强制清理**：在尝试删除或移动数据库文件前，必须调用 `SqliteConnection.ClearAllPools()` 并配合 `GC.Collect()` 确保句柄释放。
+3. **数据原子性**：单条更新采用 `UPSERT` 逻辑。后台扫描使用 `UpsertDiscovery` 保护收藏/隐藏状态位，确保 Single Point of Truth。
 
 ### 6.19 文件系统监听
 
@@ -897,11 +930,13 @@ CREATE INDEX idx_extension   ON recent_items(extension);
 
 ### 6.23 收藏文件 / 固定文件
 
-- 用户可将文件固定到 Favorites。
-- Favorites 始终显示在收藏页。
-- 收藏状态保存到 SQLite `is_favorite` 字段。
-- 收藏文件不存在仍显示，灰显。
-- 支持取消固定。
+- **独立持久化**：用户可将文件固定到 Favorites。收藏项存储在独立的 `favorites` 表中，确保即使主列表条目因老化被修剪，收藏依然永久保留。
+- **展示位置**：Favorites 始终可通过右侧抽屉（Drawer）访问，也可在左侧导航栏的 Favorites 视图中查看。
+- **收藏状态**：收藏状态保存到 SQLite `is_favorite` 字段。
+- **存在性表现**：收藏文件不存在仍显示，灰显。
+- **取消固定**：支持在主列表、左侧视图或右侧抽屉中取消固定。
+- **重排序**：右侧抽屉支持通过鼠标拖拽进行手动重排序，顺序持久化保存到 `favorite_order` 字段。
+- **外部拖入**：支持将外部文件（如从资源管理器或其他应用）直接拖入收藏栏（抽屉）进行收藏。
 
 ### 6.24 最近文件夹
 
@@ -968,6 +1003,7 @@ DPI 与多显示器：
 - `Esc` 隐藏窗口。
 - 点击托盘图标显示窗口。
 - 窗口位置使用鼠标当前所在显示器的 work area 居中。
+- **边界持久化**：自动记录并恢复窗口的显示位置（Left/Top）、基本宽度（BaseWidth）、高度（Height）以及最大化状态。
 
 ### 7.4 颜色 Token
 
@@ -1363,6 +1399,8 @@ Recents/
 - [ ] 列表不得硬编码示例文件名、示例路径、示例时间。
 - [ ] **列表不出现 `%APPDATA%\Microsoft\Windows\Recent` 中的 .lnk 条目**（除非用户索引到的真实文件本身就是 .lnk）。
 - [ ] **列表不出现项目自身的 `bin\Debug` / `bin\Release` / `obj\` 输出文件**。
+- [ ] **收藏抽屉开启时，窗口宽度自动增加 280px，主列表宽度保持不变**。
+- [ ] **列表滚动具有平滑的惯性/灵敏度控制（0.4x）**。
 - [ ] **关闭按钮首次按下时弹一次"已隐藏到托盘"气泡**，第二次起不再弹。
 - [ ] **拖动到 4K 与 1080p 显示器之间，UI 元素即时按 DPI 缩放，无错位**。
 - [ ] **`.exe` 文件图标必须来自系统真实资源**，无任何二次重绘 / 风格化。

@@ -38,5 +38,9 @@
     <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
     <!-- 不引入任何云盘 SDK、HTTP 库 -->
   </ItemGroup>
-
+  
+  <ItemGroup>
+    <Resource Include="Resources\Icons\AppIcon.ico" />
+  </ItemGroup>
+  
 </Project>

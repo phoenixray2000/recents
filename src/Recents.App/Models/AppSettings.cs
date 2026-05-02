@@ -20,6 +20,11 @@ public class AppSettings
     public int  MaxRecentItems    { get; set; } = 200;
     public string DefaultSort     { get; set; } = "RecentTime";
     public ViewDensity CurrentDensity { get; set; } = ViewDensity.Standard;
+    public double WindowWidth      { get; set; } = 600;
+    public double WindowHeight     { get; set; } = 760;
+    public double? WindowTop       { get; set; } = null;
+    public double? WindowLeft      { get; set; } = null;
+    public bool  StartMinimized   { get; set; } = false;
 
     // Hotkey（字符串表示，格式 "Ctrl+Alt+R"）
     public string Hotkey { get; set; } = "Alt+Shift+Z";

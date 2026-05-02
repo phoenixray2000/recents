@@ -9,6 +9,7 @@ public partial class StatusHintService : ObservableObject
     public enum AppStatus
     {
         Ready,
+        Initializing,
         Indexing,
         Watching,
         Partial,
@@ -34,6 +35,10 @@ public partial class StatusHintService : ObservableObject
             case AppStatus.Ready:
                 StatusText = "Ready";
                 StatusColor = Brush(0x63, 0xC5, 0x54); // Success Green
+                break;
+            case AppStatus.Initializing:
+                StatusText = "Initializing...";
+                StatusColor = Brush(0x60, 0xCD, 0xFF); // Info Blue
                 break;
             case AppStatus.Indexing:
                 StatusText = "Indexing...";

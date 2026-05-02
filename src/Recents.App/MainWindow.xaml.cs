@@ -38,8 +38,12 @@ public partial class MainWindow : Window
         _rebuildIndexAsync = rebuildIndexAsync;
         _restartSourcesAsync = restartSourcesAsync;
         DataContext = _viewModel;
-        Topmost = _settings.Current.AlwaysOnTop;
         _viewModel.CurrentDensity = _settings.Current.CurrentDensity;
+        Topmost = _settings.Current.AlwaysOnTop;
+        
+        // 恢复窗口位置和大小 (PRD §5.0 / 用户需求)
+        RestoreWindowBounds();
+        
         UpdateResponsiveLayout();
         
         // 首次显示时自动聚焦
@@ -57,8 +61,92 @@ public partial class MainWindow : Window
         Deactivated += (_, _) =>
         {
             if (_settings.Current.HideOnFocusLost && _settingsWindow is null)
-                Hide();
+                HideWindow();
         };
+
+        _viewModel.PropertyChanged += (s, e) => 
+        {
+            if (e.PropertyName == nameof(MainViewModel.CombinedFavoritesVisibility))
+                UpdateWindowWidth();
+        };
+        
+        UpdateWindowWidth();
+    }
+
+    private void RestoreWindowBounds()
+    {
+        if (_settings.Current.WindowWidth >= MinWidth)
+            _baseWidth = _settings.Current.WindowWidth;
+        
+        if (_settings.Current.WindowHeight >= MinHeight)
+            Height = _settings.Current.WindowHeight;
+
+        if (_settings.Current.WindowTop.HasValue && _settings.Current.WindowLeft.HasValue)
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            Top = _settings.Current.WindowTop.Value;
+            Left = _settings.Current.WindowLeft.Value;
+            EnsureWindowInVisibleRange();
+        }
+    }
+
+    private void SaveWindowBounds()
+    {
+        _settings.Current.WindowWidth = _baseWidth;
+        _settings.Current.WindowHeight = Height;
+        _settings.Current.WindowTop = Top;
+        _settings.Current.WindowLeft = Left;
+        _settings.Save();
+    }
+
+    private void EnsureWindowInVisibleRange()
+    {
+        // 获取当前窗口中心点所在的屏幕，如果完全不可见则取主屏幕
+        var virtualLeft = SystemParameters.VirtualScreenLeft;
+        var virtualTop = SystemParameters.VirtualScreenTop;
+        var virtualWidth = SystemParameters.VirtualScreenWidth;
+        var virtualHeight = SystemParameters.VirtualScreenHeight;
+
+        // 如果窗口完全在虚拟屏幕之外，重置到主屏幕中心
+        if (Left + Width < virtualLeft || Left > virtualLeft + virtualWidth ||
+            Top + Height < virtualTop || Top > virtualTop + virtualHeight)
+        {
+            WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            return;
+        }
+
+        // 确保窗口至少有一部分在工作区内，并且标题栏可抓取
+        // 简单处理：确保 Top/Left 不超出当前屏幕边界太远
+        // 更稳健的做法是使用 System.Windows.Forms.Screen (需要引用) 或 P/Invoke
+        // 这里使用 WPF 的简单方式：限制在虚拟屏幕内
+        if (Left < virtualLeft) Left = virtualLeft;
+        if (Top < virtualTop) Top = virtualTop;
+        if (Left + Width > virtualLeft + virtualWidth) Left = virtualLeft + virtualWidth - Width;
+        if (Top + Height > virtualTop + virtualHeight) Top = virtualTop + virtualHeight - Height;
+    }
+
+    private double _baseWidth = 600;
+    private void UpdateWindowWidth()
+    {
+        if (WindowState == WindowState.Maximized) return;
+
+        if (_viewModel.CombinedFavoritesVisibility)
+        {
+            Width = _baseWidth + 280;
+        }
+        else
+        {
+            Width = _baseWidth;
+        }
+    }
+
+    protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
+    {
+        base.OnRenderSizeChanged(sizeInfo);
+        if (sizeInfo.WidthChanged && !_viewModel.CombinedFavoritesVisibility)
+        {
+            _baseWidth = ActualWidth;
+        }
     }
 
     public void SetTrayService(TrayService tray) => _tray = tray;
@@ -73,7 +161,7 @@ public partial class MainWindow : Window
         }
 
         e.Cancel = true;
-        Hide();
+        HideWindow();
 
         // B1. 首次关闭时显示气泡提示 (PRD §7.8)
         if (!_settings.Current.ClosedToTrayNoticeShown)
@@ -97,10 +185,7 @@ public partial class MainWindow : Window
 
     private void UpdateResponsiveLayout()
     {
-        var compact = ActualWidth > 0 && ActualWidth < 900;
-        _viewModel.IsCompactSidebar = compact;
-        SidebarColumn.Width = new GridLength(compact ? 64 : 220);
-        LogoText.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        // 侧边栏已移除，响应式逻辑后续根据新布局需求重构
     }
 
     // 处理全局快捷键：Esc 隐藏，Ctrl+F 聚焦搜索，Enter 打开等
@@ -108,7 +193,7 @@ public partial class MainWindow : Window
     {
         if (e.Key == Key.Escape)
         {
-            Hide();
+            HideWindow();
             e.Handled = true;
             return;
         }
@@ -213,7 +298,7 @@ public partial class MainWindow : Window
                 FileActionService.RevealInExplorer(vm.DisplayPath);
             else
                 FileActionService.OpenFile(vm.DisplayPath);
-            Hide();
+            HideWindow();
         }
     }
 
@@ -233,12 +318,64 @@ public partial class MainWindow : Window
         }
     }
 
+    private void FavoritesList_MouseMove(object sender, WpfMouseEventArgs e)
+    {
+        if (e.LeftButton == MouseButtonState.Pressed && FavoritesList.SelectedItem != null)
+        {
+            var selected = FavoritesList.SelectedItem as RecentItemViewModel;
+            if (selected == null || selected.IsMissing) return;
+
+            // 包含内部排序标志和外部文件路径
+            var dataObj = DragDropService.CreateDataObject(new[] { selected.DisplayPath });
+            dataObj.SetData("InternalReorder", selected);
+            
+            System.Windows.DragDrop.DoDragDrop(FavoritesList, dataObj, System.Windows.DragDropEffects.Move | System.Windows.DragDropEffects.Copy | System.Windows.DragDropEffects.Link);
+        }
+    }
+
+    private async void FavoritesList_Drop(object sender, System.Windows.DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent("InternalReorder"))
+        {
+            var draggedVm = e.Data.GetData("InternalReorder") as RecentItemViewModel;
+            if (draggedVm == null) return;
+
+            // 找到放置点对应的项索引
+            var pos = e.GetPosition(FavoritesList);
+            var result = VisualTreeHelper.HitTest(FavoritesList, pos);
+            if (result == null) return;
+
+            var hitItem = FindParent<ListBoxItem>(result.VisualHit);
+            if (hitItem != null)
+            {
+                var targetVm = hitItem.DataContext as RecentItemViewModel;
+                if (targetVm != null && targetVm != draggedVm)
+                {
+                    int targetIndex = _viewModel.FavoritesView.Cast<object>().ToList().IndexOf(targetVm);
+                    await _indexService.ReorderFavoritesAsync(draggedVm.Item.NormalizedPath, targetIndex);
+                }
+            }
+        }
+        else if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
+        {
+            var files = (string[])e.Data.GetData(System.Windows.DataFormats.FileDrop);
+            if (files != null)
+            {
+                foreach (var file in files)
+                {
+                    await _indexService.AddFavoriteByPathAsync(file);
+                }
+            }
+        }
+    }
+
     private IEnumerable<RecentItemViewModel> GetSelectedItems() =>
         ItemsList.SelectedItems.Cast<RecentItemViewModel>();
 
     // 提供给 App 激活窗口时调用的公共方法
     public void ShowAndFocus()
     {
+        EnsureWindowInVisibleRange();
         Show();
         Activate();
         SearchBox.Focus();
@@ -249,34 +386,22 @@ public partial class MainWindow : Window
     {
         if (IsVisible && IsActive)
         {
-            Hide();
+            HideWindow();
         }
         else
         {
             ShowAndFocus();
         }
     }
-    private void Nav_Checked(object sender, RoutedEventArgs e)
+
+    public void HideWindow()
     {
-        if (_viewModel == null) return;
-
-        if (sender is System.Windows.Controls.RadioButton rb)
-        {
-            var category = rb.Content?.ToString() ?? "All";
-            
-            // 映射 UI 显示名到内部分类名 (Sidebar only)
-            if (category == "Recent Folders") category = "Folders";
-            if (category == "All Files") category = "All";
-            
-            if (category == "Settings")
-            {
-                OpenSettings();
-                rb.IsChecked = false;
-                return;
-            }
-
-            _viewModel.CurrentNavCategory = category;
-        }
+        SaveWindowBounds();
+        Hide();
+    }
+    private void Settings_Click(object sender, RoutedEventArgs e)
+    {
+        OpenSettings();
     }
 
     private void Chip_Checked(object sender, RoutedEventArgs e)

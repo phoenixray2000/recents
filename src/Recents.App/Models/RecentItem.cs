@@ -23,6 +23,8 @@ public class RecentItem
     public bool        IsFolder            { get; set; }
     // 是否已收藏（固定）
     public bool        IsFavorite          { get; set; }
+    public DateTime?   FavoriteTime        { get; set; }
+    public int         FavoriteOrder       { get; set; }
     // 是否被用户隐藏（不展示，但保留索引）
     public bool        IsHidden            { get; set; }
     // 来源位掩码：多来源命中同一路径时，各来源标志位 OR 合并

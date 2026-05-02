@@ -14,6 +14,7 @@ public partial class MainViewModel : ObservableObject
     private readonly RecentIndexService _indexService;
     private readonly HotkeyService _hotkeyService;
     private readonly StatusHintService _statusHint;
+    private readonly System.Windows.Threading.DispatcherTimer _updateTimer;
 
     [ObservableProperty]
     private string _searchText = string.Empty;
@@ -34,9 +35,6 @@ public partial class MainViewModel : ObservableObject
     private SortOption _currentSort = SortOption.RecentTime;
 
     [ObservableProperty]
-    private string _currentNavCategory = "All";
-
-    [ObservableProperty]
     private string _currentChipFilter = "All";
 
     [ObservableProperty]
@@ -46,10 +44,17 @@ public partial class MainViewModel : ObservableObject
     private bool _hasItems = true;
 
     [ObservableProperty]
-    private bool _isCompactSidebar;
+    private bool _hasFavorites = false;
+
+    [ObservableProperty]
+    private bool _isFavoritesDrawerOpen = true;
+    
+    [ObservableProperty]
+    private bool _isInitializing = true;
 
     // UI 绑定的过滤后视图
     public ICollectionView ItemsView { get; }
+    public ICollectionView FavoritesView { get; }
 
     public MainViewModel(RecentIndexService indexService, HotkeyService hotkeyService, StatusHintService statusHint)
     {
@@ -64,21 +69,52 @@ public partial class MainViewModel : ObservableObject
 
         ItemsView = CollectionViewSource.GetDefaultView(_indexService.Items);
         ItemsView.Filter = FilterItem;
-        
+
+        // 收藏夹现在绑定到独立的 Favorites 集合 (PRD §6.18 / User Feedback)
+        FavoritesView = CollectionViewSource.GetDefaultView(_indexService.Favorites);
+
         // 初始同步计数
         RefreshVisibleCount();
         UpdateHasItems();
+        UpdateHasFavorites();
         
-        _indexService.Items.CollectionChanged += (s, e) => 
+        ApplySort();
+
+        // Throttled updates (PRD/User Feedback: 启动和重扫时防止 Dispatcher 淹没导致的阻塞)
+        _updateTimer = new System.Windows.Threading.DispatcherTimer(
+            System.Windows.Threading.DispatcherPriority.Background,
+            System.Windows.Application.Current.Dispatcher)
         {
+            Interval = TimeSpan.FromMilliseconds(300)
+        };
+        _updateTimer.Tick += (s, e) =>
+        {
+            _updateTimer.Stop();
             RefreshVisibleCount();
             UpdateHasItems();
+            UpdateHasFavorites();
+            FavoritesView.Refresh();
         };
 
-        ApplySort();
+        _indexService.IndexChanged += () =>
+        {
+            if (!_updateTimer.IsEnabled) _updateTimer.Start();
+        };
+
+        _indexService.Items.CollectionChanged += (s, e) =>
+        {
+            if (IsInitializing && _indexService.Items.Count > 0)
+                IsInitializing = false;
+
+            if (!_updateTimer.IsEnabled) _updateTimer.Start();
+        };
+
+        _indexService.Favorites.CollectionChanged += (s, e) =>
+        {
+            if (!_updateTimer.IsEnabled) _updateTimer.Start();
+        };
     }
 
-    partial void OnCurrentNavCategoryChanged(string value) => RefreshItemsView();
 
     partial void OnCurrentChipFilterChanged(string value) => RefreshItemsView();
 
@@ -114,7 +150,6 @@ public partial class MainViewModel : ObservableObject
     private void ClearFilters()
     {
         SearchText = string.Empty;
-        CurrentNavCategory = "All";
         CurrentChipFilter = "All";
         RefreshItemsView();
     }
@@ -144,6 +179,21 @@ public partial class MainViewModel : ObservableObject
         HasItems = ItemsView.Cast<object>().Any();
     }
 
+    public bool CombinedFavoritesVisibility => HasFavorites && IsFavoritesDrawerOpen;
+
+    [RelayCommand]
+    private void ToggleFavorites() => IsFavoritesDrawerOpen = !IsFavoritesDrawerOpen;
+
+    private void UpdateHasFavorites()
+    {
+        HasFavorites = _indexService.Favorites.Any();
+        // 如果变成了没有收藏，自动重置打开状态为 true（方便下次有收藏时显示）
+        if (!HasFavorites) IsFavoritesDrawerOpen = true;
+        OnPropertyChanged(nameof(CombinedFavoritesVisibility));
+    }
+
+    partial void OnIsFavoritesDrawerOpenChanged(bool value) => OnPropertyChanged(nameof(CombinedFavoritesVisibility));
+
     private bool FilterItem(object obj)
     {
         if (obj is not RecentItemViewModel vm) return false;
@@ -164,23 +214,10 @@ public partial class MainViewModel : ObservableObject
         }
         else
         {
-            // Chip 为 All 时，遵循侧边栏导航规则
-            if (CurrentNavCategory == "Folders")
-            {
-                if (!vm.Item.IsFolder) return false;
-            }
-            else if (CurrentNavCategory == "All")
-            {
-                // All Files 默认仅显示文件 (PRD §17)
-                if (vm.Item.IsFolder) return false;
-            }
+            // Chip 为 All 时，默认仅显示文件 (PRD §17)
+            if (vm.Item.IsFolder) return false;
         }
 
-        // 2. 收藏过滤（如果是收藏视图，必须满足收藏状态）
-        if (CurrentNavCategory == "Favorites")
-        {
-            if (!vm.Item.IsFavorite) return false;
-        }
 
         // 搜索逻辑
         if (string.IsNullOrWhiteSpace(SearchText)) return true;

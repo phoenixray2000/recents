@@ -7,12 +7,13 @@
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:utils="clr-namespace:Recents.App.Utils"
         mc:Ignorable="d"
-        Title="Recents" Height="760" Width="1040" MinHeight="520" MinWidth="760"
+        Title="Recents" Height="760" Width="600" MinHeight="520" MinWidth="600"
         WindowStartupLocation="CenterScreen" 
         Topmost="True" ShowInTaskbar="False"
         Background="{StaticResource BgMain}" Foreground="{StaticResource TextPrimary}"
         FontFamily="Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI"
-        WindowStyle="None" AllowsTransparency="False"
+        WindowStyle="None"
+        Icon="pack://application:,,,/Recents;component/Resources/Icons/AppIcon.ico"
         PreviewKeyDown="Window_PreviewKeyDown"
         SizeChanged="Window_SizeChanged"
         Closing="Window_Closing">
@@ -23,6 +24,8 @@
 
     <Window.Resources>
         <utils:EnumToBooleanConverter x:Key="EnumToBooleanConverter" />
+        <utils:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+        <utils:BooleanToColorConverter x:Key="BooleanToColorConverter" />
 
         <!-- ListBoxItem Style -->
         <Style TargetType="ListBoxItem">
@@ -127,43 +130,39 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- Specific Template for Favorites (Always Compact, Single Action) -->
+        <DataTemplate x:Key="FavoritesItemTemplate" DataType="{x:Type vm:RecentItemViewModel}">
+            <Grid Margin="4,0" x:Name="ItemGrid">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Image Grid.Column="0" Source="{Binding SmallIcon}" Width="24" Height="24" VerticalAlignment="Center" Margin="0,0,12,0"/>
+
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource TextPrimary}" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="&#xE735;" Command="{Binding TogglePinCommand}"
+                            FontFamily="Segoe Fluent Icons" Width="32" Height="32" ToolTip="Unpin"
+                            Style="{StaticResource ActionButtonStyle}" Foreground="{StaticResource AccentBlue}"/>
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
     </Window.Resources>
 
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition x:Name="SidebarColumn" Width="220" />
             <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
-        <!-- Sidebar -->
-        <Grid Grid.Column="0" Background="{StaticResource BgSidebar}">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="60" />
-                <RowDefinition Height="*" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
-
-            <!-- App Logo -->
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0">
-                <Border Width="24" Height="24" Background="{StaticResource AccentBlue}" CornerRadius="4" Margin="0,0,12,0">
-                    <TextBlock Text="&#xEA37;" FontFamily="Segoe Fluent Icons" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                </Border>
-                <TextBlock x:Name="LogoText" Text="Recents" FontWeight="Bold" FontSize="16" VerticalAlignment="Center"/>
-            </StackPanel>
-
-            <!-- Nav Items -->
-            <StackPanel Grid.Row="1" Margin="0,10">
-                <RadioButton Content="All Files" IsChecked="True" Style="{StaticResource SidebarNavItem}" Tag="&#xE8B9;" Checked="Nav_Checked"/>
-                <RadioButton Content="Favorites" Style="{StaticResource SidebarNavItem}" Tag="&#xE734;" Checked="Nav_Checked"/>
-                <RadioButton Content="Recent Folders" Style="{StaticResource SidebarNavItem}" Tag="&#xE8B7;" Checked="Nav_Checked"/>
-            </StackPanel>
-
-            <!-- Footer Settings -->
-            <RadioButton Grid.Row="2" Content="Settings" Style="{StaticResource SidebarNavItem}" Tag="&#xE713;" Margin="0,0,0,20" Checked="Nav_Checked"/>
-        </Grid>
-
         <!-- Main Content -->
-        <Grid Grid.Column="1" Background="{StaticResource BgMain}">
+        <Grid Grid.Column="0" Background="{StaticResource BgMain}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="40" /> <!-- Custom Title Bar Row -->
                 <RowDefinition Height="Auto" /> <!-- Search Row -->
@@ -174,19 +173,14 @@
 
             <!-- Custom Title Bar Controls -->
             <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Right" shell:WindowChrome.IsHitTestVisibleInChrome="True">
-                <!-- Density Toggle -->
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
-                    <RadioButton Style="{StaticResource FilterPill}" Padding="8,4" Margin="2,0" Tag="Standard" 
-                                 IsChecked="{Binding CurrentDensity, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Standard}"
-                                 ToolTip="标准视图 (详细)" Click="Density_Click">
-                        <TextBlock Text="&#xEF2F;" FontFamily="Segoe Fluent Icons" FontSize="14"/>
-                    </RadioButton>
-                    <RadioButton Style="{StaticResource FilterPill}" Padding="8,4" Margin="2,0" Tag="Compact"
-                                 IsChecked="{Binding CurrentDensity, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Compact}"
-                                 ToolTip="紧凑视图 (极简)" Click="Density_Click">
-                        <TextBlock Text="&#xE8EF;" FontFamily="Segoe Fluent Icons" FontSize="14"/>
-                    </RadioButton>
-                </StackPanel>
+                <!-- Toggle Favorites Drawer -->
+                <ToggleButton Style="{StaticResource ActionToggleButtonStyle}" Padding="8" Margin="0,0,4,0"
+                              IsChecked="{Binding IsFavoritesDrawerOpen}"
+                              Visibility="{Binding HasFavorites, Converter={StaticResource BooleanToVisibilityConverter}}"
+                              ToolTip="Toggle Favorites Drawer">
+                    <TextBlock Text="&#xE735;" FontFamily="Segoe Fluent Icons" FontSize="14" 
+                               Foreground="{Binding IsFavoritesDrawerOpen, Converter={StaticResource BooleanToColorConverter}, ConverterParameter=AccentBlue}"/>
+                </ToggleButton>
 
                 <Button Content="&#xE921;" Style="{StaticResource WindowControlBtn}" Click="MinimizeBtn_Click"/>
                 <Button Content="&#xE922;" Style="{StaticResource WindowControlBtn}" Click="MaximizeBtn_Click"/>
@@ -202,6 +196,15 @@
                         </Style>
                     </Button.Style>
                 </Button>
+            </StackPanel>
+
+            <!-- App Logo & Title in Row 0 Left -->
+            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="24,0" shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                <Image Width="20" Height="20" Source="pack://application:,,,/Recents;component/Resources/Icons/AppIcon.ico" Margin="0,0,8,0" RenderOptions.BitmapScalingMode="HighQuality"/>
+                <TextBlock Text="Recents" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                
+                <!-- Settings Button -->
+                <Button Style="{StaticResource WindowControlBtn}" Width="32" Height="32" Content="&#xE713;" ToolTip="Settings" Click="Settings_Click"/>
             </StackPanel>
 
             <!-- Search Area -->
@@ -247,6 +250,20 @@
 
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <!-- Density Toggle -->
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                        <RadioButton Style="{StaticResource FilterPill}" Padding="6,2" Margin="1,0" Tag="Standard" 
+                                     IsChecked="{Binding CurrentDensity, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Standard}"
+                                     ToolTip="Standard View" Click="Density_Click">
+                            <TextBlock Text="&#x25AD;" FontSize="14" VerticalAlignment="Center"/>
+                        </RadioButton>
+                        <RadioButton Style="{StaticResource FilterPill}" Padding="6,2" Margin="1,0" Tag="Compact"
+                                     IsChecked="{Binding CurrentDensity, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Compact}"
+                                     ToolTip="Compact View" Click="Density_Click">
+                            <TextBlock Text="&#x2550;" FontSize="14" VerticalAlignment="Center"/>
+                        </RadioButton>
+                    </StackPanel>
+
                     <Button Background="Transparent" BorderThickness="0" Padding="8,4" Foreground="{StaticResource TextSecondary}">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
@@ -286,8 +303,30 @@
                         </Style>
                     </StackPanel.Style>
                     <TextBlock Text="&#xE9CE;" FontFamily="Segoe Fluent Icons" FontSize="48" Foreground="{StaticResource TextTertiary}" HorizontalAlignment="Center" Margin="0,0,0,16"/>
-                    <TextBlock Text="No recent files found" FontSize="14" Foreground="{StaticResource TextTertiary}" HorizontalAlignment="Center"/>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,16,0,0">
+                    <TextBlock FontSize="14" Foreground="{StaticResource TextTertiary}" HorizontalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Text" Value="No recent files found"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsInitializing}" Value="True">
+                                        <Setter Property="Text" Value="Loading index..."/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,16,0,0"
+                                Visibility="{Binding IsInitializing, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Inverse}">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Visible"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsInitializing}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
                         <Button Content="Clear filters"
                                 Command="{Binding ClearFiltersCommand}"
                                 Style="{StaticResource ActionButtonStyle}"
@@ -322,121 +361,9 @@
                         </Style>
                     </ListBox.Style>
                     <ListBox.ItemTemplate>
-                        <DataTemplate DataType="{x:Type vm:RecentItemViewModel}">
-                        <Grid Margin="4" x:Name="ItemGrid">
-                            <Grid.Style>
-                                <Style TargetType="Grid">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsMissing}" Value="True">
-                                            <Setter Property="Opacity" Value="0.5" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Grid.Style>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-
-                            <Grid.ContextMenu>
-                                <ContextMenu>
-                                    <MenuItem Header="Open" Command="{Binding OpenCommand}"/>
-                                    <MenuItem Header="Open With..." Command="{Binding OpenWithCommand}"/>
-                                    <MenuItem Header="Reveal in Explorer" Command="{Binding RevealCommand}"/>
-                                    <Separator/>
-                                    <MenuItem Header="Copy Full Path" Command="{Binding CopyPathCommand}"/>
-                                    <MenuItem Header="Copy File Name" Command="{Binding CopyFileNameCommand}"/>
-                                    <Separator/>
-                                    <MenuItem Header="Pin/Unpin" Command="{Binding TogglePinCommand}"/>
-                                    <MenuItem Header="Hide from list" Command="{Binding HideFromListCommand}"/>
-                                    <Separator/>
-                                    <MenuItem Header="Remove Once" Command="{Binding RemoveOnceCommand}"/>
-                                </ContextMenu>
-                            </Grid.ContextMenu>
-
-                            <!-- File Icon -->
-                            <Image Grid.Column="0" Source="{Binding Icon}" Width="40" Height="40" VerticalAlignment="Center" Margin="0,0,16,0" x:Name="FileIcon"/>
-
-                            <!-- File Info -->
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                <!-- 第一行：文件名 + 类型徽章 -->
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock x:Name="NameText" Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource TextPrimary}" TextTrimming="CharacterEllipsis" MaxWidth="320"/>
-                                    <!-- PRD §6.7 文件类型徽章：仅当 ClassificationSource 非 Other 且非文件夹时显示 -->
-                                    <Border CornerRadius="4" Background="{StaticResource AccentBlue}"
-                                            Padding="5,1" Margin="6,0,0,0" VerticalAlignment="Center"
-                                            Visibility="{Binding BadgeVisibility}">
-                                        <TextBlock Text="{Binding ClassificationSource}" FontSize="10" Foreground="White" FontWeight="SemiBold"/>
-                                    </Border>
-                                </StackPanel>
-                                <StackPanel x:Name="DetailsStack" Orientation="Horizontal" Margin="0,2,0,0">
-                                    <TextBlock Text="{Binding RecentTimeDisplay}" FontSize="11" Foreground="{StaticResource TextSecondary}" Margin="0,0,12,0"/>
-                                    <TextBlock Text="{Binding SizeDisplay}" FontSize="11" Foreground="{StaticResource TextSecondary}" Margin="0,0,12,0"/>
-                                    <TextBlock Text="{Binding DisplayPathShort}" ToolTip="{Binding DisplayPath}" FontSize="11" Foreground="{StaticResource TextTertiary}" TextTrimming="CharacterEllipsis"/>
-                                </StackPanel>
-                            </StackPanel>
-
-                            <!-- Action Buttons (Open, Reveal, Pin, More) -->
-                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                                <Button Content="&#xED25;" Command="{Binding OpenCommand}" 
-                                        FontFamily="Segoe Fluent Icons" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextTertiary}" Width="32" Height="32">
-                                    <Button.Style>
-                                        <Style TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
-                                            <Setter Property="ToolTip" Value="Open"/>
-                                            <Style.Triggers>
-                                                <Trigger Property="IsEnabled" Value="False">
-                                                    <Setter Property="ToolTip" Value="{Binding OpenDisabledReason}"/>
-                                                </Trigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Button.Style>
-                                </Button>
-                                <Button Content="&#xE81D;" Command="{Binding RevealCommand}"
-                                        FontFamily="Segoe Fluent Icons" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextTertiary}" Width="32" Height="32">
-                                    <Button.Style>
-                                        <Style TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
-                                            <Setter Property="ToolTip" Value="Reveal in Explorer"/>
-                                            <Style.Triggers>
-                                                <Trigger Property="IsEnabled" Value="False">
-                                                    <Setter Property="ToolTip" Value="{Binding OpenDisabledReason}"/>
-                                                </Trigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Button.Style>
-                                </Button>
-                                <Button Content="&#xE735;" ToolTip="Toggle Pin" Command="{Binding TogglePinCommand}"
-                                        FontFamily="Segoe Fluent Icons" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextTertiary}" Width="32" Height="32">
-                                    <Button.Style>
-                                        <Style TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Item.IsFavorite}" Value="True">
-                                                    <Setter Property="Foreground" Value="{StaticResource AccentBlue}"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Button.Style>
-                                </Button>
-                                <Button Content="&#xE712;" ToolTip="More Actions" Click="MoreButton_Click"
-                                        FontFamily="Segoe Fluent Icons" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextTertiary}" Width="32" Height="32">
-                                </Button>
-                            </StackPanel>
-                        </Grid>
-                        <DataTemplate.Triggers>
-                            <!-- Compact View Triggers -->
-                            <DataTrigger Binding="{Binding DataContext.CurrentDensity, RelativeSource={RelativeSource AncestorType=ListBox}}" Value="Compact">
-                                <Setter TargetName="ItemGrid" Property="Margin" Value="4,0"/>
-                                <Setter TargetName="FileIcon" Property="Width" Value="24"/>
-                                <Setter TargetName="FileIcon" Property="Height" Value="24"/>
-                                <Setter TargetName="FileIcon" Property="Margin" Value="0,0,12,0"/>
-                                <Setter TargetName="FileIcon" Property="Source" Value="{Binding SmallIcon}"/>
-                                <Setter TargetName="NameText" Property="FontSize" Value="12"/>
-                                <Setter TargetName="DetailsStack" Property="Visibility" Value="Collapsed"/>
-                            </DataTrigger>
-                        </DataTemplate.Triggers>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
+                        <StaticResource ResourceKey="SharedRecentItemTemplate"/>
+                    </ListBox.ItemTemplate>
+                </ListBox>
 
             </Grid>
             
@@ -456,5 +383,28 @@
                 </Grid>
             </Border>
         </Grid>
+
+        <!-- Right Side Favorites Drawer -->
+        <Border Grid.Column="1" Background="{StaticResource BgSidebar}" BorderThickness="1,0,0,0" BorderBrush="{StaticResource BorderMuted}" Width="280"
+                Visibility="{Binding CombinedFavoritesVisibility, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="40" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0" Margin="16,0,8,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="FAVORITES" FontWeight="Bold" FontSize="11" Foreground="{StaticResource TextSecondary}"/>
+                    </StackPanel>
+                </Grid>
+
+                <ListBox x:Name="FavoritesList" Grid.Row="1" Background="Transparent" BorderThickness="0" ItemsSource="{Binding FavoritesView}" Padding="4"
+                         ItemTemplate="{StaticResource FavoritesItemTemplate}"
+                         AllowDrop="True"
+                         MouseMove="FavoritesList_MouseMove"
+                         Drop="FavoritesList_Drop"/>
+            </Grid>
+        </Border>
     </Grid>
 </Window>
