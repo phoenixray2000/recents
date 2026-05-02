@@ -33,10 +33,16 @@ public partial class MainViewModel : ObservableObject
     private SortOption _currentSort = SortOption.RecentTime;
 
     [ObservableProperty]
-    private string _currentCategory = "All";
+    private string _currentNavCategory = "All";
+
+    [ObservableProperty]
+    private string _currentChipFilter = "All";
 
     [ObservableProperty]
     private bool _hasItems = true;
+
+    [ObservableProperty]
+    private bool _isCompactSidebar;
 
     // UI 绑定的过滤后视图
     public ICollectionView ItemsView { get; }
@@ -46,24 +52,31 @@ public partial class MainViewModel : ObservableObject
         _indexService = indexService;
         _hotkeyService = hotkeyService;
         _statusHint = statusHint;
+        _hotkeyService.PropertyChanged += (s, e) =>
+        {
+            if (e.PropertyName == nameof(HotkeyService.ActiveLabel))
+                OnPropertyChanged(nameof(HotkeyDisplay));
+        };
 
         ItemsView = CollectionViewSource.GetDefaultView(_indexService.Items);
         ItemsView.Filter = FilterItem;
         
         // 初始同步计数
-        _statusHint.UpdateCount(_indexService.Items.Count);
-        HasItems = _indexService.Items.Count > 0;
+        RefreshVisibleCount();
+        UpdateHasItems();
         
         _indexService.Items.CollectionChanged += (s, e) => 
         {
-            _statusHint.UpdateCount(_indexService.Items.Count);
-            HasItems = _indexService.Items.Count > 0;
+            RefreshVisibleCount();
+            UpdateHasItems();
         };
 
         ApplySort();
     }
 
-    partial void OnCurrentCategoryChanged(string value) => ItemsView.Refresh();
+    partial void OnCurrentNavCategoryChanged(string value) => RefreshItemsView();
+
+    partial void OnCurrentChipFilterChanged(string value) => RefreshItemsView();
 
     partial void OnCurrentSortChanged(SortOption value) => ApplySort();
 
@@ -90,28 +103,75 @@ public partial class MainViewModel : ObservableObject
     partial void OnSearchTextChanged(string value)
     {
         // 搜索词变化时重新应用过滤
+        RefreshItemsView();
+    }
+
+    [RelayCommand]
+    private void ClearFilters()
+    {
+        SearchText = string.Empty;
+        CurrentNavCategory = "All";
+        CurrentChipFilter = "All";
+        RefreshItemsView();
+    }
+
+    [RelayCommand]
+    private async Task RebuildIndex()
+    {
+        await _indexService.RebuildAsync();
+        RefreshItemsView();
+    }
+
+    private void RefreshItemsView()
+    {
         ItemsView.Refresh();
+        UpdateHasItems();
+        RefreshVisibleCount();
+    }
+
+    private void RefreshVisibleCount()
+    {
+        var count = ItemsView.Cast<object>().Count();
+        _statusHint.UpdateCount(count);
+    }
+
+    private void UpdateHasItems()
+    {
+        HasItems = ItemsView.Cast<object>().Any();
     }
 
     private bool FilterItem(object obj)
     {
         if (obj is not RecentItemViewModel vm) return false;
 
-        // B6. 分类过滤
-        if (CurrentCategory == "Folders")
+        // 1. 侧边栏导航过滤 (NavCategory)
+        if (CurrentNavCategory == "Folders")
         {
             if (!vm.Item.IsFolder) return false;
         }
-        else if (CurrentCategory != "All")
+        else if (CurrentNavCategory == "Favorites")
         {
-            // 只有非文件夹才参与类型分类
-            if (vm.Item.IsFolder) return false;
-            if (vm.Item.ClassificationSource != CurrentCategory) return false;
+            if (!vm.Item.IsFavorite) return false;
         }
-        else
+        else if (CurrentNavCategory == "All")
         {
-            // "All" 模式下默认不显示文件夹，除非是搜索模式
-            if (vm.Item.IsFolder && string.IsNullOrEmpty(SearchText)) return false;
+            // All Files 仅显示文件 (PRD §17)
+            if (vm.Item.IsFolder) return false;
+        }
+
+        // 2. 顶部 Chip 类型过滤 (ChipFilter)
+        if (CurrentChipFilter != "All")
+        {
+            if (CurrentChipFilter == "Folders")
+            {
+                if (!vm.Item.IsFolder) return false;
+            }
+            else
+            {
+                // 只有非文件夹才参与类型分类
+                if (vm.Item.IsFolder) return false;
+                if (vm.Item.ClassificationSource != CurrentChipFilter) return false;
+            }
         }
 
         // 搜索逻辑
@@ -141,5 +201,9 @@ public partial class MainViewModel : ObservableObject
         }
 
         return true;
+    }
+    public void UpdateHotkey(string hotkey)
+    {
+        _hotkeyService.UpdateHotkey(hotkey);
     }
 }

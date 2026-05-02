@@ -74,7 +74,7 @@
 | §6.18 SQLite 索引 | `Microsoft.Data.Sqlite` ≥ 8.0 | 索引库 `index.db` |
 | §6.18 SQLite 索引（可选） | `Dapper` ≥ 2.1 | 轻量数据访问，可不引入直接用 ADO.NET |
 | §6.4 .lnk 解析 | `Securify.ShellLink` ≥ 1.x | 纯托管 MS-SHLLINK 二进制解析 |
-| §6.3.5 Jump List 解析 | `OpenMcdf` ≥ 2.x | OLECF 复合文档解析 |
+| §6.3.5 Jump List | 不使用 | AutomaticDestinations / CustomDestinations 明确不作为数据源 |
 | §6.2 系统托盘 | `H.NotifyIcon.Wpf` ≥ 2.x | WPF 托盘控件（首版可选；也可用纯 P/Invoke） |
 | MVVM 基础 | `CommunityToolkit.Mvvm` ≥ 8.2 | `ObservableObject`、`RelayCommand` |
 | §12 日志 | `Serilog` ≥ 4.x | 结构化日志 |
@@ -106,8 +106,8 @@
 | `%LOCALAPPDATA%\Recents\icons\` | 读写 | 图标缓存 |
 | `%LOCALAPPDATA%\Recents\logs\recents.log` | 写 | 滚动日志 |
 | `%APPDATA%\Microsoft\Windows\Recent` | 读 / 监听 | Recent .lnk |
-| `%APPDATA%\Microsoft\Windows\Recent\AutomaticDestinations` | 读 / 监听 | Jump List |
-| `%APPDATA%\Microsoft\Windows\Recent\CustomDestinations` | 读 / 监听 | 用户固定项 |
+| `%APPDATA%\Microsoft\Windows\Recent\AutomaticDestinations` | 不访问 | Jump List 不作为数据源 |
+| `%APPDATA%\Microsoft\Windows\Recent\CustomDestinations` | 不访问 | 用户固定项不作为数据源 |
 | 已知文件夹（Downloads/Desktop/Documents/Pictures/Videos/Music） | 读 / 监听 | L1 数据源 |
 | `HKCU\Software\Microsoft\Office\*\User MRU` | 读 | Office MRU |
 | `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\ComDlg32\OpenSavePidlMRU` | 读 | 文件对话框历史 |

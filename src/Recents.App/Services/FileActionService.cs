@@ -49,6 +49,20 @@ public class FileActionService
         }
     }
 
+    public static void CopyPaths(IEnumerable<string> paths)
+    {
+        var text = string.Join(Environment.NewLine, paths.Where(p => !string.IsNullOrWhiteSpace(p)));
+        if (string.IsNullOrEmpty(text)) return;
+        try
+        {
+            System.Windows.Clipboard.SetText(text);
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "FileActionService: copy paths failed");
+        }
+    }
+
     public static void CopyFileName(string path)
     {
         if (string.IsNullOrEmpty(path)) return;
@@ -59,6 +73,20 @@ public class FileActionService
         catch (Exception ex)
         {
             Serilog.Log.Error(ex, "FileActionService: 复制文件名失败");
+        }
+    }
+
+    public static void CopyFileNames(IEnumerable<string> paths)
+    {
+        var text = string.Join(Environment.NewLine, paths.Select(Path.GetFileName).Where(p => !string.IsNullOrWhiteSpace(p)));
+        if (string.IsNullOrEmpty(text)) return;
+        try
+        {
+            System.Windows.Clipboard.SetText(text);
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "FileActionService: copy file names failed");
         }
     }
 }

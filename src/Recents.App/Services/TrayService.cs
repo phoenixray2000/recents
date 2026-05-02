@@ -6,18 +6,17 @@ namespace Recents.App.Services;
 // PRD §6.2 托盘常驻
 public class TrayService : IDisposable
 {
-    private readonly NotifyIcon _notifyIcon;
-    private readonly MainWindow _mainWindow;
-    private readonly RecentIndexService _indexService;
+    private NotifyIcon _notifyIcon = null!;
+    private MainWindow? _mainWindow;
+    private readonly Func<Task> _rescanAsync;
 
-    public TrayService(MainWindow mainWindow, RecentIndexService indexService)
+    public TrayService(Func<Task> rescanAsync)
     {
-        _mainWindow = mainWindow;
-        _indexService = indexService;
+        _rescanAsync = rescanAsync;
 
         _notifyIcon = new NotifyIcon
         {
-            Icon = System.Drawing.SystemIcons.Application, // 默认占位图标
+            Icon = System.Drawing.SystemIcons.Application,
             Text = "Recents",
             Visible = true,
             ContextMenuStrip = CreateMenu()
@@ -26,16 +25,26 @@ public class TrayService : IDisposable
         _notifyIcon.MouseClick += (s, e) =>
         {
             if (e.Button == MouseButtons.Left)
-                _mainWindow.ShowAndFocus();
+                _mainWindow?.ShowAndFocus();
         };
+    }
+
+    public void SetMainWindow(MainWindow mainWindow)
+    {
+        _mainWindow = mainWindow;
     }
 
     private ContextMenuStrip CreateMenu()
     {
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Show", null, (s, e) => _mainWindow.ShowAndFocus());
+        menu.Items.Add("Show", null, (s, e) => _mainWindow?.ShowAndFocus());
+        menu.Items.Add("Settings", null, (s, e) =>
+        {
+            _mainWindow?.ShowAndFocus();
+            _mainWindow?.OpenSettings();
+        });
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Rescan", null, (s, e) => _ = _indexService.RebuildAsync());
+        menu.Items.Add("Rescan", null, (s, e) => _ = _rescanAsync());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (s, e) =>
         {

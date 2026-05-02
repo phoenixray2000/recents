@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using CommunityToolkit.Mvvm.ComponentModel;
 using System.Windows;
 using System.Windows.Interop;
 using Serilog;
@@ -9,7 +10,7 @@ namespace Recents.App.Services;
 // 用 P/Invoke RegisterHotKey / UnregisterHotKey 注册全局快捷键，
 // 注册失败时按候选链回退：Ctrl+Alt+R → Win+; → Ctrl+Shift+Space → Ctrl+Alt+Space。
 // 全部失败时记 Error 日志，触发 RegistrationFailed 事件（供 TrayService 显示气泡）。
-public sealed class HotkeyService : IDisposable
+public sealed partial class HotkeyService : ObservableObject, IDisposable
 {
     #region Win32 P/Invoke
 
@@ -39,16 +40,80 @@ public sealed class HotkeyService : IDisposable
     // 候选热键链（PRD §6.1）
     private static readonly (uint Mod, uint Vk, string Label)[] Candidates =
     {
+        (MOD_ALT     | MOD_SHIFT | MOD_NOREPEAT, 0x5A,         "Alt+Shift+Z"), // VK_Z = 0x5A
         (MOD_CONTROL | MOD_ALT   | MOD_NOREPEAT, VK_R,         "Ctrl+Alt+R"),
         (MOD_WIN     | MOD_NOREPEAT,              VK_SEMICOLON, "Win+;"),
         (MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, VK_SPACE,     "Ctrl+Shift+Space"),
-        (MOD_CONTROL | MOD_ALT   | MOD_NOREPEAT, VK_SPACE,     "Ctrl+Alt+Space"),
     };
 
     private HwndSource?         _hwndSource;
     private IntPtr              _hwnd;
     private bool                _registered;
     private (uint Mod, uint Vk, string Label) _active;
+
+    public void UpdateHotkey(string hotkeyString)
+    {
+        if (_hwnd == IntPtr.Zero) return;
+
+        if (_registered)
+        {
+            UnregisterHotKey(_hwnd, HotkeyId);
+            _registered = false;
+        }
+
+        if (TryParseHotkey(hotkeyString, out var mod, out var vk))
+        {
+            if (RegisterHotKey(_hwnd, HotkeyId, mod | MOD_NOREPEAT, vk))
+            {
+                _registered = true;
+                ActiveLabel = hotkeyString;
+                Log.Information("HotkeyService: 热键更新成功 → {Label}", hotkeyString);
+                return;
+            }
+        }
+
+        Log.Warning("HotkeyService: 自定义热键 {Label} 注册失败，尝试候选链", hotkeyString);
+        TryRegisterCandidates();
+    }
+
+    private static bool TryParseHotkey(string hotkey, out uint mod, out uint vk)
+    {
+        mod = 0;
+        vk = 0;
+        if (string.IsNullOrEmpty(hotkey)) return false;
+
+        var parts = hotkey.Split('+');
+        foreach (var part in parts.Take(parts.Length - 1))
+        {
+            switch (part.Trim().ToUpperInvariant())
+            {
+                case "CTRL": mod |= MOD_CONTROL; break;
+                case "ALT": mod |= MOD_ALT; break;
+                case "SHIFT": mod |= MOD_SHIFT; break;
+                case "WIN": mod |= MOD_WIN; break;
+            }
+        }
+
+        var keyStr = parts.Last().Trim().ToUpperInvariant();
+        if (keyStr.Length == 1)
+        {
+            vk = (uint)keyStr[0];
+            return true;
+        }
+        
+        // Basic mapping for common non-char keys
+        switch (keyStr)
+        {
+            case "SPACE": vk = VK_SPACE; return true;
+            case "SEMICOLON": vk = VK_SEMICOLON; return true;
+            // Add more if needed, but for P0 this is enough
+        }
+
+        return false;
+    }
+
+    [ObservableProperty]
+    private string _activeLabel = "(Not registered)";
 
     // 热键触发时通知（UI 层订阅）
     public event Action? HotkeyPressed;
@@ -75,6 +140,8 @@ public sealed class HotkeyService : IDisposable
             {
                 _active     = candidate;
                 _registered = true;
+                ActiveLabel = candidate.Label;
+                OnPropertyChanged(nameof(ActiveLabel)); // Bug-7 Fix
                 Log.Information("HotkeyService: 热键注册成功 → {Label}", candidate.Label);
                 return;
             }
@@ -84,6 +151,7 @@ public sealed class HotkeyService : IDisposable
 
         // 全部候选都失败
         var msg = "全局热键注册失败，所有候选组合均被占用。请在设置中手动更改热键。";
+        ActiveLabel = "(Not registered)";
         Log.Error("HotkeyService: {Msg}", msg);
         RegistrationFailed?.Invoke(msg);
     }
@@ -97,9 +165,6 @@ public sealed class HotkeyService : IDisposable
         }
         return IntPtr.Zero;
     }
-
-    // 返回当前已成功注册的热键标签（供 UI 展示）
-    public string ActiveLabel => _registered ? _active.Label : "（未注册）";
 
     public void Dispose()
     {

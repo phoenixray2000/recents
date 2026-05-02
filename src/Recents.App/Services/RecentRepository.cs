@@ -198,6 +198,14 @@ internal sealed class RecentRepository : IDisposable
         cmd.ExecuteNonQuery();
     }
 
+    public void ClearHidden()
+    {
+        if (_conn is null) return;
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM recent_items WHERE is_hidden = 1;";
+        cmd.ExecuteNonQuery();
+    }
+
     private static RecentItem ReadItem(SqliteDataReader r) => new()
     {
         NormalizedPath       = r.GetString(0),

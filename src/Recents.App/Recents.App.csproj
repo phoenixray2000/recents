@@ -3,6 +3,7 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
+    <RollForward>Major</RollForward>
     <RootNamespace>Recents.App</RootNamespace>
     <AssemblyName>Recents</AssemblyName>
     <Nullable>enable</Nullable>
@@ -27,7 +28,7 @@
     <!-- §12 结构化日志 -->
     <PackageReference Include="Serilog" Version="4.2.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
-    <!-- 不引入：OpenMcdf（Jump List 是 P1）、任何云盘 SDK、HTTP 库 -->
+    <!-- 不引入任何云盘 SDK、HTTP 库 -->
   </ItemGroup>
 
 </Project>

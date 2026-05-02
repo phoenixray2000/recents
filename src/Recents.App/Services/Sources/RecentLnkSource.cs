@@ -75,13 +75,6 @@ public sealed class RecentLnkSource : IRecentSource, IDisposable
             {
                 if (ct.IsCancellationRequested) break;
 
-                // PRD §6.3.4 跳过 AutomaticDestinations 和 CustomDestinations 子目录
-                if (file.Contains(@"\AutomaticDestinations\", StringComparison.OrdinalIgnoreCase) ||
-                    file.Contains(@"\CustomDestinations\",    StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
                 var lwt = File.GetLastWriteTime(file);
                 if (lwt >= cutoff)
                 {
@@ -97,12 +90,6 @@ public sealed class RecentLnkSource : IRecentSource, IDisposable
 
     private void HandleDebouncedChange(string lnkPath)
     {
-        if (lnkPath.Contains(@"\AutomaticDestinations\", StringComparison.OrdinalIgnoreCase) ||
-            lnkPath.Contains(@"\CustomDestinations\",    StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
         var res = ShellLinkResolver.Resolve(lnkPath);
         if (res is null || string.IsNullOrWhiteSpace(res.TargetPath)) return;
 
@@ -125,13 +112,13 @@ public sealed class RecentLnkSource : IRecentSource, IDisposable
             Extension          = isDir ? "" : Path.GetExtension(res.TargetPath).ToLowerInvariant(),
             ClassificationSource = FileTypeClassifier.Classify(isDir ? "" : Path.GetExtension(res.TargetPath), isDir, _settings.ClassificationSourceGroups),
             IsFolder           = isDir,
-            Exists             = isDir || File.Exists(res.TargetPath) ? ExistsState.Exists : ExistsState.Missing,
+            Exists             = isDir || File.Exists(res.TargetPath) ? ExistsState.Found : ExistsState.Missing,
             Sources            = Kind,
             TargetModifiedTime = res.LastWriteTime,
             RecentTime         = res.LastWriteTime // PRD: RecentTime 取 .lnk 的 LastWriteTime
         };
 
-        if (!isDir && item.Exists == ExistsState.Exists)
+        if (!isDir && item.Exists == ExistsState.Found)
         {
             try { item.SizeBytes = new FileInfo(res.TargetPath).Length; } catch { }
         }

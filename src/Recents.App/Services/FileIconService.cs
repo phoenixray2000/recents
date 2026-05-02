@@ -61,4 +61,9 @@ public static class FileIconService
 
         return null;
     }
+
+    public static void ClearCache()
+    {
+        // Icons are currently fetched on demand; this hook keeps the Settings action stable.
+    }
 }

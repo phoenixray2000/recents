@@ -138,7 +138,7 @@ public sealed class UserFolderWatchSource : IRecentSource, IDisposable
                 ClassificationSource = FileTypeClassifier.Classify(
                     isDir ? "" : Path.GetExtension(fullPath), isDir, _settings.ClassificationSourceGroups),
                 IsFolder             = isDir,
-                Exists               = ExistsState.Exists,
+                Exists               = ExistsState.Found,
                 Sources              = Kind,
                 TargetModifiedTime   = mTime,
                 RecentTime           = cTime > mTime ? cTime : mTime

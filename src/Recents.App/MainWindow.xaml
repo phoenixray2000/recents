@@ -13,6 +13,7 @@
         FontFamily="Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI"
         WindowStyle="None" AllowsTransparency="False"
         PreviewKeyDown="Window_PreviewKeyDown"
+        SizeChanged="Window_SizeChanged"
         Closing="Window_Closing">
 
     <shell:WindowChrome.WindowChrome>
@@ -26,6 +27,21 @@
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="12,8" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="ContextMenu">
+                <Setter.Value>
+                    <ContextMenu>
+                        <MenuItem Header="Open" Command="{Binding OpenCommand}"/>
+                        <MenuItem Header="Reveal in Explorer" Command="{Binding RevealCommand}"/>
+                        <Separator/>
+                        <MenuItem Header="Copy Full Path" Command="{Binding CopyPathCommand}"/>
+                        <MenuItem Header="Copy File Name" Command="{Binding CopyFileNameCommand}"/>
+                        <Separator/>
+                        <MenuItem Header="Pin/Unpin" Command="{Binding TogglePinCommand}"/>
+                        <Separator/>
+                        <MenuItem Header="Remove Once" Command="{Binding RemoveOnceCommand}"/>
+                    </ContextMenu>
+                </Setter.Value>
+            </Setter>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
@@ -116,7 +132,7 @@
 
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="220" />
+            <ColumnDefinition x:Name="SidebarColumn" Width="220" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
@@ -133,13 +149,13 @@
                 <Border Width="24" Height="24" Background="{StaticResource AccentBlue}" CornerRadius="4" Margin="0,0,12,0">
                     <TextBlock Text="&#xEA37;" FontFamily="Segoe Fluent Icons" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
-                <TextBlock Text="Recents" FontWeight="Bold" FontSize="16" VerticalAlignment="Center"/>
+                <TextBlock x:Name="LogoText" Text="Recents" FontWeight="Bold" FontSize="16" VerticalAlignment="Center"/>
             </StackPanel>
 
             <!-- Nav Items -->
             <StackPanel Grid.Row="1" Margin="0,10">
-                <RadioButton Content="All" IsChecked="True" Style="{StaticResource SidebarNavItem}" Tag="&#xE8B9;" Checked="Nav_Checked"/>
-                <RadioButton Content="Favorites" Style="{StaticResource SidebarNavItem}" Tag="&#xE734;" Checked="Nav_Checked" Visibility="Collapsed"/> <!-- P1 -->
+                <RadioButton Content="All Files" IsChecked="True" Style="{StaticResource SidebarNavItem}" Tag="&#xE8B9;" Checked="Nav_Checked"/>
+                <RadioButton Content="Favorites" Style="{StaticResource SidebarNavItem}" Tag="&#xE734;" Checked="Nav_Checked"/>
                 <RadioButton Content="Recent Folders" Style="{StaticResource SidebarNavItem}" Tag="&#xE8B7;" Checked="Nav_Checked"/>
                 <Separator Background="{StaticResource BorderMuted}" Margin="16,10" Height="1"/>
                 <RadioButton Content="Documents" Style="{StaticResource SidebarNavItem}" Tag="&#xE8A5;" Checked="Nav_Checked"/>
@@ -148,7 +164,7 @@
             </StackPanel>
 
             <!-- Footer Settings -->
-            <RadioButton Grid.Row="2" Content="Settings" Style="{StaticResource SidebarNavItem}" Tag="&#xE713;" Margin="0,0,0,20" Visibility="Collapsed"/>
+            <RadioButton Grid.Row="2" Content="Settings" Style="{StaticResource SidebarNavItem}" Tag="&#xE713;" Margin="0,0,0,20" Checked="Nav_Checked"/>
         </Grid>
 
         <!-- Main Content -->
@@ -214,11 +230,11 @@
             <!-- Filter Area -->
             <Grid Grid.Row="2" Margin="24,0,24,10">
                 <StackPanel Orientation="Horizontal">
-                    <RadioButton Content="All" IsChecked="True" Style="{StaticResource FilterPill}" Checked="Nav_Checked"/>
-                    <RadioButton Content="Docs" Style="{StaticResource FilterPill}" Tag="Documents" Checked="Nav_Checked"/>
-                    <RadioButton Content="Images" Style="{StaticResource FilterPill}" Checked="Nav_Checked"/>
-                    <RadioButton Content="Code" Style="{StaticResource FilterPill}" Checked="Nav_Checked"/>
-                    <RadioButton Content="Folders" Style="{StaticResource FilterPill}" Checked="Nav_Checked"/>
+                    <RadioButton Content="All Files" IsChecked="True" Style="{StaticResource FilterPill}" Checked="Chip_Checked" Tag="All"/>
+                    <RadioButton Content="Documents" Style="{StaticResource FilterPill}" Tag="Documents" Checked="Chip_Checked"/>
+                    <RadioButton Content="Images" Style="{StaticResource FilterPill}" Tag="Images" Checked="Chip_Checked"/>
+                    <RadioButton Content="Code" Style="{StaticResource FilterPill}" Tag="Code" Checked="Chip_Checked"/>
+                    <RadioButton Content="Folders" Style="{StaticResource FilterPill}" Tag="Folders" Checked="Chip_Checked"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Background="Transparent" BorderThickness="0" Padding="8,4" Foreground="{StaticResource TextSecondary}">
@@ -228,13 +244,13 @@
                             </Style>
                         </Button.Style>
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock x:Name="SortLabel" Text="Recent Time" FontSize="12" Margin="0,0,8,0"/>
+                            <TextBlock x:Name="SortLabel" Text="Newest first" FontSize="12" Margin="0,0,8,0"/>
                             <TextBlock Text="&#xE70D;" FontFamily="Segoe Fluent Icons" FontSize="8" VerticalAlignment="Center"/>
                         </StackPanel>
                         <Button.ContextMenu>
                             <ContextMenu>
-                                <MenuItem Header="Recent Time" Click="SortItem_Click" Tag="RecentTime"/>
-                                <MenuItem Header="Display Name" Click="SortItem_Click" Tag="DisplayName"/>
+                                <MenuItem Header="Newest first" Click="SortItem_Click" Tag="RecentTime"/>
+                                <MenuItem Header="Name A-Z" Click="SortItem_Click" Tag="DisplayName"/>
                                 <!-- P1: Size and File Type sorting options hidden -->
                                 <MenuItem Header="Size" Click="SortItem_Click" Tag="Size" Visibility="Collapsed"/>
                                 <MenuItem Header="Classification" Click="SortItem_Click" Tag="ClassificationSource" Visibility="Collapsed"/>
@@ -260,7 +276,17 @@
                         </Style>
                     </StackPanel.Style>
                     <TextBlock Text="&#xE9CE;" FontFamily="Segoe Fluent Icons" FontSize="48" Foreground="{StaticResource TextTertiary}" HorizontalAlignment="Center" Margin="0,0,0,16"/>
-                    <TextBlock Text="No recent items found" FontSize="14" Foreground="{StaticResource TextTertiary}" HorizontalAlignment="Center"/>
+                    <TextBlock Text="No recent files found" FontSize="14" Foreground="{StaticResource TextTertiary}" HorizontalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,16,0,0">
+                        <Button Content="Clear filters"
+                                Command="{Binding ClearFiltersCommand}"
+                                Style="{StaticResource ActionButtonStyle}"
+                                Padding="12,7" Margin="0,0,8,0"/>
+                        <Button Content="Rebuild index"
+                                Command="{Binding RebuildIndexCommand}"
+                                Style="{StaticResource ActionButtonStyle}"
+                                Padding="12,7"/>
+                    </StackPanel>
                 </StackPanel>
 
                 <ListBox x:Name="ItemsList" Background="Transparent" BorderThickness="0"
@@ -282,12 +308,35 @@
                     </ListBox.Style>
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:RecentItemViewModel}">
-                        <Grid Margin="4">
+                        <Grid Margin="4" x:Name="ItemGrid">
+                            <Grid.Style>
+                                <Style TargetType="Grid">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                                            <Setter Property="Opacity" Value="0.5" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
+
+                            <Grid.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Open" Command="{Binding OpenCommand}"/>
+                                    <MenuItem Header="Reveal in Explorer" Command="{Binding RevealCommand}"/>
+                                    <Separator/>
+                                    <MenuItem Header="Copy Full Path" Command="{Binding CopyPathCommand}"/>
+                                    <MenuItem Header="Copy File Name" Command="{Binding CopyFileNameCommand}"/>
+                                    <Separator/>
+                                    <MenuItem Header="Pin/Unpin" Command="{Binding TogglePinCommand}"/>
+                                    <Separator/>
+                                    <MenuItem Header="Remove Once" Command="{Binding RemoveOnceCommand}"/>
+                                </ContextMenu>
+                            </Grid.ContextMenu>
 
                             <!-- File Icon -->
                             <Image Grid.Column="0" Source="{Binding Icon}" Width="40" Height="40" VerticalAlignment="Center" Margin="0,0,16,0"/>
@@ -307,24 +356,45 @@
                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
                                     <TextBlock Text="{Binding RecentTimeDisplay}" FontSize="11" Foreground="{StaticResource TextSecondary}" Margin="0,0,12,0"/>
                                     <TextBlock Text="{Binding SizeDisplay}" FontSize="11" Foreground="{StaticResource TextSecondary}" Margin="0,0,12,0"/>
-                                    <TextBlock Text="{Binding DisplayPath}" FontSize="11" Foreground="{StaticResource TextTertiary}" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding DisplayPathShort}" ToolTip="{Binding DisplayPath}" FontSize="11" Foreground="{StaticResource TextTertiary}" TextTrimming="CharacterEllipsis"/>
                                 </StackPanel>
                             </StackPanel>
 
                             <!-- Action Buttons (Open, Reveal, Pin, More) -->
                             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                                <Button Content="&#xED25;" ToolTip="Open" Command="{Binding OpenCommand}" 
-                                        FontFamily="Segoe Fluent Icons" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextTertiary}" Width="32" Height="32"/>
-                                <Button Content="&#xE81D;" ToolTip="Reveal in Explorer" Command="{Binding RevealCommand}"
-                                        FontFamily="Segoe Fluent Icons" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextTertiary}" Width="32" Height="32"/>
+                                <Button Content="&#xED25;" Command="{Binding OpenCommand}" 
+                                        FontFamily="Segoe Fluent Icons" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextTertiary}" Width="32" Height="32">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+                                            <Setter Property="ToolTip" Value="Open"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsEnabled" Value="False">
+                                                    <Setter Property="ToolTip" Value="{Binding OpenDisabledReason}"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                                <Button Content="&#xE81D;" Command="{Binding RevealCommand}"
+                                        FontFamily="Segoe Fluent Icons" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextTertiary}" Width="32" Height="32">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+                                            <Setter Property="ToolTip" Value="Reveal in Explorer"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsEnabled" Value="False">
+                                                    <Setter Property="ToolTip" Value="{Binding OpenDisabledReason}"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
                                 <Button Content="&#xE735;" ToolTip="Toggle Pin" Command="{Binding TogglePinCommand}"
                                         FontFamily="Segoe Fluent Icons" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextTertiary}" Width="32" Height="32">
                                     <Button.Style>
-                                        <Style TargetType="Button">
+                                        <Style TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Item.IsFavorite}" Value="True">
                                                     <Setter Property="Foreground" Value="{StaticResource AccentBlue}"/>
-                                                    <Setter Property="Content" Value="&#xE735;"/> <!-- Filled star? No, use different icons if needed -->
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
@@ -332,17 +402,6 @@
                                 </Button>
                                 <Button Content="&#xE712;" ToolTip="More Actions" Click="MoreButton_Click"
                                         FontFamily="Segoe Fluent Icons" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextTertiary}" Width="32" Height="32">
-                                    <Button.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="Open" Command="{Binding OpenCommand}"/>
-                                            <MenuItem Header="Reveal in Explorer" Command="{Binding RevealCommand}"/>
-                                            <Separator/>
-                                            <MenuItem Header="Copy Full Path" Command="{Binding CopyPathCommand}"/>
-                                            <MenuItem Header="Copy File Name" Command="{Binding CopyFileNameCommand}"/>
-                                            <Separator/>
-                                            <MenuItem Header="Pin/Unpin" Command="{Binding TogglePinCommand}"/>
-                                        </ContextMenu>
-                                    </Button.ContextMenu>
                                 </Button>
                             </StackPanel>
                         </Grid>

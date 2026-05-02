@@ -3,7 +3,7 @@ using System.Windows.Media;
 
 namespace Recents.App.Services;
 
-// PRD §5.9 动态状态栏提示
+// Dynamic status bar text, color, and keyboard hints.
 public partial class StatusHintService : ObservableObject
 {
     public enum AppStatus
@@ -19,13 +19,13 @@ public partial class StatusHintService : ObservableObject
     private string _statusText = "Ready";
 
     [ObservableProperty]
-    private SolidColorBrush _statusColor = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x40, 0xC4, 0xFF)); // AccentBlue
+    private SolidColorBrush _statusColor = Brush(0x63, 0xC5, 0x54);
 
     [ObservableProperty]
     private string _itemCount = "0 items";
 
     [ObservableProperty]
-    private string _keyboardHint = "↑↓ Navigate";
+    private string _keyboardHint = "Up/Down Navigate";
 
     public void SetStatus(AppStatus status)
     {
@@ -33,19 +33,23 @@ public partial class StatusHintService : ObservableObject
         {
             case AppStatus.Ready:
                 StatusText = "Ready";
-                StatusColor = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x40, 0xC4, 0xFF));
+                StatusColor = Brush(0x63, 0xC5, 0x54); // Success Green
                 break;
             case AppStatus.Indexing:
                 StatusText = "Indexing...";
-                StatusColor = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFF, 0xD6, 0x00)); // Yellow
+                StatusColor = Brush(0xF5, 0xB6, 0x42); // Warning Orange
                 break;
             case AppStatus.Watching:
-                StatusText = "Watching";
-                StatusColor = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x00, 0xE6, 0x76)); // Green
+                StatusText = "Watching sources";
+                StatusColor = Brush(0x63, 0xC5, 0x54); // Success Green
+                break;
+            case AppStatus.Partial:
+                StatusText = "Some sources unavailable";
+                StatusColor = Brush(0xF5, 0xB6, 0x42); // Warning Orange
                 break;
             case AppStatus.Error:
                 StatusText = "Error";
-                StatusColor = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFF, 0x52, 0x52)); // Red
+                StatusColor = Brush(0xE1, 0x5B, 0x64); // Danger Red
                 break;
         }
     }
@@ -58,10 +62,17 @@ public partial class StatusHintService : ObservableObject
     public void UpdateHint(bool hasSelection, bool canDrag)
     {
         if (!hasSelection)
-            KeyboardHint = "↑↓ Navigate";
+            KeyboardHint = "Up/Down Navigate";
         else if (canDrag)
-            KeyboardHint = "Enter Open · Drag to share";
+            KeyboardHint = "Enter Open | Drag to share";
         else
             KeyboardHint = "Enter Open";
+    }
+
+    private static SolidColorBrush Brush(byte r, byte g, byte b)
+    {
+        var brush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(r, g, b));
+        brush.Freeze();
+        return brush;
     }
 }

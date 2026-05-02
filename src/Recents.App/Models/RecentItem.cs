@@ -37,7 +37,7 @@ public class RecentItem
 public enum ExistsState
 {
     Missing = 0,   // 确认不存在
-    Exists  = 1,   // 确认存在
+    Found   = 1,   // 确认存在 (之前叫 Exists，统一叫 Found)
     Unknown = 2,   // 未探测 / 网络断开 / 超时
 }
 
@@ -50,8 +50,6 @@ public enum SourceKinds
     UserFolderWatch  = 1 << 1,   // L1：用户自定义本地目录
     UncFolderWatch   = 1 << 2,   // L1：用户自定义 UNC 路径
     RecentLnk        = 1 << 3,   // L1：%APPDATA%\Microsoft\Windows\Recent .lnk
-    JumpListAuto     = 1 << 4,   // L2：AutomaticDestinations
-    JumpListCustom   = 1 << 5,   // L3：CustomDestinations
     OfficeMru        = 1 << 6,   // L2：Office MRU 注册表
     OpenSavePidlMru  = 1 << 7,   // L3：OpenSavePidlMRU 注册表
     RecentDocsReg    = 1 << 8,   // L3：RecentDocs 注册表（降级补充）

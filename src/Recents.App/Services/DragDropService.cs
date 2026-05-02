@@ -43,10 +43,15 @@ public class DragDropService
             // 1. 获取各路径的绝对 PIDL
             for (int i = 0; i < paths.Length; i++)
             {
-                pidlPtrs[i] = ILCreateFromPathW(paths[i]);
+                var hr = SHParseDisplayName(paths[i], IntPtr.Zero, out pidlPtrs[i], 0, out _);
+                if (hr != 0)
+                {
+                    Log.Warning("DragDropService: SHParseDisplayName failed {Path}, hr={HResult}", paths[i], hr);
+                    return;
+                }
                 if (pidlPtrs[i] == IntPtr.Zero)
                 {
-                    Log.Warning("DragDropService: ILCreateFromPathW 返回空指针 {Path}", paths[i]);
+                    Log.Warning("DragDropService: SHParseDisplayName returned null PIDL {Path}", paths[i]);
                     return; // 任意一个失败则放弃整个 ShellIDList
                 }
                 // ILGetSize 返回 PIDL 完整字节数（含末尾2字节 null 终止符）
@@ -110,9 +115,13 @@ public class DragDropService
 
     #region Shell P/Invoke
 
-    // 根据路径字符串创建 PIDL；调用方负责调用 ILFree 释放
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
-    private static extern IntPtr ILCreateFromPathW(string pszPath);
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = true)]
+    private static extern int SHParseDisplayName(
+        string pszName,
+        IntPtr pbc,
+        out IntPtr ppidl,
+        uint sfgaoIn,
+        out uint psfgaoOut);
 
     // 获取 PIDL 的总字节大小（含末尾 null 终止符）
     [DllImport("shell32.dll")]

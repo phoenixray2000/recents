@@ -13,8 +13,10 @@ namespace Recents.App.Services;
 // 各 IRecentSource 扫描结果异步通过 MergeAsync 推入。
 public class RecentIndexService : IDisposable
 {
+    private const int RemovedSourceMask = (1 << 4) | (1 << 5);
     private readonly SettingsService _settingsService;
     private readonly RecentRepository _repo;
+    private readonly ExistsProbeService _probeService;
     private readonly object _mergeLock = new();
 
     // UI 绑定集合（在 Dispatcher 线程维护，按 RecentTime 倒序）
@@ -27,6 +29,7 @@ public class RecentIndexService : IDisposable
     public RecentIndexService(SettingsService settingsService)
     {
         _settingsService = settingsService;
+        _probeService = new ExistsProbeService(this);
         var dir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Recents");
@@ -44,7 +47,26 @@ public class RecentIndexService : IDisposable
         {
             foreach (var item in _repo.LoadAll(maxItems))
             {
-                var vm = new RecentItemViewModel(item, this);
+                var activeSources = item.Sources & ~(SourceKinds)RemovedSourceMask;
+                if (activeSources == SourceKinds.None)
+                {
+                    _repo.Delete(item.NormalizedPath);
+                    continue;
+                }
+
+                if (activeSources != item.Sources)
+                {
+                    item.Sources = activeSources;
+                    _repo.Upsert(item);
+                }
+
+                if (item.Exists == ExistsState.Missing)
+                {
+                    _repo.Delete(item.NormalizedPath);
+                    continue;
+                }
+
+                var vm = new RecentItemViewModel(item, this, _probeService);
                 _index[item.NormalizedPath] = vm;
                 Items.Add(vm);
             }
@@ -77,8 +99,8 @@ public class RecentIndexService : IDisposable
                 return;
         }
 
-        // Missing 文件 + ShowMissingFiles=false → 移除
-        if (incoming.Exists == ExistsState.Missing && !_settingsService.Current.ShowMissingFiles)
+        // Missing items are never shown; stale MRU entries are removed from the index.
+        if (incoming.Exists == ExistsState.Missing)
         {
             await RemoveAsync(incoming.NormalizedPath);
             return;
@@ -94,7 +116,7 @@ public class RecentIndexService : IDisposable
                 {
                     incoming.LastSeenTime = DateTime.UtcNow;
                     _repo.Upsert(incoming);
-                    var vm = new RecentItemViewModel(incoming, this);
+                    var vm = new RecentItemViewModel(incoming, this, _probeService);
                     _index[incoming.NormalizedPath] = vm;
                     InsertSorted(vm);
                 }
@@ -111,6 +133,18 @@ public class RecentIndexService : IDisposable
 
                     if (incoming.SizeBytes.HasValue && existing.Item.SizeBytes != incoming.SizeBytes)
                     { existing.Item.SizeBytes = incoming.SizeBytes; changed = true; }
+
+                    if (existing.Item.IsFolder != incoming.IsFolder)
+                    { existing.Item.IsFolder = incoming.IsFolder; changed = true; }
+
+                    if (!string.IsNullOrWhiteSpace(incoming.DisplayName) && existing.Item.DisplayName != incoming.DisplayName)
+                    { existing.Item.DisplayName = incoming.DisplayName; changed = true; }
+
+                    if (existing.Item.Extension != incoming.Extension)
+                    { existing.Item.Extension = incoming.Extension; changed = true; }
+
+                    if (existing.Item.ClassificationSource != incoming.ClassificationSource)
+                    { existing.Item.ClassificationSource = incoming.ClassificationSource; changed = true; }
 
                     if (incoming.Exists != ExistsState.Unknown)
                         existing.Item.Exists = incoming.Exists;
@@ -174,6 +208,26 @@ public class RecentIndexService : IDisposable
                 _index.Clear();
                 System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => Items.Clear());
                 Log.Information("RecentIndexService: 索引已清空，等待各源重新扫描");
+            }
+        }).ConfigureAwait(false);
+    }
+
+    public async Task ClearHiddenItemsAsync()
+    {
+        await Task.Run(() =>
+        {
+            lock (_mergeLock)
+            {
+                _repo.ClearHidden();
+                var hiddenPaths = _index.Values.Where(v => v.Item.IsHidden).Select(v => v.Item.NormalizedPath).ToList();
+                foreach (var path in hiddenPaths)
+                {
+                    if (_index.TryGetValue(path, out var vm))
+                    {
+                        _index.Remove(path);
+                        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => Items.Remove(vm));
+                    }
+                }
             }
         }).ConfigureAwait(false);
     }

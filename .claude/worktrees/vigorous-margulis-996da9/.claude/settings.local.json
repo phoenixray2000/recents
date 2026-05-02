@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir \"D:\\\\Git\\\\recents\" /a)",
+      "Read(//d/Git/recents/**)",
+      "Read(//d/Git/recents/.claude/**)"
+    ]
+  }
+}

@@ -45,12 +45,19 @@
                     <ControlTemplate TargetType="RadioButton">
                         <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="{TemplateBinding Padding}">
-                                <TextBlock Text="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" 
+                                <TextBlock x:Name="NavIcon"
+                                           Text="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" 
                                            Foreground="{TemplateBinding Foreground}"
                                            FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center" Margin="0,0,12,0"/>
-                                <ContentPresenter VerticalAlignment="Center"/>
+                                <ContentPresenter x:Name="NavLabel" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Border>
+                        <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding DataContext.IsCompactSidebar, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                <Setter TargetName="NavIcon" Property="Margin" Value="0"/>
+                                <Setter TargetName="NavLabel" Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -104,6 +111,28 @@
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
                     <Setter Property="Background" Value="{StaticResource RowHover}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style TargetType="ContextMenu">
+            <Setter Property="Background" Value="{StaticResource BgInput}" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderMuted}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+
+        <Style TargetType="MenuItem">
+            <Setter Property="Background" Value="{StaticResource BgInput}" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+            <Setter Property="Padding" Value="12,7" />
+            <Style.Triggers>
+                <Trigger Property="IsHighlighted" Value="True">
+                    <Setter Property="Background" Value="{StaticResource RowHover}" />
+                    <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Foreground" Value="{StaticResource TextTertiary}" />
                 </Trigger>
             </Style.Triggers>
         </Style>

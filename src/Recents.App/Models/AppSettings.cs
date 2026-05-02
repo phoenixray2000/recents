@@ -9,15 +9,23 @@ public class AppSettings
     public bool LaunchAtStartup   { get; set; } = false;
     public bool AlwaysOnTop       { get; set; } = true;
     public bool HideOnFocusLost   { get; set; } = false;
-    public bool ShowMissingFiles  { get; set; } = true;
+    public bool CloseToTray       { get; set; } = true;
     public bool ShowFolders       { get; set; } = true;
     public int  MaxRecentItems    { get; set; } = 200;
+    public string DefaultSort     { get; set; } = "RecentTime";
 
     // Hotkey（字符串表示，格式 "Ctrl+Alt+R"）
-    public string Hotkey { get; set; } = "Ctrl+Alt+R";
+    public string Hotkey { get; set; } = "Alt+Shift+Z";
 
     // Sources（默认已知文件夹在 SettingsService 初始化时写入）
     public List<SourceConfig> Sources { get; set; } = new();
+
+    public List<SystemSourceConfig> SystemSources { get; set; } = new()
+    {
+        new() { Kind = SourceKinds.RecentLnk, Enabled = true },
+        new() { Kind = SourceKinds.OfficeMru, Enabled = true },
+        new() { Kind = SourceKinds.OpenSavePidlMru, Enabled = true },
+    };
 
     // Filters
     public List<string> ExcludedExtensions { get; set; } = new()
@@ -65,4 +73,10 @@ public class AppSettings
 
     // 是否已显示过“关闭到托盘”提示
     public bool ClosedToTrayNoticeShown { get; set; } = false;
+}
+
+public class SystemSourceConfig
+{
+    public SourceKinds Kind { get; set; }
+    public bool Enabled { get; set; } = true;
 }

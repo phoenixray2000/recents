@@ -156,7 +156,7 @@ public sealed class KnownFolderWatchSource : IRecentSource, IDisposable
                 Extension          = isDir ? "" : Path.GetExtension(fullPath).ToLowerInvariant(),
                 ClassificationSource = FileTypeClassifier.Classify(isDir ? "" : Path.GetExtension(fullPath), isDir, _settings.ClassificationSourceGroups),
                 IsFolder           = isDir,
-                Exists             = ExistsState.Exists,
+                Exists             = ExistsState.Found,
                 Sources            = Kind,
                 TargetModifiedTime = mTime,
                 RecentTime         = recentTime

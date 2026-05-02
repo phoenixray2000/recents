@@ -22,6 +22,8 @@ public class SettingsService
     private readonly string _settingsDir;
 
     public AppSettings Current { get; private set; } = new();
+    public string SettingsPath => _settingsPath;
+    public string SettingsDirectory => _settingsDir;
 
     public SettingsService()
     {
@@ -38,6 +40,7 @@ public class SettingsService
         {
             Log.Information("SettingsService: 首次运行，创建默认 settings.json");
             Current = CreateDefault();
+            EnsureSystemSources(Current);
             Save();
             return;
         }
@@ -47,6 +50,7 @@ public class SettingsService
             var json    = File.ReadAllText(_settingsPath);
             var loaded  = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions);
             Current     = loaded ?? CreateDefault();
+            EnsureSystemSources(Current);
             Log.Information("SettingsService: 配置加载成功，Sources={Count}", Current.Sources.Count);
         }
         catch (Exception ex)
@@ -54,6 +58,7 @@ public class SettingsService
             BackupCorruptedFile();
             Log.Error(ex, "SettingsService: settings.json 损坏，已备份并重建默认值");
             Current = CreateDefault();
+            EnsureSystemSources(Current);
             Save();
         }
     }
@@ -107,6 +112,28 @@ public class SettingsService
                 MakeKnownFolderSource("{4BD8D571-6D19-48D3-BE97-422220080E43}", "Music"),
             }
         };
+    }
+
+    private static void EnsureSystemSources(AppSettings settings)
+    {
+        const int removedJumpListAuto = 1 << 4;
+        const int removedJumpListCustom = 1 << 5;
+
+        settings.SystemSources.RemoveAll(s =>
+            (int)s.Kind is removedJumpListAuto or removedJumpListCustom);
+
+        var required = new[]
+        {
+            SourceKinds.RecentLnk,
+            SourceKinds.OfficeMru,
+            SourceKinds.OpenSavePidlMru,
+        };
+
+        foreach (var kind in required)
+        {
+            if (settings.SystemSources.All(s => s.Kind != kind))
+                settings.SystemSources.Add(new SystemSourceConfig { Kind = kind, Enabled = true });
+        }
     }
 
     private static SourceConfig MakeKnownFolderSource(string folderGuid, string displayName) =>
