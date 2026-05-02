@@ -928,6 +928,16 @@ CREATE INDEX idx_extension   ON recent_items(extension);
    - Data paths
    - Open log folder
 
+#### 6.22.1 设置页布局优化 (Compact Design)
+
+为了保持工具的轻量感与高效，设置页采用了紧凑型设计：
+- **移除冗余标题**：移除右侧内容区头部的 "Recents Settings" 文字，仅保留标题栏左侧的动态状态提示（StatusMessage）。
+- **紧凑边距**：设置项内容左边距（Margin-left）设定为 32px，移除大面积空白，使交互焦点更集中。
+- **窗口尺寸**：设置窗口默认大小优化为 700x540，最小尺寸为 600x480。
+- **侧边栏宽度**：侧边栏宽度固定为 180px。
+- **视觉一致性**：热键录制框在聚焦时应有高亮底色和边框提示，代表处于“监听”状态。
+- **操作反馈**：设置项变更后，标题栏应实时显示“Settings saved”并随后淡回“Ready”或当前状态。
+
 ### 6.23 收藏文件 / 固定文件
 
 - **独立持久化**：用户可将文件固定到 Favorites。收藏项存储在独立的 `favorites` 表中，确保即使主列表条目因老化被修剪，收藏依然永久保留。
@@ -1066,7 +1076,7 @@ Microsoft YaHei UI
 2. 导航 / 操作图标：Segoe Fluent Icons、Segoe MDL2 Assets 或项目内 SVG 矢量图。
 3. 缺省文件图标：项目内通用占位图标。
 
-**禁止**：
+**禁止：**
 
 - 任何二次重绘、风格化、AI 生成、按文件名 / 类型自动生成的卡通图标 / 头像图标。
 - 为 `.exe` 文件强行显示机器人 / 风格化角色图标，**除非该 EXE 自身资源里就是该图标**（即调用 `SHGetFileInfo` / `IShellItemImageFactory` 返回的就是该图标）。
@@ -1091,6 +1101,7 @@ Sidebar width：180
 Sidebar icon-only width：56
 Row horizontal padding：12
 Row vertical padding：8
+Settings Content Padding：32,24
 ```
 
 ### 7.8 文案规范
