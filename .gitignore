@@ -3,6 +3,8 @@ bin/
 obj/
 out/
 publish/
+publish_fd/
+.claude/
 *.user
 *.suo
 

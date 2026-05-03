@@ -378,6 +378,12 @@
                     <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{StaticResource BgMain}">
                         <StackPanel Margin="32,24">
                             <TextBlock Text="Sources" Style="{StaticResource SectionTitle}"/>
+                            
+                            <TextBlock Text="Visibility" Style="{StaticResource FieldLabel}"/>
+                            <Border Style="{StaticResource SettingsCard}" Margin="0,0,0,20">
+                                <CheckBox Content="Show system and hidden files" IsChecked="{Binding ShowSystemAndHiddenFiles}"/>
+                            </Border>
+
                             <TextBlock Text="System sources" Style="{StaticResource FieldLabel}"/>
                             <ItemsControl ItemsSource="{Binding SystemSources}" Margin="0,0,0,20">
                                 <ItemsControl.ItemTemplate>

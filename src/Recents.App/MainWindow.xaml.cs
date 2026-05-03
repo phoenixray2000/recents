@@ -13,6 +13,7 @@ using Recents.App.Models;
 using Serilog;
 
 using Recents.App.Views;
+using Recents.App.Helpers;
 using System.Threading;
 
 namespace Recents.App;
@@ -54,8 +55,14 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         
         UpdateResponsiveLayout();
         
-        // 首次显示时自动聚焦
-        Loaded += (s, e) => SearchBox.Focus();
+        // 首次显示时自动聚焦，同时预热 Segoe Fluent Icons 字体
+        // WPF 对非系统字体懒加载，若不预热，ContextMenu Popup 首次渲染时
+        // 字形数据可能尚未就绪，导致图标显示为空白
+        Loaded += (s, e) =>
+        {
+            SearchBox.Focus();
+            PrewarmSegoeFluentIcons();
+        };
 
         // B2. 动态键盘提示
         ItemsList.SelectionChanged += (s, e) => 
@@ -80,6 +87,8 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         
         UpdateWindowWidth();
 
+        FileActionService.ActionExecuted += () => Dispatcher.BeginInvoke(new Action(HideWindowGroup));
+        ShellService.ActionExecuted += () => Dispatcher.BeginInvoke(new Action(HideWindowGroup));
 
         // §6.25: 列表选中变化时，如果预览窗口已打开，延迟 100ms 刷新
         ItemsList.SelectionChanged += (s, e) =>
@@ -275,6 +284,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
                 if (ItemsList.SelectedItem is RecentItemViewModel selected)
                 {
                     FileActionService.RevealInExplorer(selected.DisplayPath);
+                    Dispatcher.BeginInvoke(new Action(HideWindowGroup));
                     e.Handled = true;
                     return;
                 }
@@ -350,7 +360,8 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
                 FileActionService.RevealInExplorer(vm.DisplayPath);
             else
                 FileActionService.OpenFile(vm.DisplayPath);
-            HideWindowGroup();
+            
+            Dispatcher.BeginInvoke(new Action(HideWindowGroup));
         }
     }
 
@@ -360,6 +371,9 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
     {
         if (e.LeftButton == MouseButtonState.Pressed && ItemsList.SelectedItems.Count > 0)
         {
+            var source = e.OriginalSource as DependencyObject;
+            if (FindParent<System.Windows.Controls.Button>(source) != null) return;
+
             var selectedVms = GetSelectedItems().Where(v => !v.IsMissing).ToList();
 
             if (selectedVms.Count == 0) return;
@@ -374,6 +388,9 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
     {
         if (e.LeftButton == MouseButtonState.Pressed && FavoritesList.SelectedItem != null)
         {
+            var source = e.OriginalSource as DependencyObject;
+            if (FindParent<System.Windows.Controls.Button>(source) != null) return;
+
             var selected = FavoritesList.SelectedItem as RecentItemViewModel;
             if (selected == null || selected.IsMissing) return;
 
@@ -482,7 +499,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         {
             bool shouldHide = await _windowGroupFocusService
                 .ShouldHideAfterDeactivatedAsync(
-                    TimeSpan.FromMilliseconds(200),
+                    TimeSpan.FromMilliseconds(100),
                     _deactivateCts.Token);
 
             if (shouldHide)
@@ -584,6 +601,8 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
     {
         Topmost = _settings.Current.AlwaysOnTop;
         _viewModel.UpdateHotkey(_settings.Current.Hotkey);
+        _viewModel.ItemsView.Refresh();
+        _viewModel.FavoritesView.Refresh();
     }
 
     private void SortButton_Click(object sender, RoutedEventArgs e)
@@ -624,12 +643,33 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         if (sender is FrameworkElement fe)
         {
             var grid = FindParent<Grid>(fe);
-            if (grid?.ContextMenu != null)
+            if (grid != null && grid.DataContext is RecentItemViewModel vm)
             {
-                grid.ContextMenu.PlacementTarget = fe;
-                grid.ContextMenu.IsOpen = true;
+                var menu = ContextMenuBuilder.Build(vm);
+                menu.PlacementTarget = fe;
+                menu.IsOpen = true;
             }
         }
+    }
+
+    /// <summary>
+    /// 拦截所有列表项的右键菜单，动态构建全新 ContextMenu。
+    /// 每次打开都创建新实例，彻底避免 WPF Visual Parent 复用导致图标消失。
+    /// </summary>
+    private void ItemsList_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        // 找到触发右键的 ListBoxItem
+        if (e.OriginalSource is DependencyObject source)
+        {
+            var listBoxItem = FindParent<ListBoxItem>(source);
+            if (listBoxItem?.DataContext is RecentItemViewModel vm)
+            {
+                var menu = ContextMenuBuilder.Build(vm);
+                menu.PlacementTarget = listBoxItem;
+                menu.IsOpen = true;
+            }
+        }
+        e.Handled = true; // 阻止 WPF 默认的 ContextMenu 展示
     }
 
     private static T? FindParent<T>(DependencyObject child) where T : DependencyObject
@@ -676,10 +716,42 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         }
     }
 
-    /// <summary>由 App.xaml.cs 在启动完成后调用，提前初始化 WebView2。</summary>
     public void PrewarmPreview()
     {
         if (_settings.Current.PreviewEnabled)
             _ = EnsurePreviewWindow(); // 触发 PreviewWindow 构造 + InitWebView2Async
+    }
+
+    private void MenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        Dispatcher.BeginInvoke(new Action(HideWindowGroup));
+    }
+
+    /// <summary>
+    /// 强制 WPF 在 Loaded 时同步解析 Segoe Fluent Icons 字形，
+    /// 避免 ContextMenu Popup 首次打开时因字体未就绪导致图标空白。
+    /// </summary>
+    private static void PrewarmSegoeFluentIcons()
+    {
+        try
+        {
+            const string glyphs = "\uED25\uE7BC\uE81D\uE8C8\uE735\uE894\uE74D";
+            var typeface = new Typeface("Segoe Fluent Icons");
+            // FormattedText 会触发字体文件加载 + 字形 shaping，确保完全缓存
+            var ft = new FormattedText(
+                glyphs,
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Windows.FlowDirection.LeftToRight,
+                typeface,
+                14,
+                System.Windows.Media.Brushes.Transparent,
+                VisualTreeHelper.GetDpi(System.Windows.Application.Current.MainWindow).PixelsPerDip);
+            // 触发测量以强制字形加载
+            _ = ft.Width;
+        }
+        catch
+        {
+            // 字体不可用时静默失败，不影响程序运行
+        }
     }
 }

@@ -591,6 +591,12 @@ HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\RecentDocs
 | `D:\work` 或 含 `\` `/` | 路径片段匹配 |
 | `claw report` | 多 token AND |
 
+**隐藏与系统文件过滤：**
+- 设置项：`Show system and hidden files` (默认 `false`)。
+- 逻辑：当设为 `false` 时，若目标文件具有 `System` 或 `Hidden` 属性，或其所在路径的任意目录名以 `.` 开头（如 `.git`, `.vscode`），则从主列表、搜索结果及类型筛选中隐藏。
+- 例外：收藏文件 (Favorites) 永远显示，收藏优先级高于此过滤规则。不增加额外覆盖规则。
+- 生效：设置变更后立即刷新列表，无需重新扫描。忽略读取属性失败的文件。
+
 性能要求：
 - 1 万条以内输入无明显卡顿。
 - 搜索在内存索引上执行，不重新扫描磁盘。

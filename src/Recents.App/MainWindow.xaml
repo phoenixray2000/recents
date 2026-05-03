@@ -27,6 +27,10 @@
         <utils:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
         <utils:BooleanToColorConverter x:Key="BooleanToColorConverter" />
 
+        <Style x:Key="HidingMenuItem" TargetType="MenuItem">
+            <EventSetter Event="Click" Handler="MenuItem_Click"/>
+        </Style>
+
         <!-- ListBoxItem Style -->
         <Style TargetType="ListBoxItem">
             <Setter Property="Background" Value="Transparent" />
@@ -36,9 +40,9 @@
             <Setter Property="ContextMenu">
                 <Setter.Value>
                     <ContextMenu>
-                        <MenuItem Header="Open" Command="{Binding OpenCommand}"/>
-                        <MenuItem Header="Open With..." Command="{Binding OpenWithCommand}"/>
-                        <MenuItem Header="Reveal in Explorer" Command="{Binding RevealCommand}"/>
+                        <MenuItem Header="Open" Command="{Binding OpenCommand}" Style="{StaticResource HidingMenuItem}"/>
+                        <MenuItem Header="Open With..." Command="{Binding OpenWithCommand}" Style="{StaticResource HidingMenuItem}"/>
+                        <MenuItem Header="Reveal in Explorer" Command="{Binding RevealCommand}" Style="{StaticResource HidingMenuItem}"/>
                         <Separator/>
                         <MenuItem Header="Copy Full Path" Command="{Binding CopyPathCommand}"/>
                         <MenuItem Header="Copy File Name" Command="{Binding CopyFileNameCommand}"/>
@@ -160,6 +164,15 @@
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
+
+        <!-- Pre-warm Segoe Fluent Icons: WPF lazily loads non-system fonts.
+             Without this, the first ContextMenu open in the Popup HWND may render
+             before glyph data is available, showing blank icons.
+             Visibility=Hidden participates in layout/render (unlike Collapsed) 
+             ensuring glyphs are cached before any ContextMenu opens. -->
+        <TextBlock Visibility="Hidden" Width="1" Height="1" Grid.Column="0"
+                   FontFamily="Segoe Fluent Icons" FontSize="14" IsHitTestVisible="False"
+                   Text="&#xED25;&#xE7BC;&#xE81D;&#xE8C8;&#xE735;&#xE894;&#xE74D;&#xE713;&#xE921;&#xE922;&#xE8BB;"/>
 
         <!-- Main Content -->
         <Grid Grid.Column="0" Background="{StaticResource BgMain}">
@@ -350,7 +363,8 @@
                          ScrollViewer.VerticalScrollBarVisibility="Auto"
                          MouseDoubleClick="ItemsList_MouseDoubleClick"
                          PreviewMouseWheel="ItemsList_PreviewMouseWheel"
-                         MouseMove="ItemsList_MouseMove">
+                         MouseMove="ItemsList_MouseMove"
+                         ContextMenuOpening="ItemsList_ContextMenuOpening">
                     <ListBox.Style>
                         <Style TargetType="ListBox">
                             <Style.Triggers>
@@ -403,7 +417,8 @@
                          ItemTemplate="{StaticResource FavoritesItemTemplate}"
                          AllowDrop="True"
                          MouseMove="FavoritesList_MouseMove"
-                         Drop="FavoritesList_Drop"/>
+                         Drop="FavoritesList_Drop"
+                         ContextMenuOpening="ItemsList_ContextMenuOpening"/>
             </Grid>
         </Border>
     </Grid>

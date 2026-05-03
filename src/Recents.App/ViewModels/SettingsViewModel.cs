@@ -91,6 +91,7 @@ public partial class SettingsViewModel : ObservableObject
             "Recents",
             "logs");
         _previewEnabled = settings.Current.PreviewEnabled;
+        _showSystemAndHiddenFiles = settings.Current.ShowSystemAndHiddenFiles;
     }
 
     [ObservableProperty] private bool _launchAtStartup;
@@ -111,6 +112,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _logPath = string.Empty;
     [ObservableProperty] private string _statusMessage = "Ready";
     [ObservableProperty] private bool _previewEnabled;
+    [ObservableProperty] private bool _showSystemAndHiddenFiles;
 
     partial void OnLaunchAtStartupChanged(bool value)
     {
@@ -133,6 +135,11 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnPreviewEnabledChanged(bool value)
     {
         _settings.Current.PreviewEnabled = value;
+        SaveAndNotify();
+    }
+    partial void OnShowSystemAndHiddenFilesChanged(bool value)
+    {
+        _settings.Current.ShowSystemAndHiddenFiles = value;
         SaveAndNotify();
     }
 

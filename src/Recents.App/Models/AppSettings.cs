@@ -25,8 +25,8 @@ public class AppSettings
     public double? WindowTop       { get; set; } = null;
     public double? WindowLeft      { get; set; } = null;
     public bool  StartMinimized   { get; set; } = false;
-    // §6.25 空格预览
     public bool PreviewEnabled { get; set; } = true;
+    public bool ShowSystemAndHiddenFiles { get; set; } = false;
 
     // Hotkey（字符串表示，格式 "Ctrl+Alt+R"）
     public string Hotkey { get; set; } = "Alt+Shift+Z";

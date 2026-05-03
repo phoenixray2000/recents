@@ -14,6 +14,7 @@ public partial class MainViewModel : ObservableObject
     private readonly RecentIndexService _indexService;
     private readonly HotkeyService _hotkeyService;
     private readonly StatusHintService _statusHint;
+    private readonly SettingsService _settingsService;
     private readonly System.Windows.Threading.DispatcherTimer _updateTimer;
 
     [ObservableProperty]
@@ -56,11 +57,12 @@ public partial class MainViewModel : ObservableObject
     public ICollectionView ItemsView { get; }
     public ICollectionView FavoritesView { get; }
 
-    public MainViewModel(RecentIndexService indexService, HotkeyService hotkeyService, StatusHintService statusHint)
+    public MainViewModel(RecentIndexService indexService, HotkeyService hotkeyService, StatusHintService statusHint, SettingsService settingsService)
     {
         _indexService = indexService;
         _hotkeyService = hotkeyService;
         _statusHint = statusHint;
+        _settingsService = settingsService;
         _hotkeyService.PropertyChanged += (s, e) =>
         {
             if (e.PropertyName == nameof(HotkeyService.ActiveLabel))
@@ -198,6 +200,11 @@ public partial class MainViewModel : ObservableObject
     {
         if (obj is not RecentItemViewModel vm) return false;
 
+        // 收藏文件永远显示，收藏优先级高于系统/隐藏过滤规则
+        if (vm.Item.IsFavorite) return true;
+
+        if (ShouldHideBySystemAndHiddenRule(vm.Item, _settingsService.Current)) return false;
+
         // 1. 顶部 Chip 类型过滤 (ChipFilter) - 优先级高，明确用户意图
         if (CurrentChipFilter != "All")
         {
@@ -250,5 +257,39 @@ public partial class MainViewModel : ObservableObject
     public void UpdateHotkey(string hotkey)
     {
         _hotkeyService.UpdateHotkey(hotkey);
+    }
+
+    private bool ShouldHideBySystemAndHiddenRule(RecentItem item, AppSettings settings)
+    {
+        if (settings.ShowSystemAndHiddenFiles) return false;
+
+        if (IsUnderDotDirectory(item.NormalizedPath)) return true;
+
+        try
+        {
+            var attributes = System.IO.File.GetAttributes(item.NormalizedPath);
+            if ((attributes & System.IO.FileAttributes.Hidden) == System.IO.FileAttributes.Hidden ||
+                (attributes & System.IO.FileAttributes.System) == System.IO.FileAttributes.System)
+            {
+                return true;
+            }
+        }
+        catch
+        {
+            // Ignore if file doesn't exist or no access
+        }
+
+        return false;
+    }
+
+    private bool IsUnderDotDirectory(string targetPath)
+    {
+        if (string.IsNullOrEmpty(targetPath)) return false;
+        var parts = targetPath.Split(new[] { '\\', '/' }, StringSplitOptions.RemoveEmptyEntries);
+        foreach (var part in parts)
+        {
+            if (part.StartsWith('.')) return true;
+        }
+        return false;
     }
 }

@@ -141,26 +141,58 @@
         </Style>
 
         <Style TargetType="ContextMenu">
-            <Setter Property="Background" Value="{StaticResource BgInput}" />
+            <Setter Property="Background" Value="{StaticResource BgCard}" />
             <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
             <Setter Property="BorderBrush" Value="{StaticResource BorderMuted}" />
             <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="0,4" />
+            <Setter Property="HasDropShadow" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ContextMenu">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                Padding="{TemplateBinding Padding}">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="12" ShadowDepth="4" Opacity="0.4" Direction="270" />
+                            </Border.Effect>
+                            <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
+        <!-- MenuItem: NO custom ControlTemplate — WPF's built-in template correctly handles all
+             Role values (SubmenuItem, TopLevelItem, etc.) and Separator items.
+             A single custom ControlTemplate breaks role-based routing, causing IsHighlighted
+             to stop working for items after Separator elements. -->
         <Style TargetType="MenuItem">
-            <Setter Property="Background" Value="{StaticResource BgInput}" />
+            <Setter Property="Background" Value="Transparent" />
             <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
-            <Setter Property="Padding" Value="12,7" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="Margin" Value="2,1" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Style.Triggers>
                 <Trigger Property="IsHighlighted" Value="True">
                     <Setter Property="Background" Value="{StaticResource RowHover}" />
                     <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
                 </Trigger>
                 <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.5" />
                     <Setter Property="Foreground" Value="{StaticResource TextTertiary}" />
                 </Trigger>
             </Style.Triggers>
         </Style>
+
+        <Style TargetType="Separator" x:Key="{x:Static MenuItem.SeparatorStyleKey}">
+            <Setter Property="Background" Value="{StaticResource BorderMuted}"/>
+            <Setter Property="Margin" Value="8,4"/>
+            <Setter Property="Height" Value="1"/>
+        </Style>
+
         <DataTemplate x:Key="SharedRecentItemTemplate" DataType="{x:Type vm:RecentItemViewModel}">
             <Grid Margin="4" x:Name="ItemGrid">
                 <Grid.Style>
@@ -178,21 +210,10 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <Grid.ContextMenu>
-                    <ContextMenu>
-                        <MenuItem Header="Open" Command="{Binding OpenCommand}"/>
-                        <MenuItem Header="Open With..." Command="{Binding OpenWithCommand}"/>
-                        <MenuItem Header="Reveal in Explorer" Command="{Binding RevealCommand}"/>
-                        <Separator/>
-                        <MenuItem Header="Copy Full Path" Command="{Binding CopyPathCommand}"/>
-                        <MenuItem Header="Copy File Name" Command="{Binding CopyFileNameCommand}"/>
-                        <Separator/>
-                        <MenuItem Header="Pin/Unpin" Command="{Binding TogglePinCommand}"/>
-                        <MenuItem Header="Hide from list" Command="{Binding HideFromListCommand}"/>
-                        <Separator/>
-                        <MenuItem Header="Remove Once" Command="{Binding RemoveOnceCommand}"/>
-                    </ContextMenu>
-                </Grid.ContextMenu>
+                <!-- ContextMenu is built dynamically in code-behind via ContextMenuOpening
+                     to guarantee fresh UIElement instances every time. Static XAML-defined
+                     ContextMenu reuses the same UIElement children across Popup open/close
+                     cycles, causing visual parent conflicts that randomly blank out icons. -->
 
                 <!-- File Icon -->
                 <Image Grid.Column="0" Source="{Binding Icon}" Width="40" Height="40" VerticalAlignment="Center" Margin="0,0,16,0" x:Name="FileIcon"/>

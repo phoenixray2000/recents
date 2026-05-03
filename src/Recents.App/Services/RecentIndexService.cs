@@ -48,6 +48,10 @@ public class RecentIndexService : IDisposable
             SingleReader = true,
             AllowSynchronousContinuations = false
         });
+
+        System.Windows.Data.BindingOperations.EnableCollectionSynchronization(Items, _mergeLock);
+        System.Windows.Data.BindingOperations.EnableCollectionSynchronization(Favorites, _mergeLock);
+
         StartMergeQueueProcessor();
     }
 
@@ -97,33 +101,30 @@ public class RecentIndexService : IDisposable
                 recVMs.Add(new RecentItemViewModel(item, this, _probeService));
             }
 
-            // 3. 批量更新到 UI 线程并合并索引
-            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+            // 3. 同步合并索引
+            lock (_mergeLock)
             {
-                lock (_mergeLock)
+                // A. 处理收藏
+                foreach (var vm in favVMs)
                 {
-                    // A. 处理收藏
-                    foreach (var vm in favVMs)
+                    if (!_index.ContainsKey(vm.Item.NormalizedPath))
                     {
-                        if (!_index.ContainsKey(vm.Item.NormalizedPath))
-                        {
-                            _index[vm.Item.NormalizedPath] = vm;
-                        }
-                        Favorites.Add(_index[vm.Item.NormalizedPath]);
+                        _index[vm.Item.NormalizedPath] = vm;
                     }
-
-                    // B. 处理最近
-                    foreach (var vm in recVMs)
-                    {
-                        if (!_index.ContainsKey(vm.Item.NormalizedPath))
-                        {
-                            _index[vm.Item.NormalizedPath] = vm;
-                        }
-                        Items.Add(_index[vm.Item.NormalizedPath]);
-                    }
+                    Favorites.Add(_index[vm.Item.NormalizedPath]);
                 }
-                Log.Information("RecentIndexService: 已从数据库恢复 {FavCount} 条收藏, {RecCount} 条最近项", Favorites.Count, Items.Count);
-            });
+
+                // B. 处理最近
+                foreach (var vm in recVMs)
+                {
+                    if (!_index.ContainsKey(vm.Item.NormalizedPath))
+                    {
+                        _index[vm.Item.NormalizedPath] = vm;
+                    }
+                    Items.Add(_index[vm.Item.NormalizedPath]);
+                }
+            }
+            Log.Information("RecentIndexService: 已从数据库恢复 {FavCount} 条收藏, {RecCount} 条最近项", Favorites.Count, Items.Count);
         }
         catch (Exception ex)
         {
@@ -201,6 +202,14 @@ public class RecentIndexService : IDisposable
 
             if (existing is null)
             {
+                var max = _settingsService.Current.MaxRecentItems;
+                if (Items.Count >= max && incoming.RecentTime < Items.Last().Item.RecentTime)
+                {
+                    incoming.LastSeenTime = DateTime.UtcNow;
+                    _repo.UpsertDiscovery(incoming);
+                    return;
+                }
+
                 incoming.LastSeenTime = DateTime.UtcNow;
                 _repo.UpsertDiscovery(incoming);
                 var vm = new RecentItemViewModel(incoming, this, _probeService);
@@ -261,22 +270,19 @@ public class RecentIndexService : IDisposable
         var max = _settingsService.Current.MaxRecentItems;
         if (Items.Count <= max) return;
 
-        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+        lock (_mergeLock)
         {
-            lock (_mergeLock)
+            while (Items.Count > max)
             {
-                while (Items.Count > max)
+                var oldest = Items.Last();
+                Items.RemoveAt(Items.Count - 1);
+                // 如果不在收藏夹，才彻底从内存索引移除
+                if (!Favorites.Contains(oldest))
                 {
-                    var oldest = Items.Last();
-                    Items.RemoveAt(Items.Count - 1);
-                    // 如果不在收藏夹，才彻底从内存索引移除
-                    if (!Favorites.Contains(oldest))
-                    {
-                        _index.Remove(oldest.Item.NormalizedPath);
-                    }
+                    _index.Remove(oldest.Item.NormalizedPath);
                 }
             }
-        });
+        }
     }
 
     // FileSystemWatcher.Deleted 时调用
@@ -294,15 +300,12 @@ public class RecentIndexService : IDisposable
                 // 从最近列表物理删除
                 _repo.Delete(normalized);
                 
-                System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => 
+                Items.Remove(vm);
+                // 如果不在收藏夹，才彻底从索引移除
+                if (!Favorites.Contains(vm))
                 {
-                    Items.Remove(vm);
-                    // 如果不在收藏夹，才彻底从索引移除
-                    if (!Favorites.Contains(vm))
-                    {
-                        _index.Remove(normalized);
-                    }
-                });
+                    _index.Remove(normalized);
+                }
             }
         }).ConfigureAwait(false);
     }
@@ -326,16 +329,13 @@ public class RecentIndexService : IDisposable
         {
             vm.Item.FavoriteTime = DateTime.UtcNow;
             // 计算排序：新加入的排在最后
-            int maxOrder = 0;
-            System.Windows.Application.Current?.Dispatcher.Invoke(() => {
-                maxOrder = Favorites.Count > 0 ? Favorites.Max(v => v.Item.FavoriteOrder) : 0;
-            });
+            int maxOrder = Favorites.Count > 0 ? Favorites.Max(v => v.Item.FavoriteOrder) : 0;
             vm.Item.FavoriteOrder = maxOrder + 1;
 
             _repo.UpsertFavorite(vm.Item);
+            if (!Favorites.Contains(vm)) Favorites.Add(vm);
             System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
             {
-                if (!Favorites.Contains(vm)) Favorites.Add(vm);
                 vm.Refresh();
                 IndexChanged?.Invoke();
             });
@@ -343,9 +343,9 @@ public class RecentIndexService : IDisposable
         else
         {
             _repo.DeleteFavorite(vm.Item.NormalizedPath);
+            Favorites.Remove(vm);
             System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
             {
-                Favorites.Remove(vm);
                 vm.Refresh();
                 IndexChanged?.Invoke();
             });
@@ -387,7 +387,7 @@ public class RecentIndexService : IDisposable
                     _index[normalized] = newVm;
 
                     // 加入最近列表
-                    System.Windows.Application.Current?.Dispatcher.Invoke(() => InsertSorted(newVm));
+                    InsertSorted(newVm);
                     vm = newVm;
                 }
 
@@ -433,9 +433,9 @@ public class RecentIndexService : IDisposable
                 if (!_index.TryGetValue(normalizedPath, out var vm)) return;
                 vm.Item.IsHidden = true;
                 _repo.Upsert(vm.Item);
+                Items.Remove(vm);
                 System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => 
                 {
-                    Items.Remove(vm);
                     IndexChanged?.Invoke();
                 });
                 _index.Remove(normalizedPath);
@@ -452,7 +452,7 @@ public class RecentIndexService : IDisposable
             {
                 _repo.DeleteAll();
                 _index.Clear();
-                System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => Items.Clear());
+                Items.Clear();
                 Log.Information("RecentIndexService: 索引已清空，等待各源重新扫描");
             }
         }).ConfigureAwait(false);
@@ -471,7 +471,7 @@ public class RecentIndexService : IDisposable
                     if (_index.TryGetValue(path, out var vm))
                     {
                         _index.Remove(path);
-                        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => Items.Remove(vm));
+                        Items.Remove(vm);
                     }
                 }
             }
@@ -483,23 +483,17 @@ public class RecentIndexService : IDisposable
     // 按 RecentTime 倒序插入（保持集合有序）
     private void InsertSorted(RecentItemViewModel vm)
     {
-        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
-        {
-            int pos = 0;
-            while (pos < Items.Count && Items[pos].Item.RecentTime >= vm.Item.RecentTime)
-                pos++;
-            Items.Insert(pos, vm);
-        });
+        int pos = 0;
+        while (pos < Items.Count && Items[pos].Item.RecentTime >= vm.Item.RecentTime)
+            pos++;
+        Items.Insert(pos, vm);
     }
 
     // RecentTime 更新后移到正确位置
     private void ReSortToTop(RecentItemViewModel vm)
     {
-        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
-        {
-            if (Items.Remove(vm))
-                InsertSorted(vm);
-        });
+        if (Items.Remove(vm))
+            InsertSorted(vm);
     }
 
     #endregion

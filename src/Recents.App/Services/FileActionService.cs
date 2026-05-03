@@ -7,12 +7,15 @@ namespace Recents.App.Services;
 // PRD §6.9 / §6.10 文件操作。
 public class FileActionService
 {
+    public static event Action? ActionExecuted;
+
     public static void OpenFile(string path)
     {
         if (string.IsNullOrEmpty(path)) return;
         try
         {
             Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+            ActionExecuted?.Invoke();
         }
         catch (Exception ex)
         {
@@ -29,6 +32,7 @@ public class FileActionService
             // 如果是文件夹，直接打开；如果是文件，选中它
             string argument = Directory.Exists(path) ? path : $"/select,\"{path}\"";
             Process.Start("explorer.exe", argument);
+            ActionExecuted?.Invoke();
         }
         catch (Exception ex)
         {

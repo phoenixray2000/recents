@@ -10,6 +10,8 @@ namespace Recents.App.Services;
 
 public static class ShellService
 {
+    public static event Action? ActionExecuted;
+
     #region Open With
 
     [DllImport("shell32.dll", SetLastError = true)]
@@ -39,6 +41,7 @@ public static class ShellService
         try
         {
             Process.Start(new ProcessStartInfo("rundll32.exe", $"shell32.dll,OpenAs_RunDLL \"{path}\"") { UseShellExecute = true });
+            ActionExecuted?.Invoke();
         }
         catch (Exception ex)
         {

@@ -55,7 +55,7 @@ public partial class App : WpfApp
             _statusHint = new StatusHintService();
             _statusHint.SetStatus(StatusHintService.AppStatus.Initializing);
 
-            var mainVm = new MainViewModel(_index, _hotkey, _statusHint);
+            var mainVm = new MainViewModel(_index, _hotkey, _statusHint, _settings);
 
             _ = _index.LoadFromDatabaseAsync(_settings.Current.MaxRecentItems);
 
