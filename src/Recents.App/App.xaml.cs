@@ -48,6 +48,9 @@ public partial class App : WpfApp
             _settings = new SettingsService();
             _settings.Load();
 
+            // 应用界面语言（空值跟随系统）
+            Localization.LocalizationManager.Instance.SetLanguage(_settings.Current.Language);
+
             _index = new RecentIndexService(_settings);
             _index.OpenDatabase();
             
@@ -73,7 +76,7 @@ public partial class App : WpfApp
             _hotkey.Initialize(mainWindow);
             
             _hotkey.HotkeyPressed += mainWindow.ToggleVisibility;
-            _hotkey.RegistrationFailed += msg => _tray?.ShowBalloon("Hotkey conflict", msg, System.Windows.Forms.ToolTipIcon.Error);
+            _hotkey.RegistrationFailed += msg => _tray?.ShowBalloon(Localization.Loc.T("Error_HotkeyConflict"), msg, System.Windows.Forms.ToolTipIcon.Error);
             _singleInstance.ShowWindowRequested += () => Dispatcher.Invoke(mainWindow.ShowAndFocus);
 
             _tray.SetMainWindow(mainWindow);

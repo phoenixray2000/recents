@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Recents.App.Localization;
 using Recents.App.Models;
 using Recents.App.Services;
 using Recents.App.Services.Sources;
@@ -48,7 +49,23 @@ public partial class SettingsViewModel : ObservableObject
     public ObservableCollection<SourceConfig> KnownSources { get; }
     public ObservableCollection<SourceConfig> CustomSources { get; }
     public IReadOnlyList<int> MaxRecentItemOptions { get; } = new[] { 100, 200, 500, 1000 };
-    public IReadOnlyList<string> SortOptions { get; } = new[] { "RecentTime", "DisplayName", "Size", "ClassificationSource" };
+
+    public record SortOption(string Code, string DisplayName);
+    public IReadOnlyList<SortOption> SortOptions { get; } = new[]
+    {
+        new SortOption("RecentTime",           Loc.T("Sort_RecentTime")),
+        new SortOption("DisplayName",          Loc.T("Sort_DisplayName")),
+        new SortOption("Size",                 Loc.T("Sort_Size")),
+        new SortOption("ClassificationSource", Loc.T("Sort_Classification")),
+    };
+
+    public record LanguageOption(string Code, string DisplayName);
+    public IReadOnlyList<LanguageOption> LanguageOptions { get; } = new[]
+    {
+        new LanguageOption("",      Loc.T("Lang_Auto")),
+        new LanguageOption("en-US", Loc.T("Lang_English")),
+        new LanguageOption("zh-CN", Loc.T("Lang_Chinese")),
+    };
 
     public SettingsViewModel(
         SettingsService settings,
@@ -62,9 +79,9 @@ public partial class SettingsViewModel : ObservableObject
         _rebuildIndexAsync = rebuildIndexAsync;
         SystemSources = new ObservableCollection<SystemSourceInfo>
         {
-            MakeSystemSource(SourceKinds.RecentLnk, "Recent shortcuts", @"%APPDATA%\Microsoft\Windows\Recent"),
-            MakeSystemSource(SourceKinds.OfficeMru, "Office MRU", @"HKCU\Software\Microsoft\Office\...\User MRU"),
-            MakeSystemSource(SourceKinds.OpenSavePidlMru, "Open / Save dialog MRU", @"HKCU\...\Explorer\ComDlg32\OpenSavePidlMRU")
+            MakeSystemSource(SourceKinds.RecentLnk, Loc.T("Source_RecentLnk_Name"), @"%APPDATA%\Microsoft\Windows\Recent"),
+            MakeSystemSource(SourceKinds.OfficeMru, Loc.T("Source_OfficeMru_Name"), @"HKCU\Software\Microsoft\Office\...\User MRU"),
+            MakeSystemSource(SourceKinds.OpenSavePidlMru, Loc.T("Source_OpenSavePidlMru_Name"), @"HKCU\...\Explorer\ComDlg32\OpenSavePidlMRU")
         };
         KnownSources = new ObservableCollection<SourceConfig>(
             settings.Current.Sources.Where(s => s.Kind == SourceKinds.KnownFolderWatch));
@@ -92,6 +109,7 @@ public partial class SettingsViewModel : ObservableObject
             "logs");
         _previewEnabled = settings.Current.PreviewEnabled;
         _showSystemAndHiddenFiles = settings.Current.ShowSystemAndHiddenFiles;
+        _selectedLanguage = settings.Current.Language ?? "";
     }
 
     [ObservableProperty] private bool _launchAtStartup;
@@ -110,9 +128,17 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _settingsPath = string.Empty;
     [ObservableProperty] private string _dataPath = string.Empty;
     [ObservableProperty] private string _logPath = string.Empty;
-    [ObservableProperty] private string _statusMessage = "Ready";
+    [ObservableProperty] private string _statusMessage = Loc.T("Settings_Status_Ready");
     [ObservableProperty] private bool _previewEnabled;
     [ObservableProperty] private bool _showSystemAndHiddenFiles;
+    [ObservableProperty] private string _selectedLanguage = "";
+
+    partial void OnSelectedLanguageChanged(string value)
+    {
+        _settings.Current.Language = value ?? "";
+        LocalizationManager.Instance.SetLanguage(value);
+        SaveAndNotify();
+    }
 
     partial void OnLaunchAtStartupChanged(bool value)
     {
@@ -158,7 +184,7 @@ public partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private void AddFolder()
     {
-        using var dialog = new Forms.FolderBrowserDialog { Description = "Add a folder source" };
+        using var dialog = new Forms.FolderBrowserDialog { Description = Loc.T("Settings_AddFolder_Description") };
         if (dialog.ShowDialog() != Forms.DialogResult.OK || string.IsNullOrWhiteSpace(dialog.SelectedPath))
             return;
 
@@ -182,7 +208,7 @@ public partial class SettingsViewModel : ObservableObject
         {
             Kind = SourceKinds.UncFolderWatch,
             Path = @"\\server\share",
-            DisplayName = "Network path",
+            DisplayName = Loc.T("Settings_NetworkPath_Default"),
             Enabled = false,
             RecentLookbackDays = 30
         };
@@ -230,12 +256,13 @@ public partial class SettingsViewModel : ObservableObject
         Save();
         SettingsChanged?.Invoke();
         
-        StatusMessage = "Settings saved";
-        try 
+        var savedMsg = Loc.T("Settings_Status_Saved");
+        StatusMessage = savedMsg;
+        try
         {
             await Task.Delay(2000);
-            if (StatusMessage == "Settings saved")
-                StatusMessage = "Ready";
+            if (StatusMessage == savedMsg)
+                StatusMessage = Loc.T("Settings_Status_Ready");
         }
         catch { /* Ignore if task cancelled or other issues */ }
     }

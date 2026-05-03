@@ -2,6 +2,7 @@ using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.Windows.Media;
+using Recents.App.Localization;
 using Recents.App.Models;
 using Recents.App.Services;
 
@@ -133,7 +134,7 @@ public partial class RecentItemViewModel : ObservableObject
         }
     }
 
-    public string OpenDisabledReason => IsMissing ? "File does not exist or is inaccessible." : string.Empty;
+    public string OpenDisabledReason => IsMissing ? Loc.T("Error_FileMissing") : string.Empty;
 
     [RelayCommand(CanExecute = nameof(CanActionExecute))]
     private void Open() => FileActionService.OpenFile(Item.NormalizedPath);

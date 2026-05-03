@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using Recents.App.Localization;
 using Recents.App.ViewModels;
 using WpfBrush = System.Windows.Media.Brush;
 
@@ -24,17 +25,17 @@ public static class ContextMenuBuilder
     {
         var menu = new ContextMenu();
 
-        menu.Items.Add(CreateItem("\uED25", "Open", vm.OpenCommand));
-        menu.Items.Add(CreateItem("\uE7BC", "Open With...", vm.OpenWithCommand));
-        menu.Items.Add(CreateItem("\uE81D", "Reveal in Explorer", vm.RevealCommand));
+        menu.Items.Add(CreateItem("\uED25", Loc.T("Action_Open"), vm.OpenCommand));
+        menu.Items.Add(CreateItem("\uE7BC", Loc.T("Action_OpenWith"), vm.OpenWithCommand));
+        menu.Items.Add(CreateItem("\uE81D", Loc.T("Action_Reveal"), vm.RevealCommand));
         menu.Items.Add(new Separator());
-        menu.Items.Add(CreateItem("\uE8C8", "Copy Full Path", vm.CopyPathCommand));
-        menu.Items.Add(CreateItem("\uE8C8", "Copy File Name", vm.CopyFileNameCommand));
+        menu.Items.Add(CreateItem("\uE8C8", Loc.T("Action_CopyPath"), vm.CopyPathCommand));
+        menu.Items.Add(CreateItem("\uE8C8", Loc.T("Action_CopyFileName"), vm.CopyFileNameCommand));
         menu.Items.Add(new Separator());
-        menu.Items.Add(CreateItem("\uE735", "Toggle Pin", vm.TogglePinCommand));
-        menu.Items.Add(CreateItem("\uE894", "Hide from list", vm.HideFromListCommand));
+        menu.Items.Add(CreateItem("\uE735", Loc.T("Action_TogglePin"), vm.TogglePinCommand));
+        menu.Items.Add(CreateItem("\uE894", Loc.T("Action_HideFromList"), vm.HideFromListCommand));
         menu.Items.Add(new Separator());
-        menu.Items.Add(CreateItem("\uE74D", "Remove Once", vm.RemoveOnceCommand, isDanger: true));
+        menu.Items.Add(CreateItem("\uE74D", Loc.T("Action_RemoveOnce"), vm.RemoveOnceCommand, isDanger: true));
 
         return menu;
     }

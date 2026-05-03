@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+
+  <data name="Main_Title" xml:space="preserve"><value>Recents</value></data>
+  <data name="Main_Tooltip_Settings" xml:space="preserve"><value>设置</value></data>
+  <data name="Main_Search_Placeholder" xml:space="preserve"><value>搜索最近文件...</value></data>
+  <data name="Main_Filter_AllFiles" xml:space="preserve"><value>全部</value></data>
+  <data name="Main_Filter_Documents" xml:space="preserve"><value>文档</value></data>
+  <data name="Main_Filter_Images" xml:space="preserve"><value>图片</value></data>
+  <data name="Main_Filter_Code" xml:space="preserve"><value>代码</value></data>
+  <data name="Main_Filter_Folders" xml:space="preserve"><value>文件夹</value></data>
+  <data name="Main_Density_Standard" xml:space="preserve"><value>标准视图</value></data>
+  <data name="Main_Density_Compact" xml:space="preserve"><value>紧凑视图</value></data>
+  <data name="Main_Sort_NewestFirst" xml:space="preserve"><value>最近优先</value></data>
+  <data name="Main_Sort_NameAZ" xml:space="preserve"><value>名称 A-Z</value></data>
+  <data name="Main_Sort_Size" xml:space="preserve"><value>大小</value></data>
+  <data name="Main_Sort_Classification" xml:space="preserve"><value>分类</value></data>
+  <data name="Main_Empty_NoFiles" xml:space="preserve"><value>未找到最近文件</value></data>
+  <data name="Main_Empty_Loading" xml:space="preserve"><value>正在加载索引...</value></data>
+  <data name="Main_Empty_ClearFilters" xml:space="preserve"><value>清除筛选</value></data>
+  <data name="Main_Empty_RebuildIndex" xml:space="preserve"><value>重建索引</value></data>
+  <data name="Main_Favorites_Header" xml:space="preserve"><value>收藏</value></data>
+  <data name="Main_Favorites_Toggle" xml:space="preserve"><value>展开/收起收藏栏</value></data>
+  <data name="Main_Favorites_Unpin" xml:space="preserve"><value>取消固定</value></data>
+
+  <data name="Settings_Title" xml:space="preserve"><value>设置</value></data>
+  <data name="Settings_Close" xml:space="preserve"><value>关闭设置</value></data>
+  <data name="Settings_Tab_General" xml:space="preserve"><value>常规</value></data>
+  <data name="Settings_Tab_Hotkey" xml:space="preserve"><value>快捷键</value></data>
+  <data name="Settings_Tab_Sources" xml:space="preserve"><value>数据源</value></data>
+  <data name="Settings_Tab_List" xml:space="preserve"><value>列表</value></data>
+  <data name="Settings_Tab_Filters" xml:space="preserve"><value>过滤</value></data>
+  <data name="Settings_Tab_About" xml:space="preserve"><value>关于</value></data>
+  <data name="Settings_Section_General" xml:space="preserve"><value>常规</value></data>
+  <data name="Settings_Section_Hotkey" xml:space="preserve"><value>快捷键</value></data>
+  <data name="Settings_Section_Sources" xml:space="preserve"><value>数据源</value></data>
+  <data name="Settings_Section_List" xml:space="preserve"><value>列表</value></data>
+  <data name="Settings_Section_Filters" xml:space="preserve"><value>过滤</value></data>
+  <data name="Settings_Section_About" xml:space="preserve"><value>关于</value></data>
+  <data name="Settings_Field_StartupBehavior" xml:space="preserve"><value>启动与行为</value></data>
+  <data name="Settings_Field_QuickPreview" xml:space="preserve"><value>快速预览</value></data>
+  <data name="Settings_Field_Language" xml:space="preserve"><value>语言</value></data>
+  <data name="Settings_Field_GlobalHotkey" xml:space="preserve"><value>全局快捷键</value></data>
+  <data name="Settings_Field_Visibility" xml:space="preserve"><value>可见性</value></data>
+  <data name="Settings_Field_SystemSources" xml:space="preserve"><value>系统数据源</value></data>
+  <data name="Settings_Field_KnownFolders" xml:space="preserve"><value>已知文件夹</value></data>
+  <data name="Settings_Field_CustomPaths" xml:space="preserve"><value>自定义路径</value></data>
+  <data name="Settings_Field_CacheIndex" xml:space="preserve"><value>缓存与索引</value></data>
+  <data name="Settings_Field_DisplayPreferences" xml:space="preserve"><value>显示偏好</value></data>
+  <data name="Settings_Field_ContentOptions" xml:space="preserve"><value>内容选项</value></data>
+  <data name="Settings_Field_ExcludedExtensions" xml:space="preserve"><value>排除的扩展名</value></data>
+  <data name="Settings_Field_ExcludedPaths" xml:space="preserve"><value>排除的路径</value></data>
+  <data name="Settings_Field_ExcludedKeywords" xml:space="preserve"><value>排除的关键词</value></data>
+  <data name="Settings_Field_Version" xml:space="preserve"><value>版本</value></data>
+  <data name="Settings_Field_Privacy" xml:space="preserve"><value>隐私</value></data>
+  <data name="Settings_Field_Repository" xml:space="preserve"><value>仓库</value></data>
+  <data name="Settings_Cb_LaunchAtStartup" xml:space="preserve"><value>开机自启</value></data>
+  <data name="Settings_Cb_StartMinimized" xml:space="preserve"><value>启动时最小化</value></data>
+  <data name="Settings_Cb_HideOnFocusLost" xml:space="preserve"><value>失去焦点时隐藏</value></data>
+  <data name="Settings_Cb_AlwaysOnTop" xml:space="preserve"><value>窗口置顶</value></data>
+  <data name="Settings_Cb_CloseToTray" xml:space="preserve"><value>关闭时最小化到托盘</value></data>
+  <data name="Settings_Cb_QuickPreviewEnable" xml:space="preserve"><value>启用快速预览（空格键）</value></data>
+  <data name="Settings_Cb_QuickPreviewDesc" xml:space="preserve"><value>按空格键使用 WebView2 引擎预览支持的文件</value></data>
+  <data name="Settings_Cb_ShowSystemHidden" xml:space="preserve"><value>显示系统和隐藏文件</value></data>
+  <data name="Settings_Cb_ShowFolders" xml:space="preserve"><value>在列表中显示文件夹</value></data>
+  <data name="Settings_Lbl_HotkeyDesc" xml:space="preserve"><value>在任何位置按下此快捷键以显示或隐藏 Recents</value></data>
+  <data name="Settings_Lbl_HotkeyToolTip" xml:space="preserve"><value>点击后按下按键以修改快捷键</value></data>
+  <data name="Settings_Btn_ResetDefault" xml:space="preserve"><value>恢复默认</value></data>
+  <data name="Settings_Btn_AddFolder" xml:space="preserve"><value>添加文件夹</value></data>
+  <data name="Settings_Btn_AddNetworkPath" xml:space="preserve"><value>添加网络路径</value></data>
+  <data name="Settings_Btn_RebuildIndex" xml:space="preserve"><value>重建索引</value></data>
+  <data name="Settings_Btn_ClearHidden" xml:space="preserve"><value>清空已隐藏项</value></data>
+  <data name="Settings_Btn_ClearIconCache" xml:space="preserve"><value>清除图标缓存</value></data>
+  <data name="Settings_Lbl_MaxRecentItems" xml:space="preserve"><value>最大显示条数</value></data>
+  <data name="Settings_Lbl_DefaultSort" xml:space="preserve"><value>默认排序</value></data>
+  <data name="Settings_About_Tagline1" xml:space="preserve"><value>一款轻量的 Windows 最近文件启动器。</value></data>
+  <data name="Settings_About_Tagline2" xml:space="preserve"><value>快速查找、预览、拖拽并打开你的最近文件。</value></data>
+  <data name="Settings_Privacy_Local" xml:space="preserve"><value>• 完全本地运行。</value></data>
+  <data name="Settings_Privacy_NoUpload" xml:space="preserve"><value>• 不上传任何文件。</value></data>
+  <data name="Settings_Privacy_NoDelete" xml:space="preserve"><value>• 不会删除原始文件。</value></data>
+  <data name="Settings_About_Copyright" xml:space="preserve"><value>© 2026 Recents</value></data>
+  <data name="Settings_Status_Ready" xml:space="preserve"><value>就绪</value></data>
+  <data name="Settings_Status_Saved" xml:space="preserve"><value>设置已保存</value></data>
+  <data name="Settings_AddFolder_Description" xml:space="preserve"><value>添加一个文件夹数据源</value></data>
+  <data name="Settings_NetworkPath_Default" xml:space="preserve"><value>网络路径</value></data>
+
+  <data name="Source_RecentLnk_Name" xml:space="preserve"><value>最近使用的快捷方式</value></data>
+  <data name="Source_OfficeMru_Name" xml:space="preserve"><value>Office 最近列表</value></data>
+  <data name="Source_OpenSavePidlMru_Name" xml:space="preserve"><value>打开/保存对话框最近列表</value></data>
+
+  <data name="Sort_RecentTime" xml:space="preserve"><value>最近优先</value></data>
+  <data name="Sort_DisplayName" xml:space="preserve"><value>名称 A-Z</value></data>
+  <data name="Sort_Size" xml:space="preserve"><value>大小</value></data>
+  <data name="Sort_Classification" xml:space="preserve"><value>分类</value></data>
+
+  <data name="Status_Ready" xml:space="preserve"><value>就绪</value></data>
+  <data name="Status_Initializing" xml:space="preserve"><value>初始化中...</value></data>
+  <data name="Status_Indexing" xml:space="preserve"><value>正在索引...</value></data>
+  <data name="Status_Watching" xml:space="preserve"><value>正在监听数据源</value></data>
+  <data name="Status_Partial" xml:space="preserve"><value>部分数据源不可用</value></data>
+  <data name="Status_Error" xml:space="preserve"><value>错误</value></data>
+  <data name="Status_ItemCount" xml:space="preserve"><value>{0} 项</value></data>
+  <data name="Status_Hint_Navigate" xml:space="preserve"><value>↑↓ 导航</value></data>
+  <data name="Status_Hint_OpenDrag" xml:space="preserve"><value>回车 打开 | 拖拽 分享</value></data>
+  <data name="Status_Hint_Open" xml:space="preserve"><value>回车 打开</value></data>
+
+  <data name="Action_Open" xml:space="preserve"><value>打开</value></data>
+  <data name="Action_OpenWith" xml:space="preserve"><value>打开方式...</value></data>
+  <data name="Action_Reveal" xml:space="preserve"><value>在资源管理器中显示</value></data>
+  <data name="Action_CopyPath" xml:space="preserve"><value>复制完整路径</value></data>
+  <data name="Action_CopyFileName" xml:space="preserve"><value>复制文件名</value></data>
+  <data name="Action_TogglePin" xml:space="preserve"><value>固定 / 取消固定</value></data>
+  <data name="Action_HideFromList" xml:space="preserve"><value>从列表中隐藏</value></data>
+  <data name="Action_RemoveOnce" xml:space="preserve"><value>移除此项</value></data>
+
+  <data name="Error_OpenFailed_Title" xml:space="preserve"><value>打开失败</value></data>
+  <data name="Error_OpenFailed_Message" xml:space="preserve"><value>无法打开文件：
+{0}</value></data>
+  <data name="Error_FileMissing" xml:space="preserve"><value>文件不存在或无法访问。</value></data>
+  <data name="Error_HotkeyConflict" xml:space="preserve"><value>快捷键冲突</value></data>
+
+  <data name="Lang_Auto" xml:space="preserve"><value>跟随系统</value></data>
+  <data name="Lang_English" xml:space="preserve"><value>English</value></data>
+  <data name="Lang_Chinese" xml:space="preserve"><value>中文</value></data>
+</root>

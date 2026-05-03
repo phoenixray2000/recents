@@ -28,6 +28,9 @@ public class AppSettings
     public bool PreviewEnabled { get; set; } = true;
     public bool ShowSystemAndHiddenFiles { get; set; } = false;
 
+    // 界面语言（空 = 跟随系统；支持 "en-US"、"zh-CN" 等 BCP 47 标识）
+    public string Language { get; set; } = "";
+
     // Hotkey（字符串表示，格式 "Ctrl+Alt+R"）
     public string Hotkey { get; set; } = "Alt+Shift+Z";
 

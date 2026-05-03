@@ -32,6 +32,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
     private CancellationTokenSource? _previewNavCts;
     private readonly IWindowGroupFocusService _windowGroupFocusService;
     private CancellationTokenSource? _deactivateCts;
+    private bool _contextMenuOpen;
 
     public MainWindow(
         MainViewModel viewModel,
@@ -492,6 +493,15 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         if (!_settings.Current.HideOnFocusLost)
             return;
 
+        // 动态 ContextMenu 运行在独立 Popup 中，会短暂夺取焦点。
+        // 若此时触发 Deactivated，应忽略，等菜单关闭后再决定。
+        if (_contextMenuOpen)
+            return;
+
+        // 若外部对话框（如 Open With）正在展示，不隐藏主窗口
+        if (ShellService.IsExternalDialogOpen)
+            return;
+
         _deactivateCts?.Cancel();
         _deactivateCts = new CancellationTokenSource();
 
@@ -504,6 +514,11 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
 
             if (shouldHide)
             {
+                // 再次检查标记。因为 ShouldHideAfterDeactivatedAsync 内部有 100ms 延迟，
+                // 期间 Command 脚本可能已经启动并设置了 IsExternalDialogOpen = true。
+                if (ShellService.IsExternalDialogOpen)
+                    return;
+
                 HideWindowGroup();
             }
         }
@@ -645,9 +660,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
             var grid = FindParent<Grid>(fe);
             if (grid != null && grid.DataContext is RecentItemViewModel vm)
             {
-                var menu = ContextMenuBuilder.Build(vm);
-                menu.PlacementTarget = fe;
-                menu.IsOpen = true;
+                OpenDynamicContextMenu(vm, fe);
             }
         }
     }
@@ -658,18 +671,33 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
     /// </summary>
     private void ItemsList_ContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
-        // 找到触发右键的 ListBoxItem
         if (e.OriginalSource is DependencyObject source)
         {
             var listBoxItem = FindParent<ListBoxItem>(source);
             if (listBoxItem?.DataContext is RecentItemViewModel vm)
             {
-                var menu = ContextMenuBuilder.Build(vm);
-                menu.PlacementTarget = listBoxItem;
-                menu.IsOpen = true;
+                OpenDynamicContextMenu(vm, listBoxItem);
             }
         }
-        e.Handled = true; // 阻止 WPF 默认的 ContextMenu 展示
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// 统一入口：构建并打开动态 ContextMenu，同时管理 _contextMenuOpen 标记
+    /// 以防止菜单打开期间触发窗口 Deactivated 隐藏逻辑。
+    /// </summary>
+    private void OpenDynamicContextMenu(RecentItemViewModel vm, UIElement placementTarget)
+    {
+        var menu = ContextMenuBuilder.Build(vm);
+        menu.PlacementTarget = placementTarget;
+
+        _contextMenuOpen = true;
+        menu.Closed += (_, _) =>
+        {
+            _contextMenuOpen = false;
+        };
+
+        menu.IsOpen = true;
     }
 
     private static T? FindParent<T>(DependencyObject child) where T : DependencyObject

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using Recents.App.Localization;
 
 namespace Recents.App.Services;
 
@@ -19,8 +20,8 @@ public class FileActionService
         }
         catch (Exception ex)
         {
-            Serilog.Log.Error(ex, "FileActionService: 无法打开文件 {Path}", path);
-            System.Windows.MessageBox.Show($"无法打开文件：\n{ex.Message}", "打开失败", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            Serilog.Log.Error(ex, "FileActionService: open file failed {Path}", path);
+            System.Windows.MessageBox.Show(Loc.T("Error_OpenFailed_Message", ex.Message), Loc.T("Error_OpenFailed_Title"), System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
         }
     }
 

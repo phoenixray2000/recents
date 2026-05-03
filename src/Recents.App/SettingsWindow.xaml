@@ -3,7 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:src="clr-namespace:Recents.App.Services.Sources"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
-        Title="Settings" Height="600" Width="700" MinHeight="480" MinWidth="600"
+        xmlns:loc="clr-namespace:Recents.App.Localization"
+        Title="{loc:T Key=Settings_Title}" Height="600" Width="700" MinHeight="480" MinWidth="600"
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource BgWindow}"
         Foreground="{StaticResource TextPrimary}"
@@ -290,7 +291,7 @@
                            FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Margin="24,0"/>
                 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button Content="&#xE8BB;" Click="CloseBtn_Click" ToolTip="Close settings">
+                    <Button Content="&#xE8BB;" Click="CloseBtn_Click" ToolTip="{loc:T Key=Settings_Close}">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource WindowControlBtn}">
                                 <Style.Triggers>
@@ -315,23 +316,33 @@
                     </Style>
                 </TabControl.Resources>
 
-                <TabItem Header="General">
+                <TabItem Header="{loc:T Key=Settings_Tab_General}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{StaticResource BgMain}">
                         <StackPanel Margin="32,24" MaxWidth="560" HorizontalAlignment="Left">
-                            <TextBlock Text="General" Style="{StaticResource SectionTitle}"/>
-                            
-                            <TextBlock Text="Startup &amp; Behavior" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Text="{loc:T Key=Settings_Section_General}" Style="{StaticResource SectionTitle}"/>
+
+                            <TextBlock Text="{loc:T Key=Settings_Field_StartupBehavior}" Style="{StaticResource FieldLabel}"/>
                             <Border Style="{StaticResource SettingsCard}">
                                 <StackPanel>
-                                    <CheckBox Content="Launch at startup" IsChecked="{Binding LaunchAtStartup}"/>
-                                    <CheckBox Content="Start minimized" IsChecked="{Binding StartMinimized}"/>
-                                    <CheckBox Content="Hide when focus lost" IsChecked="{Binding HideOnFocusLost}"/>
-                                    <CheckBox Content="Always on top" IsChecked="{Binding AlwaysOnTop}"/>
-                                    <CheckBox Content="Hide to tray when closing" IsChecked="{Binding CloseToTray}"/>
+                                    <CheckBox Content="{loc:T Key=Settings_Cb_LaunchAtStartup}" IsChecked="{Binding LaunchAtStartup}"/>
+                                    <CheckBox Content="{loc:T Key=Settings_Cb_StartMinimized}" IsChecked="{Binding StartMinimized}"/>
+                                    <CheckBox Content="{loc:T Key=Settings_Cb_HideOnFocusLost}" IsChecked="{Binding HideOnFocusLost}"/>
+                                    <CheckBox Content="{loc:T Key=Settings_Cb_AlwaysOnTop}" IsChecked="{Binding AlwaysOnTop}"/>
+                                    <CheckBox Content="{loc:T Key=Settings_Cb_CloseToTray}" IsChecked="{Binding CloseToTray}"/>
                                 </StackPanel>
                             </Border>
 
-                            <TextBlock Text="Quick Preview" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Text="{loc:T Key=Settings_Field_Language}" Style="{StaticResource FieldLabel}"/>
+                            <Border Style="{StaticResource SettingsCard}">
+                                <ComboBox ItemsSource="{Binding LanguageOptions}"
+                                          SelectedValue="{Binding SelectedLanguage}"
+                                          SelectedValuePath="Code"
+                                          DisplayMemberPath="DisplayName"
+                                          Style="{StaticResource PremiumComboBox}"
+                                          Width="240" HorizontalAlignment="Left"/>
+                            </Border>
+
+                            <TextBlock Text="{loc:T Key=Settings_Field_QuickPreview}" Style="{StaticResource FieldLabel}"/>
                             <Border Style="{StaticResource SettingsCard}" Padding="16,12">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -341,9 +352,9 @@
                                     <CheckBox IsChecked="{Binding PreviewEnabled}"
                                               VerticalAlignment="Top" Margin="0,2,12,0"/>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="Enable quick preview (Space)" 
+                                        <TextBlock Text="{loc:T Key=Settings_Cb_QuickPreviewEnable}"
                                                    Foreground="{StaticResource TextPrimary}" FontWeight="Medium" FontSize="13"/>
-                                        <TextBlock Text="Press Space to preview supported files using WebView2 engine" 
+                                        <TextBlock Text="{loc:T Key=Settings_Cb_QuickPreviewDesc}"
                                                    Foreground="{StaticResource TextSecondary}" FontSize="11" Margin="0,2,0,0"/>
                                     </StackPanel>
                                 </Grid>
@@ -352,21 +363,21 @@
                     </ScrollViewer>
                 </TabItem>
 
-                <TabItem Header="Hotkey">
+                <TabItem Header="{loc:T Key=Settings_Tab_Hotkey}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{StaticResource BgMain}">
                         <StackPanel Margin="32,24" MaxWidth="560" HorizontalAlignment="Left">
-                            <TextBlock Text="Hotkey" Style="{StaticResource SectionTitle}"/>
-                            <TextBlock Text="Global Hotkey" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Text="{loc:T Key=Settings_Section_Hotkey}" Style="{StaticResource SectionTitle}"/>
+                            <TextBlock Text="{loc:T Key=Settings_Field_GlobalHotkey}" Style="{StaticResource FieldLabel}"/>
                             <Border Style="{StaticResource SettingsCard}">
                                 <StackPanel>
-                                    <TextBlock Text="Press this hotkey from anywhere to show or hide Recents" Foreground="{StaticResource TextSecondary}" FontSize="12" Margin="0,0,0,12"/>
-                                    <TextBox Text="{Binding Hotkey, UpdateSourceTrigger=PropertyChanged}" 
+                                    <TextBlock Text="{loc:T Key=Settings_Lbl_HotkeyDesc}" Foreground="{StaticResource TextSecondary}" FontSize="12" Margin="0,0,0,12"/>
+                                    <TextBox Text="{Binding Hotkey, UpdateSourceTrigger=PropertyChanged}"
                                              Style="{StaticResource HotkeyTextBoxStyle}"
                                              PreviewKeyDown="HotkeyTextBox_PreviewKeyDown"
                                              IsReadOnly="True"
                                              Margin="0,0,0,12"
-                                             ToolTip="Click and press keys to change hotkey"/>
-                                    <Button Content="Reset to default" Command="{Binding ResetHotkeyCommand}"
+                                             ToolTip="{loc:T Key=Settings_Lbl_HotkeyToolTip}"/>
+                                    <Button Content="{loc:T Key=Settings_Btn_ResetDefault}" Command="{Binding ResetHotkeyCommand}"
                                             Style="{StaticResource SettingsButton}" HorizontalAlignment="Left"/>
                                 </StackPanel>
                             </Border>
@@ -374,17 +385,17 @@
                     </ScrollViewer>
                 </TabItem>
 
-                <TabItem Header="Sources">
+                <TabItem Header="{loc:T Key=Settings_Tab_Sources}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{StaticResource BgMain}">
                         <StackPanel Margin="32,24">
-                            <TextBlock Text="Sources" Style="{StaticResource SectionTitle}"/>
-                            
-                            <TextBlock Text="Visibility" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Text="{loc:T Key=Settings_Section_Sources}" Style="{StaticResource SectionTitle}"/>
+
+                            <TextBlock Text="{loc:T Key=Settings_Field_Visibility}" Style="{StaticResource FieldLabel}"/>
                             <Border Style="{StaticResource SettingsCard}" Margin="0,0,0,20">
-                                <CheckBox Content="Show system and hidden files" IsChecked="{Binding ShowSystemAndHiddenFiles}"/>
+                                <CheckBox Content="{loc:T Key=Settings_Cb_ShowSystemHidden}" IsChecked="{Binding ShowSystemAndHiddenFiles}"/>
                             </Border>
 
-                            <TextBlock Text="System sources" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Text="{loc:T Key=Settings_Field_SystemSources}" Style="{StaticResource FieldLabel}"/>
                             <ItemsControl ItemsSource="{Binding SystemSources}" Margin="0,0,0,20">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
@@ -410,7 +421,7 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
 
-                            <TextBlock Text="Known folders" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Text="{loc:T Key=Settings_Field_KnownFolders}" Style="{StaticResource FieldLabel}"/>
                             <ItemsControl ItemsSource="{Binding KnownSources}" Margin="0,0,0,20">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type src:SourceConfig}">
@@ -421,7 +432,7 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
 
-                            <TextBlock Text="Custom paths" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Text="{loc:T Key=Settings_Field_CustomPaths}" Style="{StaticResource FieldLabel}"/>
                             <ItemsControl ItemsSource="{Binding CustomSources}" Margin="0,0,0,12">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type src:SourceConfig}">
@@ -450,26 +461,26 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,24">
-                                <Button Content="Add folder" Command="{Binding AddFolderCommand}" Style="{StaticResource PrimarySettingsButton}"/>
-                                <Button Content="Add network path" Command="{Binding AddNetworkPathCommand}" Style="{StaticResource SettingsButton}"/>
+                                <Button Content="{loc:T Key=Settings_Btn_AddFolder}" Command="{Binding AddFolderCommand}" Style="{StaticResource PrimarySettingsButton}"/>
+                                <Button Content="{loc:T Key=Settings_Btn_AddNetworkPath}" Command="{Binding AddNetworkPathCommand}" Style="{StaticResource SettingsButton}"/>
                             </StackPanel>
 
-                            <TextBlock Text="Cache &amp; Index" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Text="{loc:T Key=Settings_Field_CacheIndex}" Style="{StaticResource FieldLabel}"/>
                             <StackPanel Orientation="Horizontal">
-                                <Button Content="Rebuild index" Command="{Binding RebuildIndexCommand}" Style="{StaticResource PrimarySettingsButton}"/>
-                                <Button Content="Clear hidden items" Command="{Binding ClearHiddenItemsCommand}" Style="{StaticResource SettingsButton}"/>
-                                <Button Content="Clear icon cache" Command="{Binding ClearIconCacheCommand}" Style="{StaticResource SettingsButton}"/>
+                                <Button Content="{loc:T Key=Settings_Btn_RebuildIndex}" Command="{Binding RebuildIndexCommand}" Style="{StaticResource PrimarySettingsButton}"/>
+                                <Button Content="{loc:T Key=Settings_Btn_ClearHidden}" Command="{Binding ClearHiddenItemsCommand}" Style="{StaticResource SettingsButton}"/>
+                                <Button Content="{loc:T Key=Settings_Btn_ClearIconCache}" Command="{Binding ClearIconCacheCommand}" Style="{StaticResource SettingsButton}"/>
                             </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
                 </TabItem>
 
-                <TabItem Header="List">
+                <TabItem Header="{loc:T Key=Settings_Tab_List}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{StaticResource BgMain}">
                         <StackPanel Margin="32,24" MaxWidth="560" HorizontalAlignment="Left">
-                            <TextBlock Text="List" Style="{StaticResource SectionTitle}"/>
-                            
-                            <TextBlock Text="Display Preferences" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Text="{loc:T Key=Settings_Section_List}" Style="{StaticResource SectionTitle}"/>
+
+                            <TextBlock Text="{loc:T Key=Settings_Field_DisplayPreferences}" Style="{StaticResource FieldLabel}"/>
                             <Border Style="{StaticResource SettingsCard}">
                                 <StackPanel>
                                     <Grid Margin="0,0,0,12">
@@ -477,7 +488,7 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="Max recent items" VerticalAlignment="Center" Foreground="{StaticResource TextPrimary}"/>
+                                        <TextBlock Text="{loc:T Key=Settings_Lbl_MaxRecentItems}" VerticalAlignment="Center" Foreground="{StaticResource TextPrimary}"/>
                                         <ComboBox Grid.Column="1" ItemsSource="{Binding MaxRecentItemOptions}" SelectedItem="{Binding MaxRecentItems}"
                                                   Style="{StaticResource PremiumComboBox}" Width="120" HorizontalAlignment="Right"/>
                                     </Grid>
@@ -486,22 +497,25 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="Default sort order" VerticalAlignment="Center" Foreground="{StaticResource TextPrimary}"/>
-                                        <ComboBox Grid.Column="1" ItemsSource="{Binding SortOptions}" SelectedItem="{Binding DefaultSort}"
+                                        <TextBlock Text="{loc:T Key=Settings_Lbl_DefaultSort}" VerticalAlignment="Center" Foreground="{StaticResource TextPrimary}"/>
+                                        <ComboBox Grid.Column="1" ItemsSource="{Binding SortOptions}"
+                                                  SelectedValue="{Binding DefaultSort}"
+                                                  SelectedValuePath="Code"
+                                                  DisplayMemberPath="DisplayName"
                                                   Style="{StaticResource PremiumComboBox}" Width="120" HorizontalAlignment="Right"/>
                                     </Grid>
                                 </StackPanel>
                             </Border>
 
-                            <TextBlock Text="Content Options" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Text="{loc:T Key=Settings_Field_ContentOptions}" Style="{StaticResource FieldLabel}"/>
                             <Border Style="{StaticResource SettingsCard}">
-                                <CheckBox Content="Show folders in list" IsChecked="{Binding ShowFolders}"/>
+                                <CheckBox Content="{loc:T Key=Settings_Cb_ShowFolders}" IsChecked="{Binding ShowFolders}"/>
                             </Border>
                         </StackPanel>
                     </ScrollViewer>
                 </TabItem>
 
-                <TabItem Header="Filters">
+                <TabItem Header="{loc:T Key=Settings_Tab_Filters}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{StaticResource BgMain}">
                         <Grid Margin="32,24" MaxWidth="680" HorizontalAlignment="Left">
                             <Grid.RowDefinitions>
@@ -513,51 +527,51 @@
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="90"/>
                             </Grid.RowDefinitions>
-                            <TextBlock Text="Filters" Style="{StaticResource SectionTitle}"/>
-                            <TextBlock Grid.Row="1" Text="Excluded extensions" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Text="{loc:T Key=Settings_Section_Filters}" Style="{StaticResource SectionTitle}"/>
+                            <TextBlock Grid.Row="1" Text="{loc:T Key=Settings_Field_ExcludedExtensions}" Style="{StaticResource FieldLabel}"/>
                             <TextBox Grid.Row="2" Text="{Binding ExcludedExtensionsText, UpdateSourceTrigger=LostFocus}"
                                      AcceptsReturn="True" VerticalScrollBarVisibility="Auto"/>
-                            <TextBlock Grid.Row="3" Text="Excluded paths" Style="{StaticResource FieldLabel}" Margin="0,14,0,6"/>
+                            <TextBlock Grid.Row="3" Text="{loc:T Key=Settings_Field_ExcludedPaths}" Style="{StaticResource FieldLabel}" Margin="0,14,0,6"/>
                             <TextBox Grid.Row="4" Text="{Binding ExcludedPathsText, UpdateSourceTrigger=LostFocus}"
                                      AcceptsReturn="True" VerticalScrollBarVisibility="Auto"/>
-                            <TextBlock Grid.Row="5" Text="Excluded keywords" Style="{StaticResource FieldLabel}" Margin="0,14,0,6"/>
+                            <TextBlock Grid.Row="5" Text="{loc:T Key=Settings_Field_ExcludedKeywords}" Style="{StaticResource FieldLabel}" Margin="0,14,0,6"/>
                             <TextBox Grid.Row="6" Text="{Binding ExcludedKeywordsText, UpdateSourceTrigger=LostFocus}"
                                      AcceptsReturn="True" VerticalScrollBarVisibility="Auto"/>
                         </Grid>
                     </ScrollViewer>
                 </TabItem>
 
-                <TabItem Header="About">
+                <TabItem Header="{loc:T Key=Settings_Tab_About}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{StaticResource BgMain}">
                         <StackPanel Margin="32,24" MaxWidth="680" HorizontalAlignment="Left">
-                            <TextBlock Text="About" Style="{StaticResource SectionTitle}"/>
-                            
+                            <TextBlock Text="{loc:T Key=Settings_Section_About}" Style="{StaticResource SectionTitle}"/>
+
                             <Border Style="{StaticResource SettingsCard}" Padding="24">
                                 <StackPanel>
-                                    <TextBlock Text="Recents" Foreground="{StaticResource AccentBlue}" FontWeight="Bold" FontSize="28" Margin="0,0,0,12"/>
-                                    
-                                    <TextBlock Text="A lightweight Windows recent-files launcher." Foreground="{StaticResource TextPrimary}" FontSize="14" FontWeight="Medium"/>
-                                    <TextBlock Text="Quickly find, preview, drag, and open your recent files." Foreground="{StaticResource TextSecondary}" FontSize="13" Margin="0,4,0,24"/>
-                                    
-                                    <TextBlock Text="Version" Style="{StaticResource FieldLabel}" Margin="0,0,0,4"/>
+                                    <TextBlock Text="{loc:T Key=Main_Title}" Foreground="{StaticResource AccentBlue}" FontWeight="Bold" FontSize="28" Margin="0,0,0,12"/>
+
+                                    <TextBlock Text="{loc:T Key=Settings_About_Tagline1}" Foreground="{StaticResource TextPrimary}" FontSize="14" FontWeight="Medium"/>
+                                    <TextBlock Text="{loc:T Key=Settings_About_Tagline2}" Foreground="{StaticResource TextSecondary}" FontSize="13" Margin="0,4,0,24"/>
+
+                                    <TextBlock Text="{loc:T Key=Settings_Field_Version}" Style="{StaticResource FieldLabel}" Margin="0,0,0,4"/>
                                     <TextBlock Text="0.1.0" Foreground="{StaticResource TextPrimary}" Margin="0,0,0,20"/>
-                                    
-                                    <TextBlock Text="Privacy" Style="{StaticResource FieldLabel}" Margin="0,0,0,4"/>
+
+                                    <TextBlock Text="{loc:T Key=Settings_Field_Privacy}" Style="{StaticResource FieldLabel}" Margin="0,0,0,4"/>
                                     <StackPanel Margin="0,0,0,20">
-                                        <TextBlock Text="• Runs locally." Foreground="{StaticResource TextSecondary}" Margin="0,2"/>
-                                        <TextBlock Text="• Does not upload files." Foreground="{StaticResource TextSecondary}" Margin="0,2"/>
-                                        <TextBlock Text="• Does not delete original files." Foreground="{StaticResource TextSecondary}" Margin="0,2"/>
+                                        <TextBlock Text="{loc:T Key=Settings_Privacy_Local}" Foreground="{StaticResource TextSecondary}" Margin="0,2"/>
+                                        <TextBlock Text="{loc:T Key=Settings_Privacy_NoUpload}" Foreground="{StaticResource TextSecondary}" Margin="0,2"/>
+                                        <TextBlock Text="{loc:T Key=Settings_Privacy_NoDelete}" Foreground="{StaticResource TextSecondary}" Margin="0,2"/>
                                     </StackPanel>
-                                    
-                                    <TextBlock Text="Repository" Style="{StaticResource FieldLabel}" Margin="0,0,0,4"/>
+
+                                    <TextBlock Text="{loc:T Key=Settings_Field_Repository}" Style="{StaticResource FieldLabel}" Margin="0,0,0,4"/>
                                     <TextBlock Margin="0,0,0,32">
                                         <Hyperlink NavigateUri="https://github.com/phoenixray2000/recents" RequestNavigate="Hyperlink_RequestNavigate">
                                             <TextBlock Text="https://github.com/phoenixray2000/recents" Foreground="{StaticResource AccentBlue}"/>
                                         </Hyperlink>
                                     </TextBlock>
-                                    
+
                                     <Border BorderBrush="{StaticResource BorderMuted}" BorderThickness="0,1,0,0" Padding="0,16,0,0">
-                                        <TextBlock Text="© 2026 Recents" Foreground="{StaticResource TextTertiary}" FontSize="11" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="{loc:T Key=Settings_About_Copyright}" Foreground="{StaticResource TextTertiary}" FontSize="11" HorizontalAlignment="Center"/>
                                     </Border>
                                 </StackPanel>
                             </Border>

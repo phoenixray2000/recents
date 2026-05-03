@@ -11,6 +11,7 @@ namespace Recents.App.Services;
 public static class ShellService
 {
     public static event Action? ActionExecuted;
+    public static bool IsExternalDialogOpen { get; private set; }
 
     #region Open With
 
@@ -23,7 +24,7 @@ public static class ShellService
         [MarshalAs(UnmanagedType.LPWStr)]
         public string pcszFile;
         [MarshalAs(UnmanagedType.LPWStr)]
-        public string pcszClass;
+        public string? pcszClass;
         public int oaifInFlags;
     }
 
@@ -36,17 +37,53 @@ public static class ShellService
     {
         if (string.IsNullOrEmpty(path)) return;
 
-        // Alternative approach: rundll32.exe shell32.dll,OpenAs_RunDLL path
-        // This is more reliable across Windows versions without complex P/Invoke
-        try
+        // Capture the owner HWND on the UI thread before dispatching to the worker.
+        IntPtr ownerHwnd = IntPtr.Zero;
+        var mainWindow = System.Windows.Application.Current?.MainWindow;
+        if (mainWindow != null)
         {
-            Process.Start(new ProcessStartInfo("rundll32.exe", $"shell32.dll,OpenAs_RunDLL \"{path}\"") { UseShellExecute = true });
-            ActionExecuted?.Invoke();
+            ownerHwnd = new WindowInteropHelper(mainWindow).Handle;
         }
-        catch (Exception ex)
+
+        // SHOpenWithDialog is synchronous and modal — it does not return until
+        // the user dismisses the dialog. We run it on a dedicated STA thread so
+        // the IsExternalDialogOpen flag is held for the *entire* dialog lifetime.
+        //
+        // The previous rundll32 + WaitForExit approach was unreliable because on
+        // modern Windows the actual dialog is hosted by Explorer/a UWP process,
+        // and rundll32 itself often exits before the dialog is even visible —
+        // clearing the flag prematurely and letting the main window auto-hide
+        // when focus eventually shifts to the dialog.
+        IsExternalDialogOpen = true;
+
+        var thread = new System.Threading.Thread(() =>
         {
-            Serilog.Log.Error(ex, "ShellService: Failed to show Open With dialog for {Path}", path);
-        }
+            try
+            {
+                var info = new OPENASINFO
+                {
+                    pcszFile = path,
+                    pcszClass = null,
+                    oaifInFlags = OAIF_ALLOW_REGISTRATION | OAIF_EXEC
+                };
+                SHOpenWithDialog(ownerHwnd, ref info);
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Error(ex, "ShellService: Failed to show Open With dialog for {Path}", path);
+            }
+            finally
+            {
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+                {
+                    IsExternalDialogOpen = false;
+                    ActionExecuted?.Invoke();
+                });
+            }
+        });
+        thread.SetApartmentState(System.Threading.ApartmentState.STA);
+        thread.IsBackground = true;
+        thread.Start();
     }
 
     #endregion

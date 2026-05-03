@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+
+  <data name="Main_Title" xml:space="preserve"><value>Recents</value></data>
+  <data name="Main_Tooltip_Settings" xml:space="preserve"><value>Settings</value></data>
+  <data name="Main_Search_Placeholder" xml:space="preserve"><value>Search recent files...</value></data>
+  <data name="Main_Filter_AllFiles" xml:space="preserve"><value>All Files</value></data>
+  <data name="Main_Filter_Documents" xml:space="preserve"><value>Documents</value></data>
+  <data name="Main_Filter_Images" xml:space="preserve"><value>Images</value></data>
+  <data name="Main_Filter_Code" xml:space="preserve"><value>Code</value></data>
+  <data name="Main_Filter_Folders" xml:space="preserve"><value>Folders</value></data>
+  <data name="Main_Density_Standard" xml:space="preserve"><value>Standard view</value></data>
+  <data name="Main_Density_Compact" xml:space="preserve"><value>Compact view</value></data>
+  <data name="Main_Sort_NewestFirst" xml:space="preserve"><value>Newest first</value></data>
+  <data name="Main_Sort_NameAZ" xml:space="preserve"><value>Name A-Z</value></data>
+  <data name="Main_Sort_Size" xml:space="preserve"><value>Size</value></data>
+  <data name="Main_Sort_Classification" xml:space="preserve"><value>Classification</value></data>
+  <data name="Main_Empty_NoFiles" xml:space="preserve"><value>No recent files found</value></data>
+  <data name="Main_Empty_Loading" xml:space="preserve"><value>Loading index...</value></data>
+  <data name="Main_Empty_ClearFilters" xml:space="preserve"><value>Clear filters</value></data>
+  <data name="Main_Empty_RebuildIndex" xml:space="preserve"><value>Rebuild index</value></data>
+  <data name="Main_Favorites_Header" xml:space="preserve"><value>FAVORITES</value></data>
+  <data name="Main_Favorites_Toggle" xml:space="preserve"><value>Toggle favorites drawer</value></data>
+  <data name="Main_Favorites_Unpin" xml:space="preserve"><value>Unpin</value></data>
+
+  <data name="Settings_Title" xml:space="preserve"><value>Settings</value></data>
+  <data name="Settings_Close" xml:space="preserve"><value>Close settings</value></data>
+  <data name="Settings_Tab_General" xml:space="preserve"><value>General</value></data>
+  <data name="Settings_Tab_Hotkey" xml:space="preserve"><value>Hotkey</value></data>
+  <data name="Settings_Tab_Sources" xml:space="preserve"><value>Sources</value></data>
+  <data name="Settings_Tab_List" xml:space="preserve"><value>List</value></data>
+  <data name="Settings_Tab_Filters" xml:space="preserve"><value>Filters</value></data>
+  <data name="Settings_Tab_About" xml:space="preserve"><value>About</value></data>
+  <data name="Settings_Section_General" xml:space="preserve"><value>General</value></data>
+  <data name="Settings_Section_Hotkey" xml:space="preserve"><value>Hotkey</value></data>
+  <data name="Settings_Section_Sources" xml:space="preserve"><value>Sources</value></data>
+  <data name="Settings_Section_List" xml:space="preserve"><value>List</value></data>
+  <data name="Settings_Section_Filters" xml:space="preserve"><value>Filters</value></data>
+  <data name="Settings_Section_About" xml:space="preserve"><value>About</value></data>
+  <data name="Settings_Field_StartupBehavior" xml:space="preserve"><value>Startup &amp; Behavior</value></data>
+  <data name="Settings_Field_QuickPreview" xml:space="preserve"><value>Quick Preview</value></data>
+  <data name="Settings_Field_Language" xml:space="preserve"><value>Language</value></data>
+  <data name="Settings_Field_GlobalHotkey" xml:space="preserve"><value>Global Hotkey</value></data>
+  <data name="Settings_Field_Visibility" xml:space="preserve"><value>Visibility</value></data>
+  <data name="Settings_Field_SystemSources" xml:space="preserve"><value>System sources</value></data>
+  <data name="Settings_Field_KnownFolders" xml:space="preserve"><value>Known folders</value></data>
+  <data name="Settings_Field_CustomPaths" xml:space="preserve"><value>Custom paths</value></data>
+  <data name="Settings_Field_CacheIndex" xml:space="preserve"><value>Cache &amp; Index</value></data>
+  <data name="Settings_Field_DisplayPreferences" xml:space="preserve"><value>Display Preferences</value></data>
+  <data name="Settings_Field_ContentOptions" xml:space="preserve"><value>Content Options</value></data>
+  <data name="Settings_Field_ExcludedExtensions" xml:space="preserve"><value>Excluded extensions</value></data>
+  <data name="Settings_Field_ExcludedPaths" xml:space="preserve"><value>Excluded paths</value></data>
+  <data name="Settings_Field_ExcludedKeywords" xml:space="preserve"><value>Excluded keywords</value></data>
+  <data name="Settings_Field_Version" xml:space="preserve"><value>Version</value></data>
+  <data name="Settings_Field_Privacy" xml:space="preserve"><value>Privacy</value></data>
+  <data name="Settings_Field_Repository" xml:space="preserve"><value>Repository</value></data>
+  <data name="Settings_Cb_LaunchAtStartup" xml:space="preserve"><value>Launch at startup</value></data>
+  <data name="Settings_Cb_StartMinimized" xml:space="preserve"><value>Start minimized</value></data>
+  <data name="Settings_Cb_HideOnFocusLost" xml:space="preserve"><value>Hide when focus lost</value></data>
+  <data name="Settings_Cb_AlwaysOnTop" xml:space="preserve"><value>Always on top</value></data>
+  <data name="Settings_Cb_CloseToTray" xml:space="preserve"><value>Hide to tray when closing</value></data>
+  <data name="Settings_Cb_QuickPreviewEnable" xml:space="preserve"><value>Enable quick preview (Space)</value></data>
+  <data name="Settings_Cb_QuickPreviewDesc" xml:space="preserve"><value>Press Space to preview supported files using WebView2 engine</value></data>
+  <data name="Settings_Cb_ShowSystemHidden" xml:space="preserve"><value>Show system and hidden files</value></data>
+  <data name="Settings_Cb_ShowFolders" xml:space="preserve"><value>Show folders in list</value></data>
+  <data name="Settings_Lbl_HotkeyDesc" xml:space="preserve"><value>Press this hotkey from anywhere to show or hide Recents</value></data>
+  <data name="Settings_Lbl_HotkeyToolTip" xml:space="preserve"><value>Click and press keys to change hotkey</value></data>
+  <data name="Settings_Btn_ResetDefault" xml:space="preserve"><value>Reset to default</value></data>
+  <data name="Settings_Btn_AddFolder" xml:space="preserve"><value>Add folder</value></data>
+  <data name="Settings_Btn_AddNetworkPath" xml:space="preserve"><value>Add network path</value></data>
+  <data name="Settings_Btn_RebuildIndex" xml:space="preserve"><value>Rebuild index</value></data>
+  <data name="Settings_Btn_ClearHidden" xml:space="preserve"><value>Clear hidden items</value></data>
+  <data name="Settings_Btn_ClearIconCache" xml:space="preserve"><value>Clear icon cache</value></data>
+  <data name="Settings_Lbl_MaxRecentItems" xml:space="preserve"><value>Max recent items</value></data>
+  <data name="Settings_Lbl_DefaultSort" xml:space="preserve"><value>Default sort order</value></data>
+  <data name="Settings_About_Tagline1" xml:space="preserve"><value>A lightweight Windows recent-files launcher.</value></data>
+  <data name="Settings_About_Tagline2" xml:space="preserve"><value>Quickly find, preview, drag, and open your recent files.</value></data>
+  <data name="Settings_Privacy_Local" xml:space="preserve"><value>• Runs locally.</value></data>
+  <data name="Settings_Privacy_NoUpload" xml:space="preserve"><value>• Does not upload files.</value></data>
+  <data name="Settings_Privacy_NoDelete" xml:space="preserve"><value>• Does not delete original files.</value></data>
+  <data name="Settings_About_Copyright" xml:space="preserve"><value>© 2026 Recents</value></data>
+  <data name="Settings_Status_Ready" xml:space="preserve"><value>Ready</value></data>
+  <data name="Settings_Status_Saved" xml:space="preserve"><value>Settings saved</value></data>
+  <data name="Settings_AddFolder_Description" xml:space="preserve"><value>Add a folder source</value></data>
+  <data name="Settings_NetworkPath_Default" xml:space="preserve"><value>Network path</value></data>
+
+  <data name="Source_RecentLnk_Name" xml:space="preserve"><value>Recent shortcuts</value></data>
+  <data name="Source_OfficeMru_Name" xml:space="preserve"><value>Office MRU</value></data>
+  <data name="Source_OpenSavePidlMru_Name" xml:space="preserve"><value>Open / Save dialog MRU</value></data>
+
+  <data name="Sort_RecentTime" xml:space="preserve"><value>Newest first</value></data>
+  <data name="Sort_DisplayName" xml:space="preserve"><value>Name A-Z</value></data>
+  <data name="Sort_Size" xml:space="preserve"><value>Size</value></data>
+  <data name="Sort_Classification" xml:space="preserve"><value>Classification</value></data>
+
+  <data name="Status_Ready" xml:space="preserve"><value>Ready</value></data>
+  <data name="Status_Initializing" xml:space="preserve"><value>Initializing...</value></data>
+  <data name="Status_Indexing" xml:space="preserve"><value>Indexing...</value></data>
+  <data name="Status_Watching" xml:space="preserve"><value>Watching sources</value></data>
+  <data name="Status_Partial" xml:space="preserve"><value>Some sources unavailable</value></data>
+  <data name="Status_Error" xml:space="preserve"><value>Error</value></data>
+  <data name="Status_ItemCount" xml:space="preserve"><value>{0} items</value></data>
+  <data name="Status_Hint_Navigate" xml:space="preserve"><value>Up/Down Navigate</value></data>
+  <data name="Status_Hint_OpenDrag" xml:space="preserve"><value>Enter Open | Drag to share</value></data>
+  <data name="Status_Hint_Open" xml:space="preserve"><value>Enter Open</value></data>
+
+  <data name="Action_Open" xml:space="preserve"><value>Open</value></data>
+  <data name="Action_OpenWith" xml:space="preserve"><value>Open With...</value></data>
+  <data name="Action_Reveal" xml:space="preserve"><value>Reveal in Explorer</value></data>
+  <data name="Action_CopyPath" xml:space="preserve"><value>Copy Full Path</value></data>
+  <data name="Action_CopyFileName" xml:space="preserve"><value>Copy File Name</value></data>
+  <data name="Action_TogglePin" xml:space="preserve"><value>Toggle Pin</value></data>
+  <data name="Action_HideFromList" xml:space="preserve"><value>Hide from list</value></data>
+  <data name="Action_RemoveOnce" xml:space="preserve"><value>Remove Once</value></data>
+
+  <data name="Error_OpenFailed_Title" xml:space="preserve"><value>Open Failed</value></data>
+  <data name="Error_OpenFailed_Message" xml:space="preserve"><value>Cannot open file:
+{0}</value></data>
+  <data name="Error_FileMissing" xml:space="preserve"><value>File does not exist or is inaccessible.</value></data>
+  <data name="Error_HotkeyConflict" xml:space="preserve"><value>Hotkey conflict</value></data>
+
+  <data name="Lang_Auto" xml:space="preserve"><value>Auto (system)</value></data>
+  <data name="Lang_English" xml:space="preserve"><value>English</value></data>
+  <data name="Lang_Chinese" xml:space="preserve"><value>中文</value></data>
+</root>

@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using System.Windows.Media;
+using Recents.App.Localization;
 
 namespace Recents.App.Services;
 
@@ -16,62 +17,82 @@ public partial class StatusHintService : ObservableObject
         Error
     }
 
+    private AppStatus _currentStatus = AppStatus.Ready;
+    private int _currentCount = 0;
+    private bool _hintHasSelection = false;
+    private bool _hintCanDrag = false;
+
     [ObservableProperty]
-    private string _statusText = "Ready";
+    private string _statusText = Loc.T("Status_Ready");
 
     [ObservableProperty]
     private SolidColorBrush _statusColor = Brush(0x63, 0xC5, 0x54);
 
     [ObservableProperty]
-    private string _itemCount = "0 items";
+    private string _itemCount = Loc.T("Status_ItemCount", 0);
 
     [ObservableProperty]
-    private string _keyboardHint = "Up/Down Navigate";
+    private string _keyboardHint = Loc.T("Status_Hint_Navigate");
+
+    public StatusHintService()
+    {
+        LocalizationManager.Instance.LanguageChanged += (_, _) =>
+        {
+            // Re-render localized strings on language switch.
+            SetStatus(_currentStatus);
+            UpdateCount(_currentCount);
+            UpdateHint(_hintHasSelection, _hintCanDrag);
+        };
+    }
 
     public void SetStatus(AppStatus status)
     {
+        _currentStatus = status;
         switch (status)
         {
             case AppStatus.Ready:
-                StatusText = "Ready";
-                StatusColor = Brush(0x63, 0xC5, 0x54); // Success Green
+                StatusText = Loc.T("Status_Ready");
+                StatusColor = Brush(0x63, 0xC5, 0x54);
                 break;
             case AppStatus.Initializing:
-                StatusText = "Initializing...";
-                StatusColor = Brush(0x60, 0xCD, 0xFF); // Info Blue
+                StatusText = Loc.T("Status_Initializing");
+                StatusColor = Brush(0x60, 0xCD, 0xFF);
                 break;
             case AppStatus.Indexing:
-                StatusText = "Indexing...";
-                StatusColor = Brush(0xF5, 0xB6, 0x42); // Warning Orange
+                StatusText = Loc.T("Status_Indexing");
+                StatusColor = Brush(0xF5, 0xB6, 0x42);
                 break;
             case AppStatus.Watching:
-                StatusText = "Watching sources";
-                StatusColor = Brush(0x63, 0xC5, 0x54); // Success Green
+                StatusText = Loc.T("Status_Watching");
+                StatusColor = Brush(0x63, 0xC5, 0x54);
                 break;
             case AppStatus.Partial:
-                StatusText = "Some sources unavailable";
-                StatusColor = Brush(0xF5, 0xB6, 0x42); // Warning Orange
+                StatusText = Loc.T("Status_Partial");
+                StatusColor = Brush(0xF5, 0xB6, 0x42);
                 break;
             case AppStatus.Error:
-                StatusText = "Error";
-                StatusColor = Brush(0xE1, 0x5B, 0x64); // Danger Red
+                StatusText = Loc.T("Status_Error");
+                StatusColor = Brush(0xE1, 0x5B, 0x64);
                 break;
         }
     }
 
     public void UpdateCount(int count)
     {
-        ItemCount = $"{count} items";
+        _currentCount = count;
+        ItemCount = Loc.T("Status_ItemCount", count);
     }
 
     public void UpdateHint(bool hasSelection, bool canDrag)
     {
+        _hintHasSelection = hasSelection;
+        _hintCanDrag = canDrag;
         if (!hasSelection)
-            KeyboardHint = "Up/Down Navigate";
+            KeyboardHint = Loc.T("Status_Hint_Navigate");
         else if (canDrag)
-            KeyboardHint = "Enter Open | Drag to share";
+            KeyboardHint = Loc.T("Status_Hint_OpenDrag");
         else
-            KeyboardHint = "Enter Open";
+            KeyboardHint = Loc.T("Status_Hint_Open");
     }
 
     private static SolidColorBrush Brush(byte r, byte g, byte b)
