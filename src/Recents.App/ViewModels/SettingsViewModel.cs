@@ -8,6 +8,7 @@ using Recents.App.Models;
 using Recents.App.Services;
 using Recents.App.Services.Sources;
 using Forms = System.Windows.Forms;
+using ThemeMode = Recents.App.Models.AppSettings.ThemeMode;
 
 namespace Recents.App.ViewModels;
 
@@ -50,14 +51,6 @@ public partial class SettingsViewModel : ObservableObject
     public ObservableCollection<SourceConfig> CustomSources { get; }
     public IReadOnlyList<int> MaxRecentItemOptions { get; } = new[] { 100, 200, 500, 1000 };
 
-    public record SortOption(string Code, string DisplayName);
-    public IReadOnlyList<SortOption> SortOptions { get; } = new[]
-    {
-        new SortOption("RecentTime",           Loc.T("Sort_RecentTime")),
-        new SortOption("DisplayName",          Loc.T("Sort_DisplayName")),
-        new SortOption("Size",                 Loc.T("Sort_Size")),
-        new SortOption("ClassificationSource", Loc.T("Sort_Classification")),
-    };
 
     public record LanguageOption(string Code, string DisplayName);
     public IReadOnlyList<LanguageOption> LanguageOptions { get; } = new[]
@@ -65,6 +58,14 @@ public partial class SettingsViewModel : ObservableObject
         new LanguageOption("",      Loc.T("Lang_Auto")),
         new LanguageOption("en-US", Loc.T("Lang_English")),
         new LanguageOption("zh-CN", Loc.T("Lang_Chinese")),
+    };
+
+    public record ThemeOption(ThemeMode Mode, string DisplayName);
+    public IReadOnlyList<ThemeOption> ThemeOptions { get; } = new[]
+    {
+        new ThemeOption(ThemeMode.FollowSystem, Loc.T("Theme_FollowSystem")),
+        new ThemeOption(ThemeMode.Dark,         Loc.T("Theme_Dark")),
+        new ThemeOption(ThemeMode.Light,        Loc.T("Theme_Light")),
     };
 
     public SettingsViewModel(
@@ -95,8 +96,6 @@ public partial class SettingsViewModel : ObservableObject
         _startMinimized = settings.Current.StartMinimized;
         _hotkey = settings.Current.Hotkey;
         _maxRecentItems = settings.Current.MaxRecentItems;
-        _showFolders = settings.Current.ShowFolders;
-        _defaultSort = settings.Current.DefaultSort;
         _excludedExtensionsText = Join(settings.Current.ExcludedExtensions);
         _excludedPathsText = Join(settings.Current.ExcludedPaths);
         _excludedKeywordsText = Join(settings.Current.ExcludedKeywords);
@@ -110,6 +109,7 @@ public partial class SettingsViewModel : ObservableObject
         _previewEnabled = settings.Current.PreviewEnabled;
         _showSystemAndHiddenFiles = settings.Current.ShowSystemAndHiddenFiles;
         _selectedLanguage = settings.Current.Language ?? "";
+        _selectedTheme = settings.Current.Theme;
     }
 
     [ObservableProperty] private bool _launchAtStartup;
@@ -119,8 +119,6 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _startMinimized;
     [ObservableProperty] private string _hotkey = "Alt+Shift+Z";
     [ObservableProperty] private int _maxRecentItems;
-    [ObservableProperty] private bool _showFolders;
-    [ObservableProperty] private string _defaultSort = "RecentTime";
     [ObservableProperty] private string _excludedExtensionsText = string.Empty;
     [ObservableProperty] private string _excludedPathsText = string.Empty;
     [ObservableProperty] private string _excludedKeywordsText = string.Empty;
@@ -132,11 +130,19 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _previewEnabled;
     [ObservableProperty] private bool _showSystemAndHiddenFiles;
     [ObservableProperty] private string _selectedLanguage = "";
+    [ObservableProperty] private ThemeMode _selectedTheme = ThemeMode.FollowSystem;
 
     partial void OnSelectedLanguageChanged(string value)
     {
         _settings.Current.Language = value ?? "";
         LocalizationManager.Instance.SetLanguage(value);
+        SaveAndNotify();
+    }
+
+    partial void OnSelectedThemeChanged(ThemeMode value)
+    {
+        _settings.Current.Theme = value;
+        ThemeManager.Instance.SetMode(value);
         SaveAndNotify();
     }
 
@@ -153,8 +159,6 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnStartMinimizedChanged(bool value) { _settings.Current.StartMinimized = value; SaveAndNotify(); }
     partial void OnHotkeyChanged(string value) { _settings.Current.Hotkey = value; SaveAndNotify(); }
     partial void OnMaxRecentItemsChanged(int value) { _settings.Current.MaxRecentItems = value; SaveAndNotify(); }
-    partial void OnShowFoldersChanged(bool value) { _settings.Current.ShowFolders = value; SaveAndNotify(); }
-    partial void OnDefaultSortChanged(string value) { _settings.Current.DefaultSort = value; SaveAndNotify(); }
     partial void OnExcludedExtensionsTextChanged(string value) { _settings.Current.ExcludedExtensions = Split(value); SaveAndNotify(); }
     partial void OnExcludedPathsTextChanged(string value) { _settings.Current.ExcludedPaths = Split(value); SaveAndNotify(); }
     partial void OnExcludedKeywordsTextChanged(string value) { _settings.Current.ExcludedKeywords = Split(value); SaveAndNotify(); }

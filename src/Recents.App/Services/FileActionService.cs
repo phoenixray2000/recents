@@ -13,8 +13,19 @@ public class FileActionService
     public static void OpenFile(string path)
     {
         if (string.IsNullOrEmpty(path)) return;
+
+        if (Directory.Exists(path))
+        {
+            FolderActivationHelper.OpenOrActivateFolder(path);
+            ActionExecuted?.Invoke();
+            return;
+        }
+
         try
         {
+            // Same foreground-lock fix as OpenFolderInExplorer: grant permission before
+            // the target app's process exists so it can claim foreground after we hide.
+            NativeMethods.AllowSetForegroundWindow(NativeMethods.ASFW_ANY);
             Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
             ActionExecuted?.Invoke();
         }
@@ -30,8 +41,16 @@ public class FileActionService
         if (string.IsNullOrEmpty(path)) return;
         try
         {
-            // 如果是文件夹，直接打开；如果是文件，选中它
-            string argument = Directory.Exists(path) ? path : $"/select,\"{path}\"";
+            if (Directory.Exists(path))
+            {
+                FolderActivationHelper.OpenOrActivateFolder(path);
+                ActionExecuted?.Invoke();
+                return;
+            }
+
+            // 如果是文件，选中它
+            NativeMethods.AllowSetForegroundWindow(NativeMethods.ASFW_ANY);
+            string argument = $"/select,\"{path}\"";
             Process.Start("explorer.exe", argument);
             ActionExecuted?.Invoke();
         }

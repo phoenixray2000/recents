@@ -6,8 +6,8 @@
         xmlns:loc="clr-namespace:Recents.App.Localization"
         Title="{loc:T Key=Settings_Title}" Height="600" Width="700" MinHeight="480" MinWidth="600"
         WindowStartupLocation="CenterOwner"
-        Background="{StaticResource BgWindow}"
-        Foreground="{StaticResource TextPrimary}"
+        Background="{DynamicResource BgWindow}"
+        Foreground="{DynamicResource TextPrimary}"
         FontFamily="Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI"
         WindowStyle="None"
         Icon="pack://application:,,,/Recents;component/Resources/Icons/AppIcon.ico"
@@ -23,7 +23,7 @@
             <Setter Property="Height" Value="32" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
             <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True" />
             <Setter Property="Template">
                 <Setter.Value>
@@ -38,8 +38,8 @@
             </Setter>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource RowHover}" />
-                    <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+                    <Setter Property="Background" Value="{DynamicResource RowHover}" />
+                    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -49,30 +49,30 @@
             <Setter Property="Padding" Value="12,7"/>
             <Setter Property="Margin" Value="0,0,8,0"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BorderMuted}"/>
-            <Setter Property="Background" Value="{StaticResource BgInput}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderMuted}"/>
+            <Setter Property="Background" Value="{DynamicResource BgInput}"/>
         </Style>
 
         <Style x:Key="PrimarySettingsButton" TargetType="Button" BasedOn="{StaticResource SettingsButton}">
-            <Setter Property="Background" Value="{StaticResource AccentBlue}"/>
+            <Setter Property="Background" Value="{DynamicResource AccentBlue}"/>
             <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="{StaticResource AccentBlue}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBlue}"/>
         </Style>
 
         <Style TargetType="TextBox">
-            <Setter Property="Background" Value="{StaticResource BgInput}"/>
-            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BorderMuted}"/>
+            <Setter Property="Background" Value="{DynamicResource BgInput}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderMuted}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="9,7"/>
-            <Setter Property="CaretBrush" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource TextPrimary}"/>
         </Style>
 
         <Style x:Key="HotkeyTextBoxStyle" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
             <Style.Triggers>
                 <Trigger Property="IsFocused" Value="True">
-                    <Setter Property="BorderBrush" Value="{StaticResource AccentBlue}"/>
-                    <Setter Property="Background" Value="{StaticResource RowSelected}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBlue}"/>
+                    <Setter Property="Background" Value="{DynamicResource RowSelected}"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -93,17 +93,17 @@
                                 </Grid.ColumnDefinitions>
                                 <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center" Margin="10,0,0,0" />
                                 <TextBlock Grid.Column="1" Text="&#xE70D;" FontFamily="Segoe Fluent Icons" FontSize="10"
-                                           VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{StaticResource TextTertiary}"/>
+                                           VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource TextTertiary}"/>
                             </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="{StaticResource RowHover}" />
-                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource BorderMuted}" />
+                                <Setter TargetName="border" Property="Background" Value="{DynamicResource RowHover}" />
+                                <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource BorderMuted}" />
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="{StaticResource RowSelected}" />
-                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource AccentBlue}" />
+                                <Setter TargetName="border" Property="Background" Value="{DynamicResource RowSelected}" />
+                                <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource AccentBlue}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -112,9 +112,9 @@
         </Style>
 
         <Style x:Key="PremiumComboBox" TargetType="ComboBox">
-            <Setter Property="Background" Value="{StaticResource BgInput}"/>
-            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BorderMuted}"/>
+            <Setter Property="Background" Value="{DynamicResource BgInput}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderMuted}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="8,6"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -137,8 +137,8 @@
                             
                             <Popup Name="Popup" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}" 
                                    AllowsTransparency="True" Focusable="False" PopupAnimation="Fade" VerticalOffset="4">
-                                <Border x:Name="DropDownBorder" Background="{StaticResource BgCard}" 
-                                        BorderBrush="{StaticResource BorderMuted}" BorderThickness="1" 
+                                <Border x:Name="DropDownBorder" Background="{DynamicResource BgCard}" 
+                                        BorderBrush="{DynamicResource BorderMuted}" BorderThickness="1" 
                                         CornerRadius="8" MinWidth="{TemplateBinding ActualWidth}" MaxHeight="300">
                                     <Border.Effect>
                                         <DropShadowEffect BlurRadius="15" ShadowDepth="2" Opacity="0.3" Color="Black" />
@@ -156,7 +156,7 @@
                 <Setter.Value>
                     <Style TargetType="ComboBoxItem">
                         <Setter Property="Background" Value="Transparent"/>
-                        <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
                         <Setter Property="Padding" Value="12,8"/>
                         <Setter Property="Margin" Value="2"/>
                         <Setter Property="Template">
@@ -167,11 +167,11 @@
                                     </Border>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsHighlighted" Value="True">
-                                            <Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource RowHover}"/>
+                                            <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource RowHover}"/>
                                         </Trigger>
                                         <Trigger Property="IsSelected" Value="True">
-                                            <Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource RowSelected}"/>
-                                            <Setter Property="Foreground" Value="{StaticResource AccentBlue}"/>
+                                            <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource RowSelected}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource AccentBlue}"/>
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>
@@ -186,7 +186,7 @@
 
         <Style TargetType="ScrollBar">
             <Setter Property="Width" Value="10" />
-            <Setter Property="Background" Value="{StaticResource BgMain}" />
+            <Setter Property="Background" Value="{DynamicResource BgMain}" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Template">
                 <Setter.Value>
@@ -197,7 +197,7 @@
                                     <Thumb>
                                         <Thumb.Template>
                                             <ControlTemplate TargetType="Thumb">
-                                                <Border Background="{StaticResource TextTertiary}" CornerRadius="4" Margin="3,2"/>
+                                                <Border Background="{DynamicResource TextTertiary}" CornerRadius="4" Margin="3,2"/>
                                             </ControlTemplate>
                                         </Thumb.Template>
                                     </Thumb>
@@ -210,21 +210,22 @@
         </Style>
 
         <Style TargetType="CheckBox">
-            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
             <Setter Property="Margin" Value="0,7"/>
+            <Setter Property="Cursor" Value="Hand"/>
         </Style>
 
         <Style x:Key="SectionTitle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="20"/>
             <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
             <Setter Property="Margin" Value="0,0,0,20"/>
         </Style>
 
         <Style x:Key="FieldLabel" TargetType="TextBlock">
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
             <Setter Property="Margin" Value="0,12,0,8"/>
         </Style>
 
@@ -232,7 +233,7 @@
             <Setter Property="Height" Value="44"/>
             <Setter Property="Margin" Value="4,2"/>
             <Setter Property="Padding" Value="12,0"/>
-            <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="3,0,0,0"/>
@@ -249,13 +250,13 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource RowHover}"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                                <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource RowHover}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{StaticResource AccentBlue}"/>
-                                <Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource RowSelected}"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                                <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{DynamicResource AccentBlue}"/>
+                                <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource RowSelected}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -264,8 +265,8 @@
         </Style>
 
         <Style x:Key="SettingsCard" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource BgCard}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BorderMuted}"/>
+            <Setter Property="Background" Value="{DynamicResource BgCard}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderMuted}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="8"/>
             <Setter Property="Padding" Value="16,12"/>
@@ -273,12 +274,12 @@
         </Style>
 
         <Style TargetType="TabControl">
-            <Setter Property="Background" Value="{StaticResource BgMain}"/>
+            <Setter Property="Background" Value="{DynamicResource BgMain}"/>
             <Setter Property="BorderThickness" Value="0"/>
         </Style>
     </Window.Resources>
 
-    <Border BorderBrush="{StaticResource AccentBlue}" BorderThickness="1" Background="{StaticResource BgMain}">
+    <Border BorderBrush="{DynamicResource AccentBlue}" BorderThickness="1" Background="{DynamicResource BgMain}">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="40"/>
@@ -286,11 +287,28 @@
             </Grid.RowDefinitions>
 
             <!-- Title Bar Area -->
-            <Grid Grid.Row="0" Background="{StaticResource BgTitleBar}">
-                <TextBlock Text="{Binding StatusMessage}" Foreground="{StaticResource AccentBlue}" 
-                           FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Margin="24,0"/>
-                
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Grid Grid.Row="0" Background="{DynamicResource BgTitleBar}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Left: App icon + window title -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0">
+                    <Image Width="16" Height="16"
+                           Source="pack://application:,,,/Recents;component/Resources/Icons/AppIcon.ico"
+                           RenderOptions.BitmapScalingMode="HighQuality" Margin="0,0,8,0"/>
+                    <TextBlock Text="{loc:T Key=Settings_Title}" FontWeight="SemiBold" FontSize="13"
+                               Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- Center: Save status feedback -->
+                <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" Foreground="{DynamicResource AccentBlue}"
+                           FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+
+                <!-- Right: Close button -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Content="&#xE8BB;" Click="CloseBtn_Click" ToolTip="{loc:T Key=Settings_Close}">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource WindowControlBtn}">
@@ -307,17 +325,17 @@
             </Grid>
 
             <!-- Main Content Area -->
-            <TabControl Grid.Row="1" TabStripPlacement="Left" Background="{StaticResource BgMain}" BorderThickness="0">
+            <TabControl Grid.Row="1" TabStripPlacement="Left" Background="{DynamicResource BgMain}" BorderThickness="0">
                 <TabControl.Resources>
                     <Style TargetType="TabItem" BasedOn="{StaticResource SettingsTabItem}"/>
                     <Style TargetType="TabPanel">
                         <Setter Property="Width" Value="180"/>
-                        <Setter Property="Background" Value="{StaticResource BgSidebar}"/>
+                        <Setter Property="Background" Value="{DynamicResource BgSidebar}"/>
                     </Style>
                 </TabControl.Resources>
 
                 <TabItem Header="{loc:T Key=Settings_Tab_General}">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{StaticResource BgMain}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{DynamicResource BgMain}">
                         <StackPanel Margin="32,24" MaxWidth="560" HorizontalAlignment="Left">
                             <TextBlock Text="{loc:T Key=Settings_Section_General}" Style="{StaticResource SectionTitle}"/>
 
@@ -330,6 +348,16 @@
                                     <CheckBox Content="{loc:T Key=Settings_Cb_AlwaysOnTop}" IsChecked="{Binding AlwaysOnTop}"/>
                                     <CheckBox Content="{loc:T Key=Settings_Cb_CloseToTray}" IsChecked="{Binding CloseToTray}"/>
                                 </StackPanel>
+                            </Border>
+
+                            <TextBlock Text="{loc:T Key=Settings_Field_Theme}" Style="{StaticResource FieldLabel}"/>
+                            <Border Style="{StaticResource SettingsCard}">
+                                <ComboBox ItemsSource="{Binding ThemeOptions}"
+                                          SelectedValue="{Binding SelectedTheme}"
+                                          SelectedValuePath="Mode"
+                                          DisplayMemberPath="DisplayName"
+                                          Style="{StaticResource PremiumComboBox}"
+                                          Width="240" HorizontalAlignment="Left"/>
                             </Border>
 
                             <TextBlock Text="{loc:T Key=Settings_Field_Language}" Style="{StaticResource FieldLabel}"/>
@@ -353,9 +381,9 @@
                                               VerticalAlignment="Top" Margin="0,2,12,0"/>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                         <TextBlock Text="{loc:T Key=Settings_Cb_QuickPreviewEnable}"
-                                                   Foreground="{StaticResource TextPrimary}" FontWeight="Medium" FontSize="13"/>
+                                                   Foreground="{DynamicResource TextPrimary}" FontWeight="Medium" FontSize="13"/>
                                         <TextBlock Text="{loc:T Key=Settings_Cb_QuickPreviewDesc}"
-                                                   Foreground="{StaticResource TextSecondary}" FontSize="11" Margin="0,2,0,0"/>
+                                                   Foreground="{DynamicResource TextSecondary}" FontSize="11" Margin="0,2,0,0"/>
                                     </StackPanel>
                                 </Grid>
                             </Border>
@@ -364,13 +392,13 @@
                 </TabItem>
 
                 <TabItem Header="{loc:T Key=Settings_Tab_Hotkey}">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{StaticResource BgMain}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{DynamicResource BgMain}">
                         <StackPanel Margin="32,24" MaxWidth="560" HorizontalAlignment="Left">
                             <TextBlock Text="{loc:T Key=Settings_Section_Hotkey}" Style="{StaticResource SectionTitle}"/>
                             <TextBlock Text="{loc:T Key=Settings_Field_GlobalHotkey}" Style="{StaticResource FieldLabel}"/>
                             <Border Style="{StaticResource SettingsCard}">
                                 <StackPanel>
-                                    <TextBlock Text="{loc:T Key=Settings_Lbl_HotkeyDesc}" Foreground="{StaticResource TextSecondary}" FontSize="12" Margin="0,0,0,12"/>
+                                    <TextBlock Text="{loc:T Key=Settings_Lbl_HotkeyDesc}" Foreground="{DynamicResource TextSecondary}" FontSize="12" Margin="0,0,0,12"/>
                                     <TextBox Text="{Binding Hotkey, UpdateSourceTrigger=PropertyChanged}"
                                              Style="{StaticResource HotkeyTextBoxStyle}"
                                              PreviewKeyDown="HotkeyTextBox_PreviewKeyDown"
@@ -386,20 +414,31 @@
                 </TabItem>
 
                 <TabItem Header="{loc:T Key=Settings_Tab_Sources}">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{StaticResource BgMain}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{DynamicResource BgMain}">
                         <StackPanel Margin="32,24">
                             <TextBlock Text="{loc:T Key=Settings_Section_Sources}" Style="{StaticResource SectionTitle}"/>
 
                             <TextBlock Text="{loc:T Key=Settings_Field_Visibility}" Style="{StaticResource FieldLabel}"/>
                             <Border Style="{StaticResource SettingsCard}" Margin="0,0,0,20">
-                                <CheckBox Content="{loc:T Key=Settings_Cb_ShowSystemHidden}" IsChecked="{Binding ShowSystemAndHiddenFiles}"/>
+                                <StackPanel>
+                                    <CheckBox Content="{loc:T Key=Settings_Cb_ShowSystemHidden}" IsChecked="{Binding ShowSystemAndHiddenFiles}"/>
+                                    <Grid Margin="0,12,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{loc:T Key=Settings_Lbl_MaxRecentItems}" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}"/>
+                                        <ComboBox Grid.Column="1" ItemsSource="{Binding MaxRecentItemOptions}" SelectedItem="{Binding MaxRecentItems}"
+                                                  Style="{StaticResource PremiumComboBox}" Width="120" HorizontalAlignment="Right"/>
+                                    </Grid>
+                                </StackPanel>
                             </Border>
 
                             <TextBlock Text="{loc:T Key=Settings_Field_SystemSources}" Style="{StaticResource FieldLabel}"/>
                             <ItemsControl ItemsSource="{Binding SystemSources}" Margin="0,0,0,20">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Background="{StaticResource BgCard}" BorderBrush="{StaticResource BorderMuted}"
+                                        <Border Background="{DynamicResource BgCard}" BorderBrush="{DynamicResource BorderMuted}"
                                                 BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,10">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
@@ -409,11 +448,11 @@
                                                 </Grid.ColumnDefinitions>
                                                 <CheckBox IsChecked="{Binding Enabled}" VerticalAlignment="Center" Margin="0,0,12,0" ToolTip="Enable/Disable source"/>
                                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding Name}" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="14"/>
-                                                    <TextBlock Text="{Binding Location}" Foreground="{StaticResource TextTertiary}" FontSize="11" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
+                                                    <TextBlock Text="{Binding Name}" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold" FontSize="14"/>
+                                                    <TextBlock Text="{Binding Location}" Foreground="{DynamicResource TextTertiary}" FontSize="11" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
                                                 </StackPanel>
-                                                <Border Grid.Column="2" Background="{StaticResource BgInput}" CornerRadius="4" Padding="8,2" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding KindLabel}" Foreground="{StaticResource TextSecondary}" FontSize="10" FontWeight="Bold"/>
+                                                <Border Grid.Column="2" Background="{DynamicResource BgInput}" CornerRadius="4" Padding="8,2" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding KindLabel}" Foreground="{DynamicResource TextSecondary}" FontSize="10" FontWeight="Bold"/>
                                                 </Border>
                                             </Grid>
                                         </Border>
@@ -436,7 +475,7 @@
                             <ItemsControl ItemsSource="{Binding CustomSources}" Margin="0,0,0,12">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type src:SourceConfig}">
-                                        <Border Background="{StaticResource BgCard}" BorderBrush="{StaticResource BorderMuted}"
+                                        <Border Background="{DynamicResource BgCard}" BorderBrush="{DynamicResource BorderMuted}"
                                                 BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,10">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
@@ -448,8 +487,8 @@
                                                           Command="{Binding DataContext.SaveSourcesCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                           ToolTip="Enable/Disable source"/>
                                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding DisplayName}" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="14"/>
-                                                    <TextBlock Text="{Binding Path}" Foreground="{StaticResource TextTertiary}" FontSize="11" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
+                                                    <TextBlock Text="{Binding DisplayName}" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold" FontSize="14"/>
+                                                    <TextBlock Text="{Binding Path}" Foreground="{DynamicResource TextTertiary}" FontSize="11" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
                                                 </StackPanel>
                                                 <Button Grid.Column="2" Content="&#xE74D;" FontFamily="Segoe Fluent Icons" FontSize="12"
                                                         Command="{Binding DataContext.RemoveSourceCommand, RelativeSource={RelativeSource AncestorType=Window}}"
@@ -475,48 +514,10 @@
                     </ScrollViewer>
                 </TabItem>
 
-                <TabItem Header="{loc:T Key=Settings_Tab_List}">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{StaticResource BgMain}">
-                        <StackPanel Margin="32,24" MaxWidth="560" HorizontalAlignment="Left">
-                            <TextBlock Text="{loc:T Key=Settings_Section_List}" Style="{StaticResource SectionTitle}"/>
 
-                            <TextBlock Text="{loc:T Key=Settings_Field_DisplayPreferences}" Style="{StaticResource FieldLabel}"/>
-                            <Border Style="{StaticResource SettingsCard}">
-                                <StackPanel>
-                                    <Grid Margin="0,0,0,12">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Text="{loc:T Key=Settings_Lbl_MaxRecentItems}" VerticalAlignment="Center" Foreground="{StaticResource TextPrimary}"/>
-                                        <ComboBox Grid.Column="1" ItemsSource="{Binding MaxRecentItemOptions}" SelectedItem="{Binding MaxRecentItems}"
-                                                  Style="{StaticResource PremiumComboBox}" Width="120" HorizontalAlignment="Right"/>
-                                    </Grid>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Text="{loc:T Key=Settings_Lbl_DefaultSort}" VerticalAlignment="Center" Foreground="{StaticResource TextPrimary}"/>
-                                        <ComboBox Grid.Column="1" ItemsSource="{Binding SortOptions}"
-                                                  SelectedValue="{Binding DefaultSort}"
-                                                  SelectedValuePath="Code"
-                                                  DisplayMemberPath="DisplayName"
-                                                  Style="{StaticResource PremiumComboBox}" Width="120" HorizontalAlignment="Right"/>
-                                    </Grid>
-                                </StackPanel>
-                            </Border>
-
-                            <TextBlock Text="{loc:T Key=Settings_Field_ContentOptions}" Style="{StaticResource FieldLabel}"/>
-                            <Border Style="{StaticResource SettingsCard}">
-                                <CheckBox Content="{loc:T Key=Settings_Cb_ShowFolders}" IsChecked="{Binding ShowFolders}"/>
-                            </Border>
-                        </StackPanel>
-                    </ScrollViewer>
-                </TabItem>
 
                 <TabItem Header="{loc:T Key=Settings_Tab_Filters}">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{StaticResource BgMain}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{DynamicResource BgMain}">
                         <Grid Margin="32,24" MaxWidth="680" HorizontalAlignment="Left">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -542,36 +543,36 @@
                 </TabItem>
 
                 <TabItem Header="{loc:T Key=Settings_Tab_About}">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{StaticResource BgMain}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{DynamicResource BgMain}">
                         <StackPanel Margin="32,24" MaxWidth="680" HorizontalAlignment="Left">
                             <TextBlock Text="{loc:T Key=Settings_Section_About}" Style="{StaticResource SectionTitle}"/>
 
                             <Border Style="{StaticResource SettingsCard}" Padding="24">
                                 <StackPanel>
-                                    <TextBlock Text="{loc:T Key=Main_Title}" Foreground="{StaticResource AccentBlue}" FontWeight="Bold" FontSize="28" Margin="0,0,0,12"/>
+                                    <TextBlock Text="{loc:T Key=Main_Title}" Foreground="{DynamicResource AccentBlue}" FontWeight="Bold" FontSize="28" Margin="0,0,0,12"/>
 
-                                    <TextBlock Text="{loc:T Key=Settings_About_Tagline1}" Foreground="{StaticResource TextPrimary}" FontSize="14" FontWeight="Medium"/>
-                                    <TextBlock Text="{loc:T Key=Settings_About_Tagline2}" Foreground="{StaticResource TextSecondary}" FontSize="13" Margin="0,4,0,24"/>
+                                    <TextBlock Text="{loc:T Key=Settings_About_Tagline1}" Foreground="{DynamicResource TextPrimary}" FontSize="14" FontWeight="Medium"/>
+                                    <TextBlock Text="{loc:T Key=Settings_About_Tagline2}" Foreground="{DynamicResource TextSecondary}" FontSize="13" Margin="0,4,0,24"/>
 
                                     <TextBlock Text="{loc:T Key=Settings_Field_Version}" Style="{StaticResource FieldLabel}" Margin="0,0,0,4"/>
-                                    <TextBlock Text="0.1.0" Foreground="{StaticResource TextPrimary}" Margin="0,0,0,20"/>
+                                    <TextBlock Text="0.1.0" Foreground="{DynamicResource TextPrimary}" Margin="0,0,0,20"/>
 
                                     <TextBlock Text="{loc:T Key=Settings_Field_Privacy}" Style="{StaticResource FieldLabel}" Margin="0,0,0,4"/>
                                     <StackPanel Margin="0,0,0,20">
-                                        <TextBlock Text="{loc:T Key=Settings_Privacy_Local}" Foreground="{StaticResource TextSecondary}" Margin="0,2"/>
-                                        <TextBlock Text="{loc:T Key=Settings_Privacy_NoUpload}" Foreground="{StaticResource TextSecondary}" Margin="0,2"/>
-                                        <TextBlock Text="{loc:T Key=Settings_Privacy_NoDelete}" Foreground="{StaticResource TextSecondary}" Margin="0,2"/>
+                                        <TextBlock Text="{loc:T Key=Settings_Privacy_Local}" Foreground="{DynamicResource TextSecondary}" Margin="0,2"/>
+                                        <TextBlock Text="{loc:T Key=Settings_Privacy_NoUpload}" Foreground="{DynamicResource TextSecondary}" Margin="0,2"/>
+                                        <TextBlock Text="{loc:T Key=Settings_Privacy_NoDelete}" Foreground="{DynamicResource TextSecondary}" Margin="0,2"/>
                                     </StackPanel>
 
                                     <TextBlock Text="{loc:T Key=Settings_Field_Repository}" Style="{StaticResource FieldLabel}" Margin="0,0,0,4"/>
                                     <TextBlock Margin="0,0,0,32">
                                         <Hyperlink NavigateUri="https://github.com/phoenixray2000/recents" RequestNavigate="Hyperlink_RequestNavigate">
-                                            <TextBlock Text="https://github.com/phoenixray2000/recents" Foreground="{StaticResource AccentBlue}"/>
+                                            <TextBlock Text="https://github.com/phoenixray2000/recents" Foreground="{DynamicResource AccentBlue}"/>
                                         </Hyperlink>
                                     </TextBlock>
 
-                                    <Border BorderBrush="{StaticResource BorderMuted}" BorderThickness="0,1,0,0" Padding="0,16,0,0">
-                                        <TextBlock Text="{loc:T Key=Settings_About_Copyright}" Foreground="{StaticResource TextTertiary}" FontSize="11" HorizontalAlignment="Center"/>
+                                    <Border BorderBrush="{DynamicResource BorderMuted}" BorderThickness="0,1,0,0" Padding="0,16,0,0">
+                                        <TextBlock Text="{loc:T Key=Settings_About_Copyright}" Foreground="{DynamicResource TextTertiary}" FontSize="11" HorizontalAlignment="Center"/>
                                     </Border>
                                 </StackPanel>
                             </Border>

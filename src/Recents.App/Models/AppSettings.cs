@@ -5,20 +5,15 @@ namespace Recents.App.Models;
 // PRD §8.3 全量应用设置，序列化到 %APPDATA%\Recents\settings.json
 public class AppSettings
 {
-    public enum ViewDensity
-    {
-        Standard,
-        Compact
-    }
+    public enum ViewDensity { Standard, Compact }
+    public enum ThemeMode   { FollowSystem, Dark, Light }
 
     // General
     public bool LaunchAtStartup   { get; set; } = false;
     public bool AlwaysOnTop       { get; set; } = true;
     public bool HideOnFocusLost   { get; set; } = false;
     public bool CloseToTray       { get; set; } = true;
-    public bool ShowFolders       { get; set; } = true;
     public int  MaxRecentItems    { get; set; } = 200;
-    public string DefaultSort     { get; set; } = "RecentTime";
     public ViewDensity CurrentDensity { get; set; } = ViewDensity.Standard;
     public double WindowWidth      { get; set; } = 600;
     public double WindowHeight     { get; set; } = 760;
@@ -30,6 +25,9 @@ public class AppSettings
 
     // 界面语言（空 = 跟随系统；支持 "en-US"、"zh-CN" 等 BCP 47 标识）
     public string Language { get; set; } = "";
+
+    // 界面主题（FollowSystem = 跟随 Windows 深色/浅色设置）
+    public ThemeMode Theme { get; set; } = ThemeMode.FollowSystem;
 
     // Hotkey（字符串表示，格式 "Ctrl+Alt+R"）
     public string Hotkey { get; set; } = "Alt+Shift+Z";

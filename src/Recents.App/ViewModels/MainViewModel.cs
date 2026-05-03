@@ -200,29 +200,25 @@ public partial class MainViewModel : ObservableObject
     {
         if (obj is not RecentItemViewModel vm) return false;
 
-        // 收藏文件永远显示，收藏优先级高于系统/隐藏过滤规则
+        // 1. 文件夹排除逻辑 (PRD §17 / User Request: 所有的文件夹不要显示在全部文件中)
+        // 当处于“全部文件”标签时，文件夹无论是否收藏都不显示
+        if (CurrentChipFilter == "All" && vm.Item.IsFolder) return false;
+
+        // 2. 收藏优先级高于其他过滤规则（系统/隐藏）
         if (vm.Item.IsFavorite) return true;
 
         if (ShouldHideBySystemAndHiddenRule(vm.Item, _settingsService.Current)) return false;
 
-        // 1. 顶部 Chip 类型过滤 (ChipFilter) - 优先级高，明确用户意图
-        if (CurrentChipFilter != "All")
+        // 3. 顶部 Chip 类型过滤 (ChipFilter)
+        if (CurrentChipFilter == "Folders")
         {
-            if (CurrentChipFilter == "Folders")
-            {
-                if (!vm.Item.IsFolder) return false;
-            }
-            else
-            {
-                // 只有非文件夹才参与类型分类
-                if (vm.Item.IsFolder) return false;
-                if (vm.Item.ClassificationSource != CurrentChipFilter) return false;
-            }
+            if (!vm.Item.IsFolder) return false;
         }
-        else
+        else if (CurrentChipFilter != "All")
         {
-            // Chip 为 All 时，默认仅显示文件 (PRD §17)
+            // 其他类型过滤（文档、图片等），非文件夹参与
             if (vm.Item.IsFolder) return false;
+            if (vm.Item.ClassificationSource != CurrentChipFilter) return false;
         }
 
 

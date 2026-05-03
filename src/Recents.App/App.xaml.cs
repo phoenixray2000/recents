@@ -5,6 +5,7 @@ using Recents.App.Services.Sources;
 using Recents.App.ViewModels;
 using Serilog;
 using WpfApp = System.Windows.Application;
+using ThemeMode = Recents.App.Models.AppSettings.ThemeMode;
 
 namespace Recents.App;
 
@@ -47,6 +48,9 @@ public partial class App : WpfApp
 
             _settings = new SettingsService();
             _settings.Load();
+
+            // 应用主题（必须在创建任何窗口前注入，避免闪烁）
+            ThemeManager.Instance.Initialize(_settings.Current.Theme);
 
             // 应用界面语言（空值跟随系统）
             Localization.LocalizationManager.Instance.SetLanguage(_settings.Current.Language);

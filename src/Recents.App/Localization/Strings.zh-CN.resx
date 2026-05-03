@@ -54,7 +54,7 @@
   <data name="Main_Title" xml:space="preserve"><value>Recents</value></data>
   <data name="Main_Tooltip_Settings" xml:space="preserve"><value>设置</value></data>
   <data name="Main_Search_Placeholder" xml:space="preserve"><value>搜索最近文件...</value></data>
-  <data name="Main_Filter_AllFiles" xml:space="preserve"><value>全部</value></data>
+  <data name="Main_Filter_AllFiles" xml:space="preserve"><value>全部文件</value></data>
   <data name="Main_Filter_Documents" xml:space="preserve"><value>文档</value></data>
   <data name="Main_Filter_Images" xml:space="preserve"><value>图片</value></data>
   <data name="Main_Filter_Code" xml:space="preserve"><value>代码</value></data>
@@ -172,4 +172,9 @@
   <data name="Lang_Auto" xml:space="preserve"><value>跟随系统</value></data>
   <data name="Lang_English" xml:space="preserve"><value>English</value></data>
   <data name="Lang_Chinese" xml:space="preserve"><value>中文</value></data>
+
+  <data name="Settings_Field_Theme" xml:space="preserve"><value>主题</value></data>
+  <data name="Theme_FollowSystem" xml:space="preserve"><value>跟随系统</value></data>
+  <data name="Theme_Dark" xml:space="preserve"><value>深色</value></data>
+  <data name="Theme_Light" xml:space="preserve"><value>浅色</value></data>
 </root>

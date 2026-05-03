@@ -11,7 +11,8 @@
         Title="{loc:T Key=Main_Title}" Height="760" Width="600" MinHeight="520" MinWidth="600"
         WindowStartupLocation="CenterScreen" 
         Topmost="True" ShowInTaskbar="False"
-        Background="{StaticResource BgMain}" Foreground="{StaticResource TextPrimary}"
+        Background="Transparent" Foreground="{DynamicResource TextPrimary}"
+        AllowsTransparency="True"
         FontFamily="Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI"
         WindowStyle="None"
         Icon="pack://application:,,,/Recents;component/Resources/Icons/AppIcon.ico"
@@ -41,17 +42,46 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
-                        <Border x:Name="OuterBorder" Background="{TemplateBinding Background}" CornerRadius="8" Margin="12,2" BorderThickness="1" BorderBrush="Transparent">
+                        <StackPanel>
+                            <Border x:Name="OuterBorder" Background="{TemplateBinding Background}" CornerRadius="8" Margin="12,1" BorderThickness="1" BorderBrush="Transparent">
+                                <ContentPresenter />
+                            </Border>
+                            <Rectangle Height="1" Fill="{DynamicResource BorderMuted}" Margin="16,1" Opacity="0.8" SnapsToDevicePixels="True"/>
+                        </StackPanel>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="OuterBorder" Property="Background" Value="{DynamicResource RowHover}" />
+                                <Setter TargetName="OuterBorder" Property="BorderBrush" Value="{DynamicResource BorderMuted}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="OuterBorder" Property="Background" Value="{DynamicResource RowSelected}" />
+                                <Setter TargetName="OuterBorder" Property="BorderBrush" Value="{DynamicResource AccentBlue}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="FavoritesItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="OuterBorder" Background="{TemplateBinding Background}" CornerRadius="8" Margin="4,1" BorderThickness="1" BorderBrush="Transparent">
                             <ContentPresenter />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="OuterBorder" Property="Background" Value="{StaticResource RowHover}" />
-                                <Setter TargetName="OuterBorder" Property="BorderBrush" Value="{StaticResource BorderMuted}" />
+                                <Setter TargetName="OuterBorder" Property="Background" Value="{DynamicResource RowHover}" />
+                                <Setter TargetName="OuterBorder" Property="BorderBrush" Value="{DynamicResource BorderMuted}" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="OuterBorder" Property="Background" Value="{StaticResource RowSelected}" />
-                                <Setter TargetName="OuterBorder" Property="BorderBrush" Value="{StaticResource AccentBlue}" />
+                                <Setter TargetName="OuterBorder" Property="Background" Value="{DynamicResource RowSelected}" />
+                                <Setter TargetName="OuterBorder" Property="BorderBrush" Value="{DynamicResource AccentBlue}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -70,14 +100,14 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border Background="{TemplateBinding Background}">
-                            <TextBlock Text="{TemplateBinding Content}" FontFamily="Segoe Fluent Icons" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{StaticResource TextSecondary}"/>
+                            <TextBlock Text="{TemplateBinding Content}" FontFamily="Segoe Fluent Icons" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondary}"/>
                         </Border>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource RowHover}" />
+                    <Setter Property="Background" Value="{DynamicResource RowHover}" />
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -99,7 +129,7 @@
                                                 <Setter Property="Template">
                                                     <Setter.Value>
                                                         <ControlTemplate TargetType="Thumb">
-                                                            <Border Background="{StaticResource TextTertiary}" CornerRadius="5" Margin="2,0" Opacity="0.5" />
+                                                            <Border Background="{DynamicResource TextTertiary}" CornerRadius="5" Margin="2,0" Opacity="0.5" />
                                                         </ControlTemplate>
                                                     </Setter.Value>
                                                 </Setter>
@@ -131,19 +161,24 @@
                 <Image Grid.Column="0" Source="{Binding SmallIcon}" Width="24" Height="24" VerticalAlignment="Center" Margin="0,0,12,0"/>
 
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource TextPrimary}" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis"/>
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button Content="&#xE735;" Command="{Binding TogglePinCommand}"
                             FontFamily="Segoe Fluent Icons" Width="32" Height="32" ToolTip="{loc:T Key=Main_Favorites_Unpin}"
-                            Style="{StaticResource ActionButtonStyle}" Foreground="{StaticResource AccentBlue}"/>
+                            Style="{StaticResource ActionButtonStyle}" Foreground="{DynamicResource AccentBlue}"/>
                 </StackPanel>
             </Grid>
         </DataTemplate>
     </Window.Resources>
 
-    <Grid>
+    <Border BorderBrush="{DynamicResource WindowBorderBrush}" BorderThickness="1" 
+            Background="{DynamicResource BgMain}" CornerRadius="8" Margin="10">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="15" Direction="270" RenderingBias="Quality" ShadowDepth="1" Opacity="0.4" Color="{DynamicResource WindowShadowColor}"/>
+        </Border.Effect>
+        <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="Auto" />
@@ -159,7 +194,7 @@
                    Text="&#xED25;&#xE7BC;&#xE81D;&#xE8C8;&#xE735;&#xE894;&#xE74D;&#xE713;&#xE921;&#xE922;&#xE8BB;"/>
 
         <!-- Main Content -->
-        <Grid Grid.Column="0" Background="{StaticResource BgMain}">
+        <Grid Grid.Column="0">
             <Grid.RowDefinitions>
                 <RowDefinition Height="40" /> <!-- Custom Title Bar Row -->
                 <RowDefinition Height="Auto" /> <!-- Search Row -->
@@ -186,7 +221,7 @@
                         <Style TargetType="Button" BasedOn="{StaticResource WindowControlBtn}">
                             <Style.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Background" Value="{StaticResource ColorDanger}" />
+                                    <Setter Property="Background" Value="{DynamicResource ColorDanger}" />
                                     <Setter Property="Foreground" Value="White" />
                                 </Trigger>
                             </Style.Triggers>
@@ -206,18 +241,29 @@
 
             <!-- Search Area -->
             <Grid Grid.Row="1" Margin="24,10,24,10">
-                <Border Background="{StaticResource BgInput}" CornerRadius="8" BorderThickness="1" BorderBrush="{StaticResource BorderMuted}">
+                <Border CornerRadius="8" BorderThickness="1">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="{DynamicResource BgInput}" />
+                            <Setter Property="BorderBrush" Value="{DynamicResource BorderMuted}" />
+                            <Style.Triggers>
+                                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBlue}" />
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="40" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="&#xE721;" FontFamily="Segoe Fluent Icons" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{StaticResource TextTertiary}"/>
-                        <TextBox Grid.Column="1" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextPrimary}" VerticalContentAlignment="Center" FontSize="14" Padding="0,10"
+                        <TextBlock Grid.Column="0" Text="&#xE721;" FontFamily="Segoe Fluent Icons" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource TextTertiary}"/>
+                        <TextBox Grid.Column="1" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource TextPrimary}" VerticalContentAlignment="Center" FontSize="14" Padding="0,10"
                                  Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                                  x:Name="SearchBox" KeyDown="SearchBox_KeyDown" />
-                        <TextBlock Grid.Column="1" Text="{loc:T Key=Main_Search_Placeholder}" Foreground="{StaticResource TextTertiary}" VerticalAlignment="Center" IsHitTestVisible="False">
+                        <TextBlock Grid.Column="1" Text="{loc:T Key=Main_Search_Placeholder}" Foreground="{DynamicResource TextTertiary}" VerticalAlignment="Center" IsHitTestVisible="False">
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock">
                                     <Setter Property="Visibility" Value="Collapsed"/>
@@ -230,7 +276,7 @@
                             </TextBlock.Style>
                         </TextBlock>
                         <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="10,0">
-                            <TextBlock Text="{Binding HotkeyDisplay}" Foreground="{StaticResource TextTertiary}" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <TextBlock Text="{Binding HotkeyDisplay}" Foreground="{DynamicResource TextTertiary}" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -261,7 +307,7 @@
                         </RadioButton>
                     </StackPanel>
 
-                    <Button Background="Transparent" BorderThickness="0" Padding="8,4" Foreground="{StaticResource TextSecondary}">
+                    <Button Background="Transparent" BorderThickness="0" Padding="8,4" Foreground="{DynamicResource TextSecondary}">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
                                 <EventSetter Event="Click" Handler="SortButton_Click"/>
@@ -281,7 +327,7 @@
                             </ContextMenu>
                         </Button.ContextMenu>
                     </Button>
-                    <Button Content="&#xE8A9;" FontFamily="Segoe Fluent Icons" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextSecondary}" Margin="8,0,0,0" Visibility="Collapsed"/>
+                    <Button Content="&#xE8A9;" FontFamily="Segoe Fluent Icons" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource TextSecondary}" Margin="8,0,0,0" Visibility="Collapsed"/>
                 </StackPanel>
             </Grid>
 
@@ -299,8 +345,8 @@
                             </Style.Triggers>
                         </Style>
                     </StackPanel.Style>
-                    <TextBlock Text="&#xE9CE;" FontFamily="Segoe Fluent Icons" FontSize="48" Foreground="{StaticResource TextTertiary}" HorizontalAlignment="Center" Margin="0,0,0,16"/>
-                    <TextBlock FontSize="14" Foreground="{StaticResource TextTertiary}" HorizontalAlignment="Center">
+                    <TextBlock Text="&#xE9CE;" FontFamily="Segoe Fluent Icons" FontSize="48" Foreground="{DynamicResource TextTertiary}" HorizontalAlignment="Center" Margin="0,0,0,16"/>
+                    <TextBlock FontSize="14" Foreground="{DynamicResource TextTertiary}" HorizontalAlignment="Center">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">
                                 <Setter Property="Text" Value="{loc:T Key=Main_Empty_NoFiles}"/>
@@ -347,6 +393,7 @@
                          ScrollViewer.VerticalScrollBarVisibility="Auto"
                          MouseDoubleClick="ItemsList_MouseDoubleClick"
                          PreviewMouseWheel="ItemsList_PreviewMouseWheel"
+                         PreviewMouseLeftButtonDown="ItemsList_PreviewMouseLeftButtonDown"
                          MouseMove="ItemsList_MouseMove"
                          ContextMenuOpening="ItemsList_ContextMenuOpening">
                     <ListBox.Style>
@@ -366,24 +413,25 @@
             </Grid>
             
             <!-- Status Bar -->
-            <Border Grid.Row="4" Background="{StaticResource BgCard}" BorderThickness="0,1,0,0" BorderBrush="{StaticResource BorderMuted}" Padding="20,0">
+            <Border Grid.Row="4" Background="{DynamicResource BgCard}" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource BorderMuted}" Padding="20,0">
                 <Grid>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <Ellipse Width="8" Height="8" Fill="{Binding Status.StatusColor}" Margin="0,0,8,0"/>
-                        <TextBlock Text="{Binding Status.StatusText}" FontSize="12" Foreground="{StaticResource TextSecondary}" Margin="0,0,12,0"/>
-                        <Separator Width="1" Height="12" Background="{StaticResource BorderMuted}" Margin="0,0,12,0"/>
-                        <TextBlock Text="{Binding Status.ItemCount}" FontSize="12" Foreground="{StaticResource TextTertiary}"/>
+                        <TextBlock Text="{Binding Status.StatusText}" FontSize="12" Foreground="{DynamicResource TextSecondary}" Margin="0,0,12,0"/>
+                        <Separator Width="1" Height="12" Background="{DynamicResource BorderMuted}" Margin="0,0,12,0"/>
+                        <TextBlock Text="{Binding Status.ItemCount}" FontSize="12" Foreground="{DynamicResource TextTertiary}"/>
                     </StackPanel>
                     
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding Status.KeyboardHint}" FontSize="11" Foreground="{StaticResource TextTertiary}"/>
+                        <TextBlock Text="{Binding Status.KeyboardHint}" FontSize="11" Foreground="{DynamicResource TextTertiary}"/>
                     </StackPanel>
                 </Grid>
             </Border>
         </Grid>
 
         <!-- Right Side Favorites Drawer -->
-        <Border Grid.Column="1" Background="{StaticResource BgSidebar}" BorderThickness="1,0,0,0" BorderBrush="{StaticResource BorderMuted}" Width="280"
+        <Border Grid.Column="1" Background="{DynamicResource BgSidebar}" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource BorderMuted}" Width="280"
+                CornerRadius="0,8,8,0"
                 Visibility="{Binding CombinedFavoritesVisibility, Converter={StaticResource BooleanToVisibilityConverter}}">
             <Grid>
                 <Grid.RowDefinitions>
@@ -393,17 +441,23 @@
 
                 <Grid Grid.Row="0" Margin="16,0,8,0">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="{loc:T Key=Main_Favorites_Header}" FontWeight="Bold" FontSize="11" Foreground="{StaticResource TextSecondary}"/>
+                        <TextBlock Text="{loc:T Key=Main_Favorites_Header}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
                     </StackPanel>
                 </Grid>
 
                 <ListBox x:Name="FavoritesList" Grid.Row="1" Background="Transparent" BorderThickness="0" ItemsSource="{Binding FavoritesView}" Padding="4"
+                         ItemContainerStyle="{StaticResource FavoritesItemStyle}"
                          ItemTemplate="{StaticResource FavoritesItemTemplate}"
+                         MouseDoubleClick="FavoritesList_MouseDoubleClick"
+                         PreviewMouseLeftButtonDown="FavoritesList_PreviewMouseLeftButtonDown"
+                         ContextMenuOpening="ItemsList_ContextMenuOpening"
                          AllowDrop="True"
                          MouseMove="FavoritesList_MouseMove"
                          Drop="FavoritesList_Drop"
-                         ContextMenuOpening="ItemsList_ContextMenuOpening"/>
+                         VirtualizingPanel.IsVirtualizing="True"
+                         VirtualizingPanel.VirtualizationMode="Recycling"/>
             </Grid>
         </Border>
-    </Grid>
+        </Grid>
+    </Border>
 </Window>

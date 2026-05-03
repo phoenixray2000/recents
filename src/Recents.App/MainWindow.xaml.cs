@@ -32,7 +32,9 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
     private CancellationTokenSource? _previewNavCts;
     private readonly IWindowGroupFocusService _windowGroupFocusService;
     private CancellationTokenSource? _deactivateCts;
+    private CancellationTokenSource? _actionHideCts;
     private bool _contextMenuOpen;
+    private bool _pendingActionHide;
 
     public MainWindow(
         MainViewModel viewModel,
@@ -88,8 +90,8 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         
         UpdateWindowWidth();
 
-        FileActionService.ActionExecuted += () => Dispatcher.BeginInvoke(new Action(HideWindowGroup));
-        ShellService.ActionExecuted += () => Dispatcher.BeginInvoke(new Action(HideWindowGroup));
+        FileActionService.ActionExecuted += () => { _pendingActionHide = true; ScheduleActionFallbackHide(); };
+        ShellService.ActionExecuted += () => { _pendingActionHide = true; ScheduleActionFallbackHide(); };
 
         // §6.25: 列表选中变化时，如果预览窗口已打开，延迟 100ms 刷新
         ItemsList.SelectionChanged += (s, e) =>
@@ -297,7 +299,12 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
             // 若预览可见，Enter 打开文件并关闭预览
             if (_previewWindow?.IsVisible == true)
                 _previewWindow.Hide();
-            TryOpenSelectedItem();
+
+            if (FavoritesList.IsFocused)
+                TryOpenItem(FavoritesList.SelectedItem as RecentItemViewModel);
+            else
+                TryOpenSelectedItem();
+
             e.Handled = true;
             return;
         }
@@ -317,7 +324,25 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
 
     private void ItemsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        TryOpenSelectedItem();
+        TryOpenItem(ItemsList.SelectedItem as RecentItemViewModel);
+    }
+
+    private void FavoritesList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        TryOpenItem(FavoritesList.SelectedItem as RecentItemViewModel);
+    }
+
+    private void FavoritesList_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (e.OriginalSource is DependencyObject source)
+        {
+            var listBoxItem = FindParent<ListBoxItem>(source);
+            if (listBoxItem?.DataContext is RecentItemViewModel vm)
+            {
+                OpenDynamicContextMenu(vm, listBoxItem);
+            }
+        }
+        e.Handled = true;
     }
 
     private void ItemsList_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
@@ -352,54 +377,81 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         return null;
     }
 
-    private void TryOpenSelectedItem()
+    private void TryOpenSelectedItem() => TryOpenItem(ItemsList.SelectedItem as RecentItemViewModel);
+
+    private void TryOpenItem(RecentItemViewModel? vm)
     {
-        if (ItemsList.SelectedItem is RecentItemViewModel vm)
+        if (vm != null)
         {
             // PRD §6.24：文件夹双击用 Explorer 打开，文件用默认程序打开
-            if (vm.Item.IsFolder)
-                FileActionService.RevealInExplorer(vm.DisplayPath);
-            else
-                FileActionService.OpenFile(vm.DisplayPath);
+            // 现在全部委托给 FileActionService.OpenFile，它会自动处理文件夹激活优化
+            FileActionService.OpenFile(vm.DisplayPath);
             
-            Dispatcher.BeginInvoke(new Action(HideWindowGroup));
+            // 注意：不要在这里直接 HideWindowGroup()，
+            // 已统一由 FileActionService.ActionExecuted 中的延迟处理，
+            // 确保新建的外部进程能够顺利夺取前台焦点。
         }
     }
 
     // P0 拖拽支持 (PRD §6.8)
     // B4. 批量拖拽支持 (PRD §6.8)
+    private System.Windows.Point? _dragStartPoint;
+
+    private void ItemsList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _dragStartPoint = e.GetPosition(null);
+    }
+
+    private void FavoritesList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _dragStartPoint = e.GetPosition(null);
+    }
+
     private void ItemsList_MouseMove(object sender, WpfMouseEventArgs e)
     {
-        if (e.LeftButton == MouseButtonState.Pressed && ItemsList.SelectedItems.Count > 0)
+        if (e.LeftButton == MouseButtonState.Pressed && _dragStartPoint.HasValue && ItemsList.SelectedItems.Count > 0)
         {
-            var source = e.OriginalSource as DependencyObject;
-            if (FindParent<System.Windows.Controls.Button>(source) != null) return;
+            var currentPos = e.GetPosition(null);
+            if (Math.Abs(currentPos.X - _dragStartPoint.Value.X) > SystemParameters.MinimumHorizontalDragDistance ||
+                Math.Abs(currentPos.Y - _dragStartPoint.Value.Y) > SystemParameters.MinimumVerticalDragDistance)
+            {
+                var source = e.OriginalSource as DependencyObject;
+                if (FindParent<System.Windows.Controls.Button>(source) != null) return;
 
-            var selectedVms = GetSelectedItems().Where(v => !v.IsMissing).ToList();
+                var selectedVms = GetSelectedItems().Where(v => !v.IsMissing).ToList();
 
-            if (selectedVms.Count == 0) return;
+                if (selectedVms.Count == 0) return;
 
-            var paths = selectedVms.Select(v => v.DisplayPath).ToArray();
-            var dataObj = DragDropService.CreateDataObject(paths);
-            System.Windows.DragDrop.DoDragDrop(ItemsList, dataObj, System.Windows.DragDropEffects.Copy | System.Windows.DragDropEffects.Link);
+                var paths = selectedVms.Select(v => v.DisplayPath).ToArray();
+                var dataObj = DragDropService.CreateDataObject(paths);
+                
+                _dragStartPoint = null; // Reset before drag
+                System.Windows.DragDrop.DoDragDrop(ItemsList, dataObj, System.Windows.DragDropEffects.Copy | System.Windows.DragDropEffects.Link);
+            }
         }
     }
 
     private void FavoritesList_MouseMove(object sender, WpfMouseEventArgs e)
     {
-        if (e.LeftButton == MouseButtonState.Pressed && FavoritesList.SelectedItem != null)
+        if (e.LeftButton == MouseButtonState.Pressed && _dragStartPoint.HasValue && FavoritesList.SelectedItem != null)
         {
-            var source = e.OriginalSource as DependencyObject;
-            if (FindParent<System.Windows.Controls.Button>(source) != null) return;
+            var currentPos = e.GetPosition(null);
+            if (Math.Abs(currentPos.X - _dragStartPoint.Value.X) > SystemParameters.MinimumHorizontalDragDistance ||
+                Math.Abs(currentPos.Y - _dragStartPoint.Value.Y) > SystemParameters.MinimumVerticalDragDistance)
+            {
+                var source = e.OriginalSource as DependencyObject;
+                if (FindParent<System.Windows.Controls.Button>(source) != null) return;
 
-            var selected = FavoritesList.SelectedItem as RecentItemViewModel;
-            if (selected == null || selected.IsMissing) return;
+                var selected = FavoritesList.SelectedItem as RecentItemViewModel;
+                if (selected == null || selected.IsMissing) return;
 
-            // 包含内部排序标志和外部文件路径
-            var dataObj = DragDropService.CreateDataObject(new[] { selected.DisplayPath });
-            dataObj.SetData("InternalReorder", selected);
-            
-            System.Windows.DragDrop.DoDragDrop(FavoritesList, dataObj, System.Windows.DragDropEffects.Move | System.Windows.DragDropEffects.Copy | System.Windows.DragDropEffects.Link);
+                // 包含内部排序标志和外部文件路径
+                var dataObj = DragDropService.CreateDataObject(new[] { selected.DisplayPath });
+                dataObj.SetData("InternalReorder", selected);
+                
+                _dragStartPoint = null; // Reset before drag
+                System.Windows.DragDrop.DoDragDrop(FavoritesList, dataObj, System.Windows.DragDropEffects.Move | System.Windows.DragDropEffects.Copy | System.Windows.DragDropEffects.Link);
+            }
         }
     }
 
@@ -476,6 +528,8 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
 
     public void HideWindowGroup()
     {
+        _pendingActionHide = false;
+        _actionHideCts?.Cancel();
         _deactivateCts?.Cancel();
         SaveWindowBounds();
         if (_previewWindow?.IsVisible == true)
@@ -483,13 +537,49 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         Hide();
     }
 
+    private void ScheduleActionFallbackHide()
+    {
+        _actionHideCts?.Cancel();
+        _actionHideCts = new CancellationTokenSource();
+        var token = _actionHideCts.Token;
+
+        _ = Task.Delay(600, token).ContinueWith(t =>
+        {
+            if (t.IsCanceled) return;
+            Dispatcher.Invoke(() =>
+            {
+                if (_pendingActionHide)
+                    HideWindowGroup();
+            });
+        }, TaskScheduler.Default);
+    }
+
     private void OnRecentDockWindowActivated(object? sender, EventArgs e)
     {
         _deactivateCts?.Cancel();
+        // If a folder/file open is pending and the user came back to Recents
+        // (e.g. Explorer didn't take foreground), cancel the fallback hide.
+        if (_pendingActionHide)
+        {
+            _pendingActionHide = false;
+            _actionHideCts?.Cancel();
+        }
     }
 
     private async void OnRecentDockWindowDeactivated(object? sender, EventArgs e)
     {
+        // When an action (open file/folder) was explicitly triggered, always hide
+        // when focus moves away — even if HideOnFocusLost is off.  Explorer grabbed
+        // the foreground, which is exactly what we wanted; now dismiss Recents.
+        if (_pendingActionHide)
+        {
+            _pendingActionHide = false;
+            _actionHideCts?.Cancel();
+            if (!_contextMenuOpen)
+                HideWindowGroup();
+            return;
+        }
+
         if (!_settings.Current.HideOnFocusLost)
             return;
 
@@ -750,9 +840,10 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
             _ = EnsurePreviewWindow(); // 触发 PreviewWindow 构造 + InitWebView2Async
     }
 
-    private void MenuItem_Click(object sender, RoutedEventArgs e)
+    private async void MenuItem_Click(object sender, RoutedEventArgs e)
     {
-        Dispatcher.BeginInvoke(new Action(HideWindowGroup));
+        await Task.Delay(150);
+        Dispatcher.Invoke(HideWindowGroup);
     }
 
     /// <summary>
