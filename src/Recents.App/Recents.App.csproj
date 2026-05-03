@@ -36,7 +36,10 @@
     <!-- §12 结构化日志 -->
     <PackageReference Include="Serilog" Version="4.2.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
-    <!-- 不引入任何云盘 SDK、HTTP 库 -->
+    <!-- §6.25 空格预览：WebView2 宿主控件 -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
+    <!-- §6.25 Markdown → HTML 转换 -->
+    <PackageReference Include="Markdig" Version="0.40.0" />
   </ItemGroup>
   
   <ItemGroup>

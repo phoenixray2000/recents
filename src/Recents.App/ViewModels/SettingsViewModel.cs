@@ -90,6 +90,7 @@ public partial class SettingsViewModel : ObservableObject
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Recents",
             "logs");
+        _previewEnabled = settings.Current.PreviewEnabled;
     }
 
     [ObservableProperty] private bool _launchAtStartup;
@@ -109,6 +110,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _dataPath = string.Empty;
     [ObservableProperty] private string _logPath = string.Empty;
     [ObservableProperty] private string _statusMessage = "Ready";
+    [ObservableProperty] private bool _previewEnabled;
 
     partial void OnLaunchAtStartupChanged(bool value)
     {
@@ -128,6 +130,11 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnExcludedExtensionsTextChanged(string value) { _settings.Current.ExcludedExtensions = Split(value); SaveAndNotify(); }
     partial void OnExcludedPathsTextChanged(string value) { _settings.Current.ExcludedPaths = Split(value); SaveAndNotify(); }
     partial void OnExcludedKeywordsTextChanged(string value) { _settings.Current.ExcludedKeywords = Split(value); SaveAndNotify(); }
+    partial void OnPreviewEnabledChanged(bool value)
+    {
+        _settings.Current.PreviewEnabled = value;
+        SaveAndNotify();
+    }
 
     [RelayCommand]
     private void ResetHotkey()

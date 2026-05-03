@@ -80,6 +80,15 @@ public partial class App : WpfApp
             if (!e.Args.Contains("--minimized") && !_settings.Current.StartMinimized)
                 mainWindow.Show();
 
+            // §6.25 预热 PreviewWindow（后台异步，不阻塞启动）
+            if (_settings.Current.PreviewEnabled)
+            {
+                _ = Task.Run(() =>
+                {
+                    Dispatcher.BeginInvoke(() => mainWindow.PrewarmPreview());
+                });
+            }
+
             // 启动后延迟 1 秒再开始扫描，并切换状态
             _ = Task.Delay(1000).ContinueWith(_ => {
                 _statusHint.SetStatus(StatusHintService.AppStatus.Indexing);

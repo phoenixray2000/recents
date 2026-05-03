@@ -23,6 +23,9 @@ public partial class MainWindow : Window
     private readonly Func<Task> _restartSourcesAsync;
     private TrayService? _tray;
     private SettingsWindow? _settingsWindow;
+    // §6.25 预览窗口（单一持久实例）
+    private PreviewWindow? _previewWindow;
+    private System.Threading.CancellationTokenSource? _previewNavCts;
 
     public MainWindow(
         MainViewModel viewModel,
@@ -71,6 +74,36 @@ public partial class MainWindow : Window
         };
         
         UpdateWindowWidth();
+
+        // §6.25 预热 PreviewWindow（提前初始化 WebView2）
+        if (_settings.Current.PreviewEnabled)
+            _ = EnsurePreviewWindow();
+
+        // §6.25: 列表选中变化时，如果预览窗口已打开，延迟 100ms 刷新
+        ItemsList.SelectionChanged += (s, e) =>
+        {
+            if (_previewWindow?.IsVisible != true) return;
+            if (ItemsList.SelectedItem is not RecentItemViewModel vm) return;
+            if (vm.Item.IsFolder) return;
+
+            // 取消上一次待发的刷新
+            _previewNavCts?.Cancel();
+            _previewNavCts = new System.Threading.CancellationTokenSource();
+            var token = _previewNavCts.Token;
+
+            _ = Task.Delay(100, token).ContinueWith(t =>
+            {
+                if (t.IsCanceled) return;
+                Dispatcher.Invoke(() =>
+                {
+                    if (_previewWindow?.IsVisible == true)
+                    {
+                        _previewWindow.Tag = vm.DisplayPath;
+                        _ = _previewWindow.ShowFileAsync(vm.DisplayPath);
+                    }
+                });
+            }, TaskScheduler.Default);
+        };
     }
 
     private void RestoreWindowBounds()
@@ -193,7 +226,21 @@ public partial class MainWindow : Window
     {
         if (e.Key == Key.Escape)
         {
+            if (_previewWindow?.IsVisible == true)
+            {
+                _previewWindow.Hide();
+                e.Handled = true;
+                return;
+            }
             HideWindow();
+            e.Handled = true;
+            return;
+        }
+
+        // §6.25: Space 切换预览
+        if (e.Key == Key.Space && Keyboard.Modifiers == ModifierKeys.None)
+        {
+            TogglePreview();
             e.Handled = true;
             return;
         }
@@ -234,6 +281,9 @@ public partial class MainWindow : Window
 
         if (e.Key == Key.Enter)
         {
+            // 若预览可见，Enter 打开文件并关闭预览
+            if (_previewWindow?.IsVisible == true)
+                _previewWindow.Hide();
             TryOpenSelectedItem();
             e.Handled = true;
             return;
@@ -397,6 +447,8 @@ public partial class MainWindow : Window
     public void HideWindow()
     {
         SaveWindowBounds();
+        if (_previewWindow?.IsVisible == true)
+            _previewWindow.Hide();
         Hide();
     }
     private void Settings_Click(object sender, RoutedEventArgs e)
@@ -495,5 +547,44 @@ public partial class MainWindow : Window
         if (parentObject == null) return null;
         if (parentObject is T parent) return parent;
         return FindParent<T>(parentObject);
+    }
+
+    private PreviewWindow EnsurePreviewWindow()
+    {
+        if (_previewWindow == null)
+        {
+            _previewWindow = new PreviewWindow();
+            // 不设 Owner，避免关闭主窗口时连带销毁
+        }
+        return _previewWindow;
+    }
+
+    private void TogglePreview()
+    {
+        if (!_settings.Current.PreviewEnabled) return;
+        if (ItemsList.SelectedItem is not RecentItemViewModel vm) return;
+        if (vm.Item.IsFolder) return;   // §6.25.1: 文件夹不预览
+
+        var pw = EnsurePreviewWindow();
+
+        if (pw.IsVisible && pw.Tag as string == vm.DisplayPath)
+        {
+            // 二次 Space → 关闭
+            pw.Hide();
+        }
+        else
+        {
+            pw.Tag = vm.DisplayPath;
+            pw.PositionRelativeTo(this);
+            pw.Show();
+            _ = pw.ShowFileAsync(vm.DisplayPath);
+        }
+    }
+
+    /// <summary>由 App.xaml.cs 在启动完成后调用，提前初始化 WebView2。</summary>
+    public void PrewarmPreview()
+    {
+        if (_settings.Current.PreviewEnabled)
+            _ = EnsurePreviewWindow(); // 触发 PreviewWindow 构造 + InitWebView2Async
     }
 }

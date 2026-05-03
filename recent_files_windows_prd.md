@@ -118,7 +118,8 @@ Recents。
 - 双击打开原始文件
 - 右键基础菜单
 - 图标显示（异步、缓存）
-- 快速预览信息
+- 快速预览信息（元信息 Tooltip）
+- **空格键快速预览**（WebView2，见 §6.25）
 - 键盘操作
 - 排除规则（扩展名、路径、关键词）
 - 黑名单 / 白名单路径
@@ -131,9 +132,9 @@ Recents。
 
 ### 4.2 首版不做
 
-- 全文内容搜索
+- 全文内容搜索（索引 + 全文检索）
 - OCR
-- 文件内容预览
+- Office / PSD / CAD / 压缩包等非 WebView2 原生格式的内容预览
 - 插件系统
 - **云同步 / OneDrive / SharePoint 集成**
 - 多设备同步
@@ -698,16 +699,17 @@ explorer.exe /select,"原始文件路径"
 
 必须支持：
 
-- `Ctrl + Alt + R`：呼出 / 隐藏（默认值，可改）
-- `Esc`：隐藏窗口
+- `Alt+Shift+Z`：呼出 / 隐藏（默认值，可改）
+- `Esc`：隐藏窗口（预览打开时仅关闭预览，再按才隐藏主窗口）
 - `Enter`：打开当前选中文件
-- `↑ / ↓`：移动选择
+- `↑ / ↓`：移动选择（预览打开时同时刷新预览）
+- `Space`：切换当前选中文件的预览窗口（见 §6.25）
 - `Ctrl + C`：复制原始文件完整路径
 - `Ctrl + Shift + C`：复制文件名
 - `Ctrl + O`：打开所在位置
 - `Ctrl + F`：聚焦搜索框
 
-P0 阶段必须实现：`Esc / Enter / ↑↓ / Ctrl+C / Ctrl+Shift+C / Ctrl+O / Ctrl+F`。
+P0 阶段必须实现：`Esc / Enter / ↑↓ / Space / Ctrl+C / Ctrl+Shift+C / Ctrl+O / Ctrl+F`。
 
 ### 6.14 排除规则
 
@@ -960,6 +962,152 @@ CREATE INDEX idx_extension   ON recent_items(extension);
 - 文件夹支持拖拽。
 - **展示各子目录（文件的直接父目录）**，不做更高级别的父目录聚合。
 - **`IsFolder=true` 的条目必须保留在索引中**（融合时不可剔除），否则 Recent Folders 视图无数据。
+
+---
+
+### 6.25 空格键快速预览
+
+#### 6.25.1 设计原则
+
+- **触发方式**：在主列表中选中任一文件行后按 `Space`，弹出预览浮层；再按 `Space` 或 `Esc` 关闭。
+- **不抢焦点**：预览窗口以 `ShowActivated = false` 显示，键盘焦点始终保留在主窗口，`↑/↓/Enter/Esc/Space` 等按键继续由主窗口响应。
+- **预热机制**：主窗口首次显示后，在后台静默初始化一个持久化的 `PreviewWindow` 实例并完成 WebView2 运行时初始化（`EnsureCoreWebView2Async`），使第一次按 `Space` 也能在 200ms 内响应。
+- **单一实例**：`PreviewWindow` 全程只有一个实例，切换文件只替换内容，不销毁重建窗口。
+- **文件夹不预览**：选中文件夹时按 Space，窗口显示"Folders cannot be previewed."。
+
+#### 6.25.2 支持的预览格式
+
+| 分类 | 扩展名 | 预览方式 |
+|---|---|---|
+| 图片 | `.png .jpg .jpeg .gif .bmp .webp .ico` | VirtualHost + `<img>` HTML |
+| SVG | `.svg` | VirtualHost + `<img>` HTML（矢量直接渲染） |
+| PDF | `.pdf` | `webView.Source = fileUri`（WebView2 内置 PDF 查看器） |
+| 纯文本 | `.txt .log .ini .conf .env` | 读取内容 → HTML 转义 → `<pre>` |
+| CSV | `.csv` | 读取 → 解析 → `<table>`（最多 500 行） |
+| 代码 | `.cs .ts .js .py .go .rs .java .cpp .c .h .json .xml .yaml .yml .html .css .sql .toml .sh .ps1` | 读取内容 → HTML 转义 → `<pre><code>` |
+| Markdown | `.md .markdown` | Markdig 转 HTML → `NavigateToString` |
+| 音频 | `.mp3 .wav .m4a .aac .flac .ogg` | VirtualHost + `<audio controls autoplay>` |
+| 视频 | `.mp4 .webm` | VirtualHost + `<video controls autoplay>` |
+
+**不支持格式**（显示"This file type cannot be previewed."）：
+
+```
+.doc .docx .xls .xlsx .ppt .pptx
+.psd .ai .dwg .dxf .sketch
+.zip .rar .7z .tar .gz
+.exe .dll .sys
+以及其他二进制格式
+```
+
+#### 6.25.3 文件大小限制
+
+| 类型 | 读取上限 | 超出行为 |
+|---|---|---|
+| 文本 / 代码 / Markdown / CSV | 5 MB | 显示 "File is too large to preview (> 5 MB). Press Enter to open." |
+| 图片 | 100 MB | 同上 |
+| PDF | 不限（WebView2 流式） | — |
+| 音视频 | 不限（浏览器流式） | — |
+
+#### 6.25.4 预览窗口布局
+
+```text
+┌─────────────────────────────────────────────────────────┐
+│  [FileIcon] filename.ext          ×                      │  ← 标题栏（28px，不抢焦点）
+│  Modified: 2026-05-01 14:23  ·  2.4 MB  ·  Images      │  ← 元信息栏（20px）
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│                  [ WebView2 内容区 ]                     │  ← 自适应填满
+│                                                         │
+├─────────────────────────────────────────────────────────┤
+│  D:\full\path\to\filename.ext          Enter to Open    │  ← 底部栏（28px）
+└─────────────────────────────────────────────────────────┘
+```
+
+窗口规格：
+- 默认尺寸：860×640，可拖动调整大小（最小 400×300）
+- 位置：优先出现在主窗口右侧（如屏幕空间不足则出现在左侧；均不足则覆盖于主窗口中央）
+- 圆角 `CornerRadius=12`，无系统边框（`WindowStyle=None`），暗色背景与主窗口视觉一致
+- **不在任务栏显示**（`ShowInTaskbar=False`）
+- **不置顶**（不强制 `Topmost`，跟随普通窗口层叠顺序）
+
+#### 6.25.5 交互行为
+
+| 操作 | 效果 |
+|---|---|
+| `Space`（主窗口） | 打开预览 / 关闭预览 |
+| `Esc`（主窗口，预览开启时） | 关闭预览（不关主窗口） |
+| `Esc`（主窗口，预览关闭时） | 隐藏主窗口 |
+| `↑ / ↓`（主窗口，预览开启时） | 切换选中文件，100ms debounce 后刷新预览内容 |
+| `Enter`（主窗口） | 用默认程序打开文件（预览开启不受影响） |
+| 滚轮（预览窗口内） | 滚动预览内容 |
+| 点击 `×`（预览窗口标题栏） | 关闭预览 |
+| 点击 "Enter to Open"（预览底部） | 用默认程序打开文件 |
+| 拖动预览窗口 | 可自由移动；位置不记忆（每次打开复位） |
+| 主窗口隐藏时 | 预览窗口同步关闭 |
+
+#### 6.25.6 HTML 模板视觉规范
+
+所有生成的 HTML 页面须遵循以下样式，与主窗口保持视觉一致：
+
+```css
+/* 暗色基底 */
+background: #191D26;
+color: #F3F4F6;
+font-family: "Segoe UI Variable Display", "Segoe UI", "Microsoft YaHei UI", sans-serif;
+
+/* 代码 / 文本区 */
+font-family: "Cascadia Code", "Consolas", monospace;
+font-size: 13px;
+line-height: 1.6;
+white-space: pre-wrap;
+word-break: break-all;
+
+/* 图片容器 */
+display: flex; justify-content: center; align-items: center;
+min-height: 100vh; background: #101216;
+
+/* 滚动条 */
+scrollbar-color: #2B313D #101216;
+scrollbar-width: thin;
+```
+
+代码预览 P0 不做语法高亮（避免引入 highlight.js 等重型库）；P1 可通过纯 CSS 样式增强可读性。
+
+#### 6.25.7 WebView2 运行时依赖处理
+
+WebView2 运行时（`Microsoft.Web.WebView2`）在 Windows 10 1903 + 最新版 Edge 的机器上通常已预装。但需处理缺失情况：
+
+- 启动时异步检查 `CoreWebView2Environment.GetAvailableBrowserVersionString()`
+- 若抛异常（未安装）：`AppSettings.PreviewEnabled` 自动置 `false`，主窗口 Space 键按下时提示：
+  ```
+  Quick preview requires WebView2. 
+  Download at: aka.ms/webview2
+  ```
+- 不因缺少 WebView2 而影响主功能的任何部分。
+
+#### 6.25.8 性能要求
+
+| 场景 | 目标 |
+|---|---|
+| 首次按 Space（WebView2 已预热） | < 200ms 显示窗口并开始渲染 |
+| 切换文件刷新预览（文本 / 代码 ≤ 1MB） | < 150ms |
+| 切换文件刷新预览（图片 ≤ 10MB） | < 300ms |
+| PDF 首屏可见 | < 500ms（WebView2 自身 PDF 渲染） |
+| WebView2 预热（后台，不阻塞主功能） | < 3s（允许后台进行，不影响启动速度） |
+
+#### 6.25.9 错误处理
+
+| 错误 | 展示内容 |
+|---|---|
+| 文件不存在 | "File not found." |
+| 无读取权限 | "Cannot read file: Access denied." |
+| 文件过大 | "File is too large to preview (> X MB). Press Enter to open." |
+| 不支持格式 | "This file type cannot be previewed. Press Enter to open." |
+| 文件夹 | "Folders cannot be previewed." |
+| WebView2 渲染超时（> 5s） | "Preview timed out. Press Enter to open." |
+| WebView2 未安装 | "Quick preview requires WebView2 runtime. Download at aka.ms/webview2" |
+
+所有错误页使用与预览窗口一致的暗色主题 HTML 模板，不弹系统对话框。
 
 ---
 
@@ -1456,6 +1604,20 @@ Recents/
 - [ ] 可设置排除扩展名 / 路径 / 关键词。
 - [ ] 可设置白名单路径。
 - [ ] 可重建索引（SQLite，无需二次确认）。
+
+### 14.8 Quick Preview (Space-bar)
+
+- [ ] 按 `Space` 呼出预览窗口，窗口包含：文件名标题、元信息（大小、时间、类型）、WebView2 渲染区、底部全路径显示。
+- [ ] 预览窗口不抢主窗口焦点（`ShowActivated="False"`）。
+- [ ] 支持图片（PNG, JPG, SVG 等）原生渲染。
+- [ ] 支持 PDF 在预览窗内流式打开。
+- [ ] 支持文本、代码文件等自动读取并转义 HTML 展示。
+- [ ] 支持 Markdown 文件实时渲染（基于 Markdig）。
+- [ ] 支持 音频、视频文件在窗内播放。
+- [ ] 支持 CSV 文件以表格形式展示（最多 500 行）。
+- [ ] 选中文件夹时按 Space 显示"Folders cannot be previewed."。
+- [ ] 切换选中项时预览内容在 150ms 内完成刷新（含 100ms 防抖）。
+- [ ] 应用启动后后台静默预热 WebView2 实例，确保初次按 Space 响应时间 < 200ms。
 
 ### 14.7 性能
 
