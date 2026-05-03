@@ -4,9 +4,11 @@ using System.Windows.Input;
 using System.Windows.Controls;
 using Recents.App.ViewModels;
 
+using Recents.App.Views;
+
 namespace Recents.App;
 
-public partial class SettingsWindow : Window
+public partial class SettingsWindow : Window, IRecentDockWindow
 {
     public SettingsWindow(SettingsViewModel viewModel)
     {
@@ -44,5 +46,11 @@ public partial class SettingsWindow : Window
         {
             vm.Hotkey = sb.ToString();
         }
+    }
+
+    private void Hyperlink_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+    {
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
+        e.Handled = true;
     }
 }

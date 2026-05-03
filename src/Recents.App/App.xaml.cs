@@ -19,6 +19,8 @@ public partial class App : WpfApp
     private readonly List<IRecentSource> _sources = new();
     private readonly List<IDisposable> _sourceSubscriptions = new();
     private readonly SemaphoreSlim _sourceRestartLock = new(1, 1);
+    
+    public static IWindowGroupFocusService WindowGroupFocusService { get; } = new WindowGroupFocusService();
 
     protected override void OnStartup(StartupEventArgs e)
     {

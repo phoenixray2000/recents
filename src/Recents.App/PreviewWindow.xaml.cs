@@ -4,11 +4,16 @@ using System.Windows.Input;
 using Microsoft.Web.WebView2.Core;
 using Recents.App.Services.Preview;
 using Serilog;
+using Recents.App.Services;
 using WpfKeyEventArgs = System.Windows.Input.KeyEventArgs;
+using WpfMouseButtonEventArgs = System.Windows.Input.MouseButtonEventArgs;
+
+using Recents.App.Views;
+using System.Threading;
 
 namespace Recents.App;
 
-public partial class PreviewWindow : Window
+public partial class PreviewWindow : Window, IRecentDockWindow
 {
     // 虚拟主机名称（随机，避免冲突）
     private const string VirtualHostName = "preview.local";
@@ -18,14 +23,30 @@ public partial class PreviewWindow : Window
     private string? _pendingPath = null;    // 在 WebView2 初始化完成前缓存的路径
     private string? _currentPath = null;
     private string? _imageDimensions = null;
+    private readonly IPreviewCommandHost _commandHost;
+    private readonly IWindowGroupFocusService _windowGroupFocusService;
+    private CancellationTokenSource? _interactionCts;
 
-    public PreviewWindow()
+    public PreviewWindow(IPreviewCommandHost commandHost, IWindowGroupFocusService windowGroupFocusService)
     {
         InitializeComponent();
+        _commandHost = commandHost;
+        _windowGroupFocusService = windowGroupFocusService;
+
         InitWebView2Async();
 
-        // 键盘：Esc 关闭，Enter 打开文件
-        PreviewKeyDown += OnPreviewKeyDown;
+        // 键盘：转发到主窗口
+        PreviewKeyDown += OnPreviewWindowKeyDown;
+
+        // 交互追踪：防止误隐藏
+        PreviewMouseDown += (s, e) => _windowGroupFocusService.IsInteractingWithRecentDockWindowGroup = true;
+        PreviewMouseUp += async (s, e) =>
+        {
+            await Task.Delay(200);
+            _windowGroupFocusService.IsInteractingWithRecentDockWindowGroup = false;
+        };
+        SizeChanged += (s, e) => MarkWindowGroupInteraction();
+        LocationChanged += (s, e) => MarkWindowGroupInteraction();
     }
 
     // ── WebView2 初始化（预热）──────────────────────────────────────────
@@ -43,6 +64,7 @@ public partial class PreviewWindow : Window
             LoadingText.Visibility = Visibility.Collapsed;
 
             WebView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
+            WebView.PreviewKeyDown += OnPreviewWindowKeyDown;
 
             // 处理预热前积压的请求
             if (_pendingPath != null)
@@ -199,10 +221,65 @@ public partial class PreviewWindow : Window
         bytes >= 1_048_576     ? $"{bytes / 1_048_576.0:F1} MB" :
                                  $"{bytes / 1024.0:F1} KB";
 
-    private void OnPreviewKeyDown(object sender, WpfKeyEventArgs e)
+    private void OnPreviewWindowKeyDown(object sender, WpfKeyEventArgs e)
     {
-        if (e.Key == Key.Escape) { ClosePreview(); e.Handled = true; }
-        if (e.Key == Key.Enter)  { OpenCurrentFile(); e.Handled = true; }
+        if (e.Key == Key.Space || e.Key == Key.Escape)
+        {
+            _commandHost.ClosePreview();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Down)
+        {
+            _commandHost.SelectNextAndRefreshPreview();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Up)
+        {
+            _commandHost.SelectPreviousAndRefreshPreview();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Enter)
+        {
+            _commandHost.OpenSelectedItem();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.C && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        {
+            _commandHost.CopySelectedItemPath();
+            e.Handled = true;
+            return;
+        }
+    }
+
+
+    private void MarkWindowGroupInteraction()
+    {
+        _windowGroupFocusService.IsInteractingWithRecentDockWindowGroup = true;
+
+        _interactionCts?.Cancel();
+        _interactionCts = new CancellationTokenSource();
+        var token = _interactionCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(300, token);
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    _windowGroupFocusService.IsInteractingWithRecentDockWindowGroup = false;
+                });
+            }
+            catch (OperationCanceledException) { }
+        }, token);
     }
 
     private void ClosePreview()
@@ -211,11 +288,7 @@ public partial class PreviewWindow : Window
         _currentPath = null;
     }
 
-    private void OpenCurrentFile()
-    {
-        if (_currentPath != null)
-            Services.FileActionService.OpenFile(_currentPath);
-    }
+    private void OpenCurrentFile() => _commandHost.OpenSelectedItem();
 
     private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {

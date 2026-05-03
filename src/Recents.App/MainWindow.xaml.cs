@@ -12,9 +12,12 @@ using Recents.App.ViewModels;
 using Recents.App.Models;
 using Serilog;
 
+using Recents.App.Views;
+using System.Threading;
+
 namespace Recents.App;
 
-public partial class MainWindow : Window
+public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
 {
     private readonly MainViewModel _viewModel;
     private readonly SettingsService _settings;
@@ -25,7 +28,9 @@ public partial class MainWindow : Window
     private SettingsWindow? _settingsWindow;
     // §6.25 预览窗口（单一持久实例）
     private PreviewWindow? _previewWindow;
-    private System.Threading.CancellationTokenSource? _previewNavCts;
+    private CancellationTokenSource? _previewNavCts;
+    private readonly IWindowGroupFocusService _windowGroupFocusService;
+    private CancellationTokenSource? _deactivateCts;
 
     public MainWindow(
         MainViewModel viewModel,
@@ -61,11 +66,11 @@ public partial class MainWindow : Window
             _viewModel.Status.UpdateHint(hasSelection, canDrag);
         };
 
-        Deactivated += (_, _) =>
-        {
-            if (_settings.Current.HideOnFocusLost && _settingsWindow is null)
-                HideWindow();
-        };
+        _windowGroupFocusService = App.WindowGroupFocusService;
+        _windowGroupFocusService.RegisterWindow(this);
+
+        Activated += OnRecentDockWindowActivated;
+        Deactivated += OnRecentDockWindowDeactivated;
 
         _viewModel.PropertyChanged += (s, e) => 
         {
@@ -75,9 +80,6 @@ public partial class MainWindow : Window
         
         UpdateWindowWidth();
 
-        // §6.25 预热 PreviewWindow（提前初始化 WebView2）
-        if (_settings.Current.PreviewEnabled)
-            _ = EnsurePreviewWindow();
 
         // §6.25: 列表选中变化时，如果预览窗口已打开，延迟 100ms 刷新
         ItemsList.SelectionChanged += (s, e) =>
@@ -194,7 +196,7 @@ public partial class MainWindow : Window
         }
 
         e.Cancel = true;
-        HideWindow();
+        HideWindowGroup();
 
         // B1. 首次关闭时显示气泡提示 (PRD §7.8)
         if (!_settings.Current.ClosedToTrayNoticeShown)
@@ -232,7 +234,7 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
-            HideWindow();
+            HideWindowGroup();
             e.Handled = true;
             return;
         }
@@ -348,7 +350,7 @@ public partial class MainWindow : Window
                 FileActionService.RevealInExplorer(vm.DisplayPath);
             else
                 FileActionService.OpenFile(vm.DisplayPath);
-            HideWindow();
+            HideWindowGroup();
         }
     }
 
@@ -434,23 +436,107 @@ public partial class MainWindow : Window
 
     public void ToggleVisibility()
     {
-        if (IsVisible && IsActive)
+        if (IsVisible)
         {
-            HideWindow();
+            if (_previewWindow?.IsVisible == true)
+            {
+                _previewWindow.Hide();
+                Activate();
+                SearchBox.Focus();
+                return;
+            }
+
+            if (IsActive)
+            {
+                HideWindowGroup();
+                return;
+            }
         }
-        else
-        {
-            ShowAndFocus();
-        }
+        
+        ShowAndFocus();
     }
 
-    public void HideWindow()
+    public void HideWindowGroup()
     {
+        _deactivateCts?.Cancel();
         SaveWindowBounds();
         if (_previewWindow?.IsVisible == true)
             _previewWindow.Hide();
         Hide();
     }
+
+    private void OnRecentDockWindowActivated(object? sender, EventArgs e)
+    {
+        _deactivateCts?.Cancel();
+    }
+
+    private async void OnRecentDockWindowDeactivated(object? sender, EventArgs e)
+    {
+        if (!_settings.Current.HideOnFocusLost)
+            return;
+
+        _deactivateCts?.Cancel();
+        _deactivateCts = new CancellationTokenSource();
+
+        try
+        {
+            bool shouldHide = await _windowGroupFocusService
+                .ShouldHideAfterDeactivatedAsync(
+                    TimeSpan.FromMilliseconds(200),
+                    _deactivateCts.Token);
+
+            if (shouldHide)
+            {
+                HideWindowGroup();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    // ── IPreviewCommandHost ────────────────────────────────────────────────
+    public void ClosePreview()
+    {
+        if (_previewWindow?.IsVisible == true)
+        {
+            _previewWindow.Hide();
+            _previewWindow.Tag = null;
+        }
+    }
+
+    public void SelectNextAndRefreshPreview()
+    {
+        if (ItemsList.Items.Count == 0) return;
+        int next = ItemsList.SelectedIndex + 1;
+        if (next < ItemsList.Items.Count)
+            ItemsList.SelectedIndex = next;
+        else
+            ItemsList.SelectedIndex = 0;
+        ItemsList.ScrollIntoView(ItemsList.SelectedItem);
+    }
+
+    public void SelectPreviousAndRefreshPreview()
+    {
+        if (ItemsList.Items.Count == 0) return;
+        int prev = ItemsList.SelectedIndex - 1;
+        if (prev >= 0)
+            ItemsList.SelectedIndex = prev;
+        else
+            ItemsList.SelectedIndex = ItemsList.Items.Count - 1;
+        ItemsList.ScrollIntoView(ItemsList.SelectedItem);
+    }
+
+    public void OpenSelectedItem() => TryOpenSelectedItem();
+
+    public void CopySelectedItemPath()
+    {
+        if (ItemsList.SelectedItem is RecentItemViewModel vm)
+        {
+            FileActionService.CopyPaths(new[] { vm.DisplayPath });
+        }
+    }
+
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
         OpenSettings();
@@ -481,8 +567,13 @@ public partial class MainWindow : Window
         {
             Owner = this
         };
+        _windowGroupFocusService.RegisterWindow(_settingsWindow);
+        _settingsWindow.Activated += OnRecentDockWindowActivated;
+        _settingsWindow.Deactivated += OnRecentDockWindowDeactivated;
+        
         _settingsWindow.Closed += (_, _) =>
         {
+            _windowGroupFocusService.UnregisterWindow(_settingsWindow);
             viewModel.SettingsChanged -= ApplySettings;
             _settingsWindow = null;
         };
@@ -553,8 +644,11 @@ public partial class MainWindow : Window
     {
         if (_previewWindow == null)
         {
-            _previewWindow = new PreviewWindow();
-            // 不设 Owner，避免关闭主窗口时连带销毁
+            _previewWindow = new PreviewWindow(this, _windowGroupFocusService);
+            _windowGroupFocusService.RegisterWindow(_previewWindow);
+
+            _previewWindow.Activated += OnRecentDockWindowActivated;
+            _previewWindow.Deactivated += OnRecentDockWindowDeactivated;
         }
         return _previewWindow;
     }
@@ -576,6 +670,7 @@ public partial class MainWindow : Window
         {
             pw.Tag = vm.DisplayPath;
             pw.PositionRelativeTo(this);
+            if (pw.Owner == null) pw.Owner = this;
             pw.Show();
             _ = pw.ShowFileAsync(vm.DisplayPath);
         }
