@@ -31,6 +31,8 @@ public class RecentItem
     public SourceKinds Sources             { get; set; } = SourceKinds.None;
     // 图标缓存键（扩展名 + isFolder + DPI，用于 FileIconService）
     public string?     IconCacheKey        { get; set; }
+    // 收藏时缓存的图标 PNG 字节（仅 favorites 表持久化，避免每次启动重新拉取）
+    public byte[]?     IconData            { get; set; }
     // 最近一次被任意来源看到的时间（用于 SQLite last_seen_time 字段）
     public DateTime    LastSeenTime        { get; set; }
 }

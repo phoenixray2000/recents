@@ -555,7 +555,7 @@
                                     <TextBlock Text="{loc:T Key=Settings_About_Tagline2}" Foreground="{DynamicResource TextSecondary}" FontSize="13" Margin="0,4,0,24"/>
 
                                     <TextBlock Text="{loc:T Key=Settings_Field_Version}" Style="{StaticResource FieldLabel}" Margin="0,0,0,4"/>
-                                    <TextBlock Text="0.1.0" Foreground="{DynamicResource TextPrimary}" Margin="0,0,0,20"/>
+                                    <TextBlock Text="{Binding Version}" Foreground="{DynamicResource TextPrimary}" Margin="0,0,0,20"/>
 
                                     <TextBlock Text="{loc:T Key=Settings_Field_Privacy}" Style="{StaticResource FieldLabel}" Margin="0,0,0,4"/>
                                     <StackPanel Margin="0,0,0,20">

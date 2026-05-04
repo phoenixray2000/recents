@@ -44,6 +44,30 @@ public partial class RecentItemViewModel : ObservableObject
     private ImageSource? _smallIcon;
     private bool _smallIconLoaded;
 
+    // 供 RecentIndexService 在图标缓存完成后立即更新 UI
+    public void SetCachedSmallIcon(byte[] pngBytes)
+    {
+        var decoded = DecodePng(pngBytes);
+        if (decoded == null) return;
+        _smallIcon = decoded;
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => OnPropertyChanged(nameof(SmallIcon)));
+    }
+
+    private static System.Windows.Media.Imaging.BitmapSource? DecodePng(byte[] data)
+    {
+        try
+        {
+            using var ms = new System.IO.MemoryStream(data);
+            var decoder = System.Windows.Media.Imaging.BitmapDecoder.Create(
+                ms, System.Windows.Media.Imaging.BitmapCreateOptions.None,
+                System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+            var frame = decoder.Frames[0];
+            frame.Freeze();
+            return frame;
+        }
+        catch { return null; }
+    }
+
     // 真实图标（SHGetFileInfo）- 异步加载防止 UI 阻塞 (Bug-6)
     public ImageSource? Icon
     {
@@ -80,7 +104,15 @@ public partial class RecentItemViewModel : ObservableObject
             if (!_smallIconLoaded)
             {
                 _smallIconLoaded = true;
-                Task.Run(() => 
+
+                // 收藏时缓存的图标：直接解码，立即显示，无需等待 Shell
+                if (Item.IconData is { Length: > 0 } cachedPng)
+                {
+                    _smallIcon = DecodePng(cachedPng);
+                    return _smallIcon;
+                }
+
+                Task.Run(() =>
                 {
                     // P1: 小图优先使用系统图标以保证清晰度，或使用小尺寸缩略图
                     var thumb = ShellService.GetThumbnail(Item.NormalizedPath, 48, 48);
@@ -123,7 +155,10 @@ public partial class RecentItemViewModel : ObservableObject
                 {
                     if (Item.Exists == ExistsState.Missing)
                     {
-                        _ = _indexService.RemoveAsync(Item.NormalizedPath);
+                        if (Item.IsFavorite)
+                            Refresh(); // 保留收藏项，仅标记缺失
+                        else
+                            _ = _indexService.RemoveAsync(Item.NormalizedPath);
                     }
                     else
                     {

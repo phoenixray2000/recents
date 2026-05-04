@@ -77,6 +77,14 @@ internal sealed class RecentRepository : IDisposable
             cmd.ExecuteNonQuery();
         }
 
+        // 迁移：给 favorites 表补 icon_png 列（旧版 DB 缺少此列）
+        cmd.CommandText = "SELECT count(*) FROM pragma_table_info('favorites') WHERE name='icon_png';";
+        if (Convert.ToInt32(cmd.ExecuteScalar()) == 0)
+        {
+            cmd.CommandText = "ALTER TABLE favorites ADD COLUMN icon_png BLOB;";
+            try { cmd.ExecuteNonQuery(); } catch { /* table may not exist yet, will be created below */ }
+        }
+
         cmd.CommandText = """
             CREATE TABLE IF NOT EXISTS recent_items (
                 normalized_path      TEXT PRIMARY KEY,
@@ -115,12 +123,21 @@ internal sealed class RecentRepository : IDisposable
                 is_hidden            INTEGER NOT NULL,
                 source_kinds         INTEGER NOT NULL,
                 icon_cache_key       TEXT,
-                last_seen_time       INTEGER NOT NULL
+                last_seen_time       INTEGER NOT NULL,
+                icon_png             BLOB
             );
 
-            -- 迁移逻辑：如果 favorites 表为空，则从 recent_items 导入旧的收藏项
-            INSERT OR IGNORE INTO favorites 
-            SELECT * FROM recent_items WHERE is_favorite = 1;
+            -- 迁移逻辑：如果 favorites 表为空，则从 recent_items 导入旧的收藏项（显式列名，兼容列数差异）
+            INSERT OR IGNORE INTO favorites
+                (normalized_path, display_name, extension, category_source,
+                 recent_time, target_modified_time, size_bytes,
+                 exists_state, is_folder, is_favorite, favorite_time, favorite_order, is_hidden,
+                 source_kinds, icon_cache_key, last_seen_time)
+            SELECT normalized_path, display_name, extension, category_source,
+                   recent_time, target_modified_time, size_bytes,
+                   exists_state, is_folder, is_favorite, favorite_time, favorite_order, is_hidden,
+                   source_kinds, icon_cache_key, last_seen_time
+            FROM recent_items WHERE is_favorite = 1;
             """;
         cmd.ExecuteNonQuery();
     }
@@ -149,7 +166,14 @@ internal sealed class RecentRepository : IDisposable
     {
         if (_conn is null) yield break;
         using var cmd = _conn.CreateCommand();
-        cmd.CommandText = "SELECT * FROM favorites ORDER BY favorite_order ASC, favorite_time DESC";
+        cmd.CommandText = """
+            SELECT normalized_path, display_name, extension, category_source,
+                   recent_time, target_modified_time, size_bytes,
+                   exists_state, is_folder, is_favorite, favorite_time, favorite_order, is_hidden,
+                   source_kinds, icon_cache_key, last_seen_time, icon_png
+            FROM favorites
+            ORDER BY favorite_order ASC, favorite_time DESC
+            """;
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
             yield return ReadItem(reader);
@@ -280,6 +304,23 @@ internal sealed class RecentRepository : IDisposable
         }
     }
 
+    public void UpdateFavoriteIcon(string normalizedPath, byte[] iconPng)
+    {
+        if (_conn is null) return;
+        try
+        {
+            using var cmd = _conn.CreateCommand();
+            cmd.CommandText = "UPDATE favorites SET icon_png = $icon WHERE normalized_path = $path;";
+            cmd.Parameters.AddWithValue("$icon", iconPng);
+            cmd.Parameters.AddWithValue("$path", normalizedPath);
+            cmd.ExecuteNonQuery();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "RecentRepository: UpdateFavoriteIcon 失败 {Path}", normalizedPath);
+        }
+    }
+
     public void DeleteFavorite(string normalizedPath)
     {
         if (_conn is null) return;
@@ -324,6 +365,7 @@ internal sealed class RecentRepository : IDisposable
         Sources              = (SourceKinds)r.GetInt32(13),
         IconCacheKey         = r.IsDBNull(14) ? null : r.GetString(14),
         LastSeenTime         = FromEpochMs(r.GetInt64(15)),
+        IconData             = r.FieldCount > 16 && !r.IsDBNull(16) ? (byte[])r.GetValue(16) : null,
     };
 
     private static long     ToEpochMs(DateTime dt) =>

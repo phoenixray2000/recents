@@ -149,26 +149,74 @@
             </Setter>
         </Style>
 
-        <!-- Specific Template for Favorites (Always Compact, Single Action) -->
         <DataTemplate x:Key="FavoritesItemTemplate" DataType="{x:Type vm:RecentItemViewModel}">
-            <Grid Margin="4,0" x:Name="ItemGrid">
+            <Grid Margin="2,0">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />   <!-- drag handle (edit mode only) -->
+                    <ColumnDefinition Width="Auto" />   <!-- 24px icon -->
+                    <ColumnDefinition Width="*" />      <!-- display name -->
+                    <ColumnDefinition Width="Auto" />   <!-- unpin button (edit mode only) -->
                 </Grid.ColumnDefinitions>
 
-                <Image Grid.Column="0" Source="{Binding SmallIcon}" Width="24" Height="24" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                <!-- drag handle: visible in edit mode only; Border avoids mouse capture so ListBox.MouseMove fires -->
+                <Border Grid.Column="0" Width="24" Height="32" Cursor="SizeNS"
+                        Background="Transparent"
+                        PreviewMouseLeftButtonDown="FavoritesDragHandle_PreviewMouseLeftButtonDown">
+                    <TextBlock Text="&#xE784;" FontFamily="Segoe Fluent Icons" FontSize="14"
+                               Foreground="{DynamicResource TextTertiary}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               IsHitTestVisible="False"/>
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DataContext.IsFavoritesEditMode,
+                                             RelativeSource={RelativeSource AncestorType=Window}}"
+                                             Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                </Border>
 
-                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis"/>
-                </StackPanel>
+                <Image Grid.Column="1" Source="{Binding SmallIcon}" Width="24" Height="24"
+                       VerticalAlignment="Center" Margin="0,0,8,0"/>
 
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Content="&#xE735;" Command="{Binding TogglePinCommand}"
-                            FontFamily="Segoe Fluent Icons" Width="32" Height="32" ToolTip="{loc:T Key=Main_Favorites_Unpin}"
-                            Style="{StaticResource ActionButtonStyle}" Foreground="{DynamicResource AccentBlue}"/>
-                </StackPanel>
+                <TextBlock Grid.Column="2" Text="{Binding DisplayName}" FontWeight="SemiBold"
+                           FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                           ToolTip="{Binding DisplayPath}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                                    <Setter Property="Foreground" Value="{DynamicResource ColorDanger}"/>
+                                    <Setter Property="TextDecorations" Value="Strikethrough"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+
+                <!-- unpin button: visible in edit mode -->
+                <Button Grid.Column="3" Content="&#xE735;" Command="{Binding TogglePinCommand}"
+                        FontFamily="Segoe Fluent Icons" Width="28" Height="32"
+                        ToolTip="{loc:T Key=Main_Favorites_Unpin}"
+                        Foreground="{DynamicResource AccentBlue}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DataContext.IsFavoritesEditMode,
+                                             RelativeSource={RelativeSource AncestorType=Window}}"
+                                             Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
             </Grid>
         </DataTemplate>
     </Window.Resources>
@@ -429,20 +477,40 @@
             </Border>
         </Grid>
 
-        <!-- Right Side Favorites Drawer -->
-        <Border Grid.Column="1" Background="{DynamicResource BgSidebar}" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource BorderMuted}" Width="280"
+        <!-- Right Side Favorites Drawer (Visibility managed in UpdateWindowWidth to avoid flicker) -->
+        <Border x:Name="FavoritesDrawer" Grid.Column="1" Background="{DynamicResource BgSidebar}" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource BorderMuted}" Width="160"
                 CornerRadius="0,8,8,0"
-                Visibility="{Binding CombinedFavoritesVisibility, Converter={StaticResource BooleanToVisibilityConverter}}">
+                Visibility="Collapsed">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="40" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <Grid Grid.Row="0" Margin="16,0,8,0">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="{loc:T Key=Main_Favorites_Header}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
-                    </StackPanel>
+                <Grid Grid.Row="0" Margin="8,0" shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                    <TextBlock Text="{loc:T Key=Main_Favorites_Header}"
+                               FontWeight="Bold" FontSize="11"
+                               Foreground="{DynamicResource TextSecondary}"
+                               VerticalAlignment="Center" Margin="8,0,0,0"/>
+                    <Button HorizontalAlignment="Right" VerticalAlignment="Center"
+                            Command="{Binding ToggleFavoritesEditModeCommand}"
+                            Style="{StaticResource ActionButtonStyle}"
+                            Width="Auto" Padding="8,4">
+                        <Button.Content>
+                            <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondary}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="{loc:T Key=Main_Favorites_Edit}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsFavoritesEditMode}" Value="True">
+                                                <Setter Property="Text" Value="{loc:T Key=Main_Favorites_Done}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Button.Content>
+                    </Button>
                 </Grid>
 
                 <ListBox x:Name="FavoritesList" Grid.Row="1" Background="Transparent" BorderThickness="0" ItemsSource="{Binding FavoritesView}" Padding="4"
@@ -453,9 +521,19 @@
                          ContextMenuOpening="ItemsList_ContextMenuOpening"
                          AllowDrop="True"
                          MouseMove="FavoritesList_MouseMove"
+                         DragOver="FavoritesList_DragOver"
+                         DragLeave="FavoritesList_DragLeave"
                          Drop="FavoritesList_Drop"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                          VirtualizingPanel.IsVirtualizing="True"
-                         VirtualizingPanel.VirtualizationMode="Recycling"/>
+                         VirtualizingPanel.VirtualizationMode="Standard"/>
+                <!-- insertion line overlay, shown during edit-mode reorder drag -->
+                <Canvas Grid.Row="1" IsHitTestVisible="False" Panel.ZIndex="10">
+                    <Border x:Name="FavoritesDragLine"
+                            Height="2" Width="{Binding ActualWidth, ElementName=FavoritesList}"
+                            Background="{DynamicResource AccentBlue}"
+                            CornerRadius="1" Visibility="Collapsed"/>
+                </Canvas>
             </Grid>
         </Border>
         </Grid>

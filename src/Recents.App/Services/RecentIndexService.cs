@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Recents.App.Models;
 using Recents.App.Services.Sources;
 using Recents.App.Utils;
@@ -68,6 +70,8 @@ public class RecentIndexService : IDisposable
             var favVMs = new List<RecentItemViewModel>();
             foreach (var item in favorites)
             {
+                // 每次启动都重新探测收藏项是否存在（不依赖上次缓存的状态）
+                item.Exists = ExistsState.Unknown;
                 favVMs.Add(new RecentItemViewModel(item, this, _probeService));
             }
 
@@ -339,6 +343,7 @@ public class RecentIndexService : IDisposable
                 vm.Refresh();
                 IndexChanged?.Invoke();
             });
+            _ = CaptureAndCacheFavoriteIconAsync(vm);
         }
         else
         {
@@ -497,6 +502,44 @@ public class RecentIndexService : IDisposable
     }
 
     #endregion
+
+    private async Task CaptureAndCacheFavoriteIconAsync(RecentItemViewModel vm)
+    {
+        try
+        {
+            var bytes = await Task.Run(() =>
+            {
+                var icon = FileIconService.GetIcon(vm.Item.NormalizedPath, vm.Item.IsFolder, false);
+                return icon is BitmapSource bs ? EncodeIconToPng(bs) : null;
+            });
+
+            if (bytes == null) return;
+
+            vm.Item.IconData = bytes;
+            _repo.UpdateFavoriteIcon(vm.Item.NormalizedPath, bytes);
+            vm.SetCachedSmallIcon(bytes);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "RecentIndexService: 图标缓存失败 {Path}", vm.Item.NormalizedPath);
+        }
+    }
+
+    private static byte[]? EncodeIconToPng(BitmapSource source)
+    {
+        try
+        {
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(source));
+            using var ms = new System.IO.MemoryStream();
+            encoder.Save(ms);
+            return ms.ToArray();
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     public void Dispose() => _repo.Dispose();
 }

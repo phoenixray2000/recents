@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -8,7 +8,7 @@ using Recents.App.Services;
 
 namespace Recents.App.ViewModels;
 
-// PRD §13 / §6.6 主视图模型
+// PRD 搂13 / 搂6.6 涓昏鍥炬ā鍨?
 public partial class MainViewModel : ObservableObject
 {
     private readonly RecentIndexService _indexService;
@@ -53,7 +53,13 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _isInitializing = true;
 
-    // UI 绑定的过滤后视图
+    [ObservableProperty]
+    private bool _isFavoritesEditMode = false;
+
+    [RelayCommand]
+    private void ToggleFavoritesEditMode() => IsFavoritesEditMode = !IsFavoritesEditMode;
+
+    // UI 缁戝畾鐨勮繃婊ゅ悗瑙嗗浘
     public ICollectionView ItemsView { get; }
     public ICollectionView FavoritesView { get; }
 
@@ -72,17 +78,17 @@ public partial class MainViewModel : ObservableObject
         ItemsView = CollectionViewSource.GetDefaultView(_indexService.Items);
         ItemsView.Filter = FilterItem;
 
-        // 收藏夹现在绑定到独立的 Favorites 集合 (PRD §6.18 / User Feedback)
+        // 鏀惰棌澶圭幇鍦ㄧ粦瀹氬埌鐙珛鐨?Favorites 闆嗗悎 (PRD 搂6.18 / User Feedback)
         FavoritesView = CollectionViewSource.GetDefaultView(_indexService.Favorites);
 
-        // 初始同步计数
+        // 鍒濆鍚屾璁℃暟
         RefreshVisibleCount();
         UpdateHasItems();
         UpdateHasFavorites();
         
         ApplySort();
 
-        // Throttled updates (PRD/User Feedback: 启动和重扫时防止 Dispatcher 淹没导致的阻塞)
+        // Throttled updates (PRD/User Feedback: 鍚姩鍜岄噸鎵椂闃叉 Dispatcher 娣规病瀵艰嚧鐨勯樆濉?
         _updateTimer = new System.Windows.Threading.DispatcherTimer(
             System.Windows.Threading.DispatcherPriority.Background,
             System.Windows.Application.Current.Dispatcher)
@@ -144,7 +150,7 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnSearchTextChanged(string value)
     {
-        // 搜索词变化时重新应用过滤
+        // 鎼滅储璇嶅彉鍖栨椂閲嶆柊搴旂敤杩囨护
         RefreshItemsView();
     }
 
@@ -189,7 +195,7 @@ public partial class MainViewModel : ObservableObject
     private void UpdateHasFavorites()
     {
         HasFavorites = _indexService.Favorites.Any();
-        // 如果变成了没有收藏，自动重置打开状态为 true（方便下次有收藏时显示）
+        // 濡傛灉鍙樻垚浜嗘病鏈夋敹钘忥紝鑷姩閲嶇疆鎵撳紑鐘舵€佷负 true锛堟柟渚夸笅娆℃湁鏀惰棌鏃舵樉绀猴級
         if (!HasFavorites) IsFavoritesDrawerOpen = true;
         OnPropertyChanged(nameof(CombinedFavoritesVisibility));
     }
@@ -200,47 +206,45 @@ public partial class MainViewModel : ObservableObject
     {
         if (obj is not RecentItemViewModel vm) return false;
 
-        // 1. 文件夹排除逻辑 (PRD §17 / User Request: 所有的文件夹不要显示在全部文件中)
-        // 当处于“全部文件”标签时，文件夹无论是否收藏都不显示
+        // 1. 鏂囦欢澶规帓闄ら€昏緫 (PRD 搂17 / User Request: 鎵€鏈夌殑鏂囦欢澶逛笉瑕佹樉绀哄湪鍏ㄩ儴鏂囦欢涓?
+        // 褰撳浜庘€濆叏閮ㄦ枃浠垛€濇爣绛炬椂锛屾枃浠跺す鏃犺鏄惁鏀惰棌閮戒笉鏄剧ず
         if (CurrentChipFilter == "All" && vm.Item.IsFolder) return false;
 
-        // 2. 收藏优先级高于其他过滤规则（系统/隐藏）
-        if (vm.Item.IsFavorite) return true;
+        // 2. 绯荤粺/闅愯棌鏂囦欢杩囨护锛堟敹钘忓す椤硅眮鍏嶆瑙勫垯锛屼絾浠嶅彈 Chip 绫诲瀷杩囨护锛?
+        if (!vm.Item.IsFavorite && ShouldHideBySystemAndHiddenRule(vm.Item, _settingsService.Current)) return false;
 
-        if (ShouldHideBySystemAndHiddenRule(vm.Item, _settingsService.Current)) return false;
-
-        // 3. 顶部 Chip 类型过滤 (ChipFilter)
+        // 3. 椤堕儴 Chip 绫诲瀷杩囨护 (ChipFilter)
         if (CurrentChipFilter == "Folders")
         {
             if (!vm.Item.IsFolder) return false;
         }
         else if (CurrentChipFilter != "All")
         {
-            // 其他类型过滤（文档、图片等），非文件夹参与
+            // 鍏朵粬绫诲瀷杩囨护锛堟枃妗ｃ€佸浘鐗囩瓑锛夛紝闈炴枃浠跺す鍙備笌
             if (vm.Item.IsFolder) return false;
             if (vm.Item.ClassificationSource != CurrentChipFilter) return false;
         }
 
 
-        // 搜索逻辑
+        // 鎼滅储閫昏緫
         if (string.IsNullOrWhiteSpace(SearchText)) return true;
 
         var tokens = SearchText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (tokens.Length == 0) return true;
 
-        // 扩展名精确匹配（首字符为 .）
+        // 鎵╁睍鍚嶇簿纭尮閰嶏紙棣栧瓧绗︿负 .锛?
         if (tokens.Length == 1 && tokens[0].StartsWith('.'))
         {
             return string.Equals(vm.Extension, tokens[0], StringComparison.OrdinalIgnoreCase);
         }
 
-        // 路径片段匹配（含 \ 或 /）
+        // 璺緞鐗囨鍖归厤锛堝惈 \ 鎴?/锛?
         if (tokens.Length == 1 && (tokens[0].Contains('\\') || tokens[0].Contains('/')))
         {
             return vm.DisplayPath.Contains(tokens[0].Replace('/', '\\'), StringComparison.OrdinalIgnoreCase);
         }
 
-        // 多 token AND 模糊匹配
+        // 澶?token AND 妯＄硦鍖归厤
         foreach (var token in tokens)
         {
             bool match = vm.DisplayName.Contains(token, StringComparison.OrdinalIgnoreCase) ||
@@ -289,3 +293,4 @@ public partial class MainViewModel : ObservableObject
         return false;
     }
 }
+

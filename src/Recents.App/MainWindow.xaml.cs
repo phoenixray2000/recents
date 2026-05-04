@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Documents;
 using WpfKeyEventArgs = System.Windows.Input.KeyEventArgs;
 using WpfMouseEventArgs = System.Windows.Input.MouseEventArgs;
 using Recents.App.Services;
@@ -35,6 +36,9 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
     private CancellationTokenSource? _actionHideCts;
     private bool _contextMenuOpen;
     private bool _pendingActionHide;
+    private RecentItemViewModel? _favoritesDragItem;
+    private FavoriteDragAdorner? _dragAdorner;
+    private AdornerLayer? _favAdornerLayer;
 
     public MainWindow(
         MainViewModel viewModel,
@@ -177,14 +181,11 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
     {
         if (WindowState == WindowState.Maximized) return;
 
-        if (_viewModel.CombinedFavoritesVisibility)
-        {
-            Width = _baseWidth + 280;
-        }
-        else
-        {
-            Width = _baseWidth;
-        }
+        bool show = _viewModel.CombinedFavoritesVisibility;
+        // Set both drawer visibility and window width in one pass to prevent a one-frame
+        // gap where the window is wide but the drawer is still collapsed (or vice versa).
+        FavoritesDrawer.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        Width = show ? _baseWidth + 160 : _baseWidth;
     }
 
     protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
@@ -407,6 +408,16 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         _dragStartPoint = e.GetPosition(null);
     }
 
+    private void FavoritesDragHandle_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.DataContext is RecentItemViewModel vm)
+        {
+            _favoritesDragItem = vm;
+            _dragStartPoint = e.GetPosition(null);
+            e.Handled = false; // let MouseMove fire
+        }
+    }
+
     private void ItemsList_MouseMove(object sender, WpfMouseEventArgs e)
     {
         if (e.LeftButton == MouseButtonState.Pressed && _dragStartPoint.HasValue && ItemsList.SelectedItems.Count > 0)
@@ -416,7 +427,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
                 Math.Abs(currentPos.Y - _dragStartPoint.Value.Y) > SystemParameters.MinimumVerticalDragDistance)
             {
                 var source = e.OriginalSource as DependencyObject;
-                if (FindParent<System.Windows.Controls.Button>(source) != null) return;
+                if (source != null && FindParent<System.Windows.Controls.Button>(source) != null) return;
 
                 var selectedVms = GetSelectedItems().Where(v => !v.IsMissing).ToList();
 
@@ -433,25 +444,44 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
 
     private void FavoritesList_MouseMove(object sender, WpfMouseEventArgs e)
     {
-        if (e.LeftButton == MouseButtonState.Pressed && _dragStartPoint.HasValue && FavoritesList.SelectedItem != null)
+        if (e.LeftButton != MouseButtonState.Pressed || !_dragStartPoint.HasValue || FavoritesList.SelectedItem == null)
+            return;
+
+        var currentPos = e.GetPosition(null);
+        if (Math.Abs(currentPos.X - _dragStartPoint.Value.X) <= SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(currentPos.Y - _dragStartPoint.Value.Y) <= SystemParameters.MinimumVerticalDragDistance)
+            return;
+
+        var source = e.OriginalSource as DependencyObject;
+
+        if (_viewModel.IsFavoritesEditMode && _favoritesDragItem != null)
         {
-            var currentPos = e.GetPosition(null);
-            if (Math.Abs(currentPos.X - _dragStartPoint.Value.X) > SystemParameters.MinimumHorizontalDragDistance ||
-                Math.Abs(currentPos.Y - _dragStartPoint.Value.Y) > SystemParameters.MinimumVerticalDragDistance)
-            {
-                var source = e.OriginalSource as DependencyObject;
-                if (FindParent<System.Windows.Controls.Button>(source) != null) return;
+            // Edit mode: internal reorder only, no external drop data
+            var vm = _favoritesDragItem;
+            _favoritesDragItem = null;
+            _dragStartPoint = null;
 
-                var selected = FavoritesList.SelectedItem as RecentItemViewModel;
-                if (selected == null || selected.IsMissing) return;
+            _favAdornerLayer = AdornerLayer.GetAdornerLayer(FavoritesList);
+            _dragAdorner = new FavoriteDragAdorner(FavoritesList, vm.DisplayName);
+            _favAdornerLayer?.Add(_dragAdorner);
 
-                // 包含内部排序标志和外部文件路径
-                var dataObj = DragDropService.CreateDataObject(new[] { selected.DisplayPath });
-                dataObj.SetData("InternalReorder", selected);
-                
-                _dragStartPoint = null; // Reset before drag
-                System.Windows.DragDrop.DoDragDrop(FavoritesList, dataObj, System.Windows.DragDropEffects.Move | System.Windows.DragDropEffects.Copy | System.Windows.DragDropEffects.Link);
-            }
+            var dataObj = new System.Windows.DataObject();
+            dataObj.SetData("InternalReorder", vm);
+            System.Windows.DragDrop.DoDragDrop(FavoritesList, dataObj, System.Windows.DragDropEffects.Move);
+
+            if (_dragAdorner != null) { _favAdornerLayer?.Remove(_dragAdorner); _dragAdorner = null; }
+            FavoritesDragLine.Visibility = Visibility.Collapsed;
+        }
+        else if (!_viewModel.IsFavoritesEditMode)
+        {
+            // Normal mode: external file drag only, no reorder
+            if (source != null && FindParent<System.Windows.Controls.Button>(source) != null) return;
+            var selected = FavoritesList.SelectedItem as RecentItemViewModel;
+            if (selected == null || selected.IsMissing) return;
+            _dragStartPoint = null;
+            var dataObj = DragDropService.CreateDataObject(new[] { selected.DisplayPath });
+            System.Windows.DragDrop.DoDragDrop(FavoritesList, dataObj,
+                System.Windows.DragDropEffects.Copy | System.Windows.DragDropEffects.Link);
         }
     }
 
@@ -489,6 +519,45 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
                 }
             }
         }
+    }
+
+    private void FavoritesList_DragOver(object sender, System.Windows.DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent("InternalReorder")) return;
+        e.Effects = System.Windows.DragDropEffects.Move;
+        e.Handled = true;
+
+        var listPos = e.GetPosition(FavoritesList);
+        UpdateInsertionLine(listPos);
+
+        var adornerPos = e.GetPosition(AdornerLayer.GetAdornerLayer(FavoritesList));
+        _dragAdorner?.UpdatePosition(adornerPos);
+    }
+
+    private void FavoritesList_DragLeave(object sender, System.Windows.DragEventArgs e)
+    {
+        FavoritesDragLine.Visibility = Visibility.Collapsed;
+    }
+
+    private void UpdateInsertionLine(System.Windows.Point posInList)
+    {
+        double insertY = 0;
+        foreach (var item in FavoritesList.Items)
+        {
+            var container = FavoritesList.ItemContainerGenerator.ContainerFromItem(item) as FrameworkElement;
+            if (container == null) continue;
+            var itemPos = container.TranslatePoint(new System.Windows.Point(0, 0), FavoritesList);
+            if (posInList.Y < itemPos.Y + container.ActualHeight / 2)
+            {
+                insertY = itemPos.Y;
+                Canvas.SetTop(FavoritesDragLine, insertY - 1);
+                FavoritesDragLine.Visibility = Visibility.Visible;
+                return;
+            }
+            insertY = itemPos.Y + container.ActualHeight;
+        }
+        Canvas.SetTop(FavoritesDragLine, insertY - 1);
+        FavoritesDragLine.Visibility = Visibility.Visible;
     }
 
     private IEnumerable<RecentItemViewModel> GetSelectedItems() =>
@@ -871,6 +940,42 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         catch
         {
             // 字体不可用时静默失败，不影响程序运行
+        }
+    }
+
+    private sealed class FavoriteDragAdorner : Adorner
+    {
+        private readonly FormattedText _text;
+        private System.Windows.Point _pos;
+
+        public FavoriteDragAdorner(UIElement adornedElement, string name)
+            : base(adornedElement)
+        {
+            IsHitTestVisible = false;
+            _text = new FormattedText(
+                name,
+                System.Globalization.CultureInfo.CurrentCulture,
+                System.Windows.FlowDirection.LeftToRight,
+                new Typeface("Segoe UI"),
+                12,
+                System.Windows.Media.Brushes.White,
+                VisualTreeHelper.GetDpi(adornedElement).PixelsPerDip);
+        }
+
+        public void UpdatePosition(System.Windows.Point adornerLayerPos)
+        {
+            _pos = adornerLayerPos;
+            InvalidateVisual();
+        }
+
+        protected override void OnRender(DrawingContext dc)
+        {
+            var rect = new Rect(_pos.X + 14, _pos.Y - 14, _text.Width + 16, _text.Height + 8);
+            dc.DrawRoundedRectangle(
+                new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromArgb(210, 37, 99, 235)),
+                null, rect, 6, 6);
+            dc.DrawText(_text, new System.Windows.Point(rect.X + 8, rect.Y + 4));
         }
     }
 }
