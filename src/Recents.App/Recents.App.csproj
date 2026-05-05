@@ -16,6 +16,12 @@
     <Version>1.0.1</Version>
     <AssemblyVersion>1.0.0.1</AssemblyVersion>
     <FileVersion>1.0.0.1</FileVersion>
+    <Authors>Recents contributors</Authors>
+    <Copyright>Copyright 2026 Recents contributors</Copyright>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/phoenixray2000/recents</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/phoenixray2000/recents</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
     <LangVersion>latest</LangVersion>
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
