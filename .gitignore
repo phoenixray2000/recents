@@ -16,6 +16,7 @@ publish_fd/
 *.swp
 
 # .NET
+.dotnet_home/
 *.dll
 *.exe
 *.pdb
