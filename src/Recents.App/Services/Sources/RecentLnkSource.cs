@@ -1,5 +1,6 @@
 using System.IO;
 using Recents.App.Models;
+using Recents.App.Services;
 using Recents.App.Utils;
 using Serilog;
 
@@ -28,7 +29,7 @@ public sealed class RecentLnkSource : IRecentSource, IDisposable
     {
         if (!_config.Enabled || !Directory.Exists(_recentDir)) return;
 
-        Log.Information("RecentLnkSource: 启动 -> {Path}", _recentDir);
+        Log.Information("RecentLnkSource: 启动 -> {Path}", LogPrivacy.Format(_recentDir));
 
         SetupWatcher();
 

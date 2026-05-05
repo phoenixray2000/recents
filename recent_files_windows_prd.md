@@ -1789,3 +1789,73 @@ P0 阶段如未实现以下能力，对应 UI **不得显示**（不得灰色禁
 - 加密容器（VeraCrypt / BitLocker To Go 未挂载）内的文件。
 - 虚拟驱动器（Dokan / WinFsp）若不支持 `FileSystemWatcher` 通知，依赖定时增量扫描。
 - 完全离线编辑且通过第三方同步工具回写、不修改 LastWriteTime 的文件。
+
+---
+
+## 19. 当前实现校准与补充设计（2026-05-04）
+
+本节记录本轮代码审核后确认的实现口径。若本节与前文早期 P0/P1 分阶段描述冲突，以本节为准；后续重构再逐步回收旧描述。
+
+### 19.1 界面结构
+
+- 当前主窗口采用标题栏、搜索框、顶部 Chip、文件列表、右侧 Favorites Drawer、底部状态栏的结构；不再要求左侧 Sidebar 作为当前版本必备结构。
+- Settings 已作为独立设置窗口实现，不要求通过左侧 Settings 导航进入。
+- Favorites 的主要入口是右侧抽屉；收藏列表支持 Edit/Done 模式、拖拽把手重排、取消固定，并持久化 `favorite_order`。
+- 当前行操作以右键菜单和行内按钮为准；三点 `More` 不是当前实现的唯一入口。
+- 当前托盘菜单以实际程序为准：`Show / Rescan / Exit` 为基础项；Settings 或 Launch at startup 只有在对应入口真实实现时才显示。
+- 视图密度切换以现有 Settings / 标题区实现为准，不强制放在排序按钮左侧。
+
+### 19.2 快捷键与窗口行为
+
+- 默认快捷键为 `Alt+Shift+Z`，搜索框 Badge 必须绑定 `HotkeyService.ActiveLabel`。
+- 热键注册失败时采用当前 `HotkeyService` 的候选链与提示策略，不再强制要求固定候选链顺序包含 `Ctrl+Alt+Space`。
+- 关闭按钮行为、首次托盘提示和托盘常驻以当前 `CloseToTray` / `ClosedToTrayNoticeShown` 设置为准。
+- 文件操作后自动隐藏使用当前事件驱动机制：`FileActionService` / `ShellService` 触发后等待主窗口失焦，另有短延迟兜底。
+
+### 19.3 数据源与文件夹
+
+- `RecentLnkSource` 解析 `.lnk` 目标文件，不展示 `.lnk` 本体。
+- `OfficeMruSource` 和 `OpenSavePidlMruSource` 是启用的数据源；两者以 5 分钟轮询补充注册表变化。
+- Office MRU 的 `RecentTime` 优先使用 MRU 字符串中的显式打开时间戳；缺失时才回退到目标文件 `LastWriteTime`。
+- `OpenSavePidlMRU` 只能解析 PIDL 得到路径；没有可靠显式打开时间时继续回退目标文件/文件夹修改时间。
+- 当前 Recent Folders 不做“父目录聚合”视图；索引中保留 `IsFolder=true` 的真实文件夹条目，`Folders` Chip 展示这些文件夹条目。
+- 主列表 `All` Chip 默认不展示文件夹；`Folders` Chip 强制展示文件夹。
+- 不存在条目的处理以当前程序为准：非收藏 Unknown 经存在性探测确认 Missing 后可从主列表移除；收藏项保留并标记缺失。
+
+### 19.4 过滤、搜索与隐藏
+
+- 搜索采用多 token AND 语义；普通 token 同时匹配文件名、路径和扩展名；以 `.` 开头的 token 精确匹配扩展名；包含 `\` 或 `/` 的 token 按路径片段匹配。
+- `ExcludedPaths`、`ExcludedExtensions`、`ExcludedKeywords`、`WhitelistedPaths` 都是有效过滤项，并统一经 `PathMatcher` 匹配。
+- 默认排除路径采用项目输出目录粒度：`bin\Debug`、`bin\Release`、`obj\Debug`、`obj\Release`，以及 Temp、Recycle Bin、`node_modules`、`.git`、`__pycache__`。
+- `Hide from list` 写入 `HiddenPaths`，不删除原文件；清理隐藏项会同步清空 `HiddenPaths`。
+- `ShowSystemAndHiddenFiles=false` 时隐藏 Hidden/System 属性目标和任意点目录路径；收藏项跳过该属性过滤，但仍受 Chip 类型过滤约束。
+
+### 19.5 UNC 与慢 IO 保护
+
+- Add Network Path 必须要求用户输入 UNC 或映射盘路径；添加前进行 3 秒可达性探测。不可达只警告，不拒绝添加。
+- UNC 来源默认 `RecentLookbackDays=7`。
+- UNC `FileSystemWatcher.Error` 或初始不可达时，已索引 UNC 来源条目标为 `Unknown`，并按指数退避重连，最长间隔 5 分钟。
+- UNC 扫描不读取远端文件大小；创建条目时只读取必要属性，慢探测有 1.5 秒上限。
+- 缩略图加载跳过 UNC 与云占位符；Shell 缩略图提取最长等待 3 秒。
+- 文件存在性探测最长等待 1.5 秒；超时保持 `Unknown`，不标记为 `Missing`。
+
+### 19.6 图标、预览与主题
+
+- 通用图标缓存在 `%LOCALAPPDATA%\Recents\icons\`，缓存键包含扩展名、是否文件夹、图标尺寸和 DPI；Settings 的 Clear icon cache 删除该目录。
+- 收藏项仍可在 SQLite favorites 表中持久化小图标 PNG，用于启动时立即显示。
+- Quick Preview 使用单一 `PreviewWindow` 实例；主窗口显示后后台预热。
+- WebView2 启动时检查 `CoreWebView2Environment.GetAvailableBrowserVersionString()`；缺失时自动将 `PreviewEnabled=false` 并保留主功能可用。
+- 选中文件夹按 Space 时显示 `Folders cannot be previewed.`，不再静默忽略。
+- PDF 预览不设置大小上限；预览格式集合采用 PRD 与当前代码的并集，包含 `.ico`、`.conf`、`.env` 以及现有代码扩展名。
+- 预览窗口颜色使用应用主题资源（如 `BgMain`、`BgTitleBar`、`TextPrimary`、`AccentBlue`、`WindowBorderBrush`），不硬编码独立配色。
+
+### 19.7 日志与配置模型
+
+- 默认 `VerboseLogging=false` 时，日志中的路径必须脱敏，仅保留根位置和文件名；仅开启 Verbose logging 才写完整路径。
+- `AppSettings` 当前包含：窗口状态、主题、语言、热键、预览开关、系统/隐藏文件开关、数据源列表、系统源开关、排除扩展、排除路径、排除关键词、白名单路径、隐藏路径、分类映射、Verbose logging、关闭到托盘提示状态。
+- `PathNormalizer`、`PathMatcher`、`FileTypeClassifier`、`RecentRepository`、`RecentIndexService` 是当前关键设计边界：路径规范化、匹配规则、分类、持久化和融合逻辑不得散落到 UI 层。
+
+### 19.8 测试口径
+
+- 当前仓库的默认验证命令是 `dotnet build Recents.sln --no-restore`。
+- 单元测试与外部 IO 抽象仍是后续质量目标，不作为当前版本已完成验收项。

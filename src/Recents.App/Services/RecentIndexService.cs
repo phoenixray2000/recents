@@ -100,7 +100,9 @@ public class RecentIndexService : IDisposable
                     continue;
                 }
 
-                if (item.IsHidden) continue;
+                if (item.IsHidden || PathMatcher.IsHiddenPath(item.NormalizedPath, _settingsService.Current.HiddenPaths)) continue;
+                if (!PathMatcher.IsWhitelisted(item.NormalizedPath, _settingsService.Current.WhitelistedPaths)) continue;
+                if (PathMatcher.ContainsExcludedKeyword(item, _settingsService.Current.ExcludedKeywords)) continue;
 
                 recVMs.Add(new RecentItemViewModel(item, this, _probeService));
             }
@@ -165,7 +167,7 @@ public class RecentIndexService : IDisposable
                     }
                     catch (Exception ex)
                     {
-                        Log.Error(ex, "MergeQueueProcessor: 处理项失败 {Path}", incoming.NormalizedPath);
+                        Log.Error(ex, "MergeQueueProcessor: 处理项失败 {Path}", LogPrivacy.Format(incoming.NormalizedPath));
                     }
                 }
             }
@@ -183,12 +185,11 @@ public class RecentIndexService : IDisposable
             return;
 
         // A7. 用户排除路径过滤
-        foreach (var excluded in _settingsService.Current.ExcludedPaths)
-        {
-            if (incoming.NormalizedPath.Contains(@"\" + excluded + @"\", StringComparison.OrdinalIgnoreCase) ||
-                incoming.NormalizedPath.EndsWith(@"\" + excluded, StringComparison.OrdinalIgnoreCase))
-                return;
-        }
+        if (!PathMatcher.IsWhitelisted(incoming.NormalizedPath, _settingsService.Current.WhitelistedPaths) ||
+            PathMatcher.IsExcludedByPath(incoming.NormalizedPath, _settingsService.Current.ExcludedPaths) ||
+            PathMatcher.IsHiddenPath(incoming.NormalizedPath, _settingsService.Current.HiddenPaths) ||
+            PathMatcher.ContainsExcludedKeyword(incoming, _settingsService.Current.ExcludedKeywords))
+            return;
 
         // A8. 排除扩展名过滤
         if (_settingsService.Current.ExcludedExtensions.Any(ext => incoming.NormalizedPath.EndsWith(ext, StringComparison.OrdinalIgnoreCase)))
@@ -431,10 +432,19 @@ public class RecentIndexService : IDisposable
 
     public async Task HideItemAsync(string normalizedPath)
     {
+        normalizedPath = PathNormalizer.Normalize(normalizedPath);
+        if (string.IsNullOrEmpty(normalizedPath)) return;
+
         await Task.Run(() =>
         {
             lock (_mergeLock)
             {
+                if (!_settingsService.Current.HiddenPaths.Any(p => string.Equals(PathNormalizer.Normalize(p), normalizedPath, StringComparison.OrdinalIgnoreCase)))
+                {
+                    _settingsService.Current.HiddenPaths.Add(normalizedPath);
+                    _settingsService.Save();
+                }
+
                 if (!_index.TryGetValue(normalizedPath, out var vm)) return;
                 vm.Item.IsHidden = true;
                 _repo.Upsert(vm.Item);
@@ -470,6 +480,8 @@ public class RecentIndexService : IDisposable
             lock (_mergeLock)
             {
                 _repo.ClearHidden();
+                _settingsService.Current.HiddenPaths.Clear();
+                _settingsService.Save();
                 var hiddenPaths = _index.Values.Where(v => v.Item.IsHidden).Select(v => v.Item.NormalizedPath).ToList();
                 foreach (var path in hiddenPaths)
                 {
@@ -486,6 +498,24 @@ public class RecentIndexService : IDisposable
     #region 内存集合维护
 
     // 按 RecentTime 倒序插入（保持集合有序）
+    public async Task MarkSourceExistsStateAsync(SourceKinds source, ExistsState state)
+    {
+        await Task.Run(() =>
+        {
+            lock (_mergeLock)
+            {
+                _repo.UpdateExistsBySource(source, state);
+                foreach (var vm in _index.Values.Where(v => v.Item.Sources.HasFlag(source)).ToList())
+                {
+                    vm.Item.Exists = state;
+                    System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => vm.Refresh());
+                }
+
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => IndexChanged?.Invoke());
+            }
+        }).ConfigureAwait(false);
+    }
+
     private void InsertSorted(RecentItemViewModel vm)
     {
         int pos = 0;
@@ -521,7 +551,7 @@ public class RecentIndexService : IDisposable
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "RecentIndexService: 图标缓存失败 {Path}", vm.Item.NormalizedPath);
+            Log.Warning(ex, "RecentIndexService: 图标缓存失败 {Path}", LogPrivacy.Format(vm.Item.NormalizedPath));
         }
     }
 

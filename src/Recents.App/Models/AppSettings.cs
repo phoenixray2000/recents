@@ -56,20 +56,14 @@ public class AppSettings
         "node_modules",
         ".git",
         "__pycache__",
-        "bin",
-        "obj",
-        ".vs",
-        ".idea",
-        ".vscode",
-        "dist",
-        "target",
-        "build",
-        "out",
-        "artifacts",
-        "publish"
+        @"bin\Debug",
+        @"bin\Release",
+        @"obj\Debug",
+        @"obj\Release"
     };
     public List<string> ExcludedKeywords  { get; set; } = new();
     public List<string> WhitelistedPaths  { get; set; } = new();
+    public List<string> HiddenPaths { get; set; } = new();
 
     // 文件类型分组（key=分类名, value=扩展名列表）
     public Dictionary<string, List<string>> ClassificationSourceGroups { get; set; } = new()

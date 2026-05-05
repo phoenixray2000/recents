@@ -42,7 +42,7 @@ internal sealed class RecentRepository : IDisposable
         var result = cmd.ExecuteScalar()?.ToString();
         if (result != "ok")
             throw new InvalidDataException($"SQLite integrity_check: {result}");
-        Log.Information("RecentRepository: 数据库打开成功 {Path}", _dbPath);
+        Log.Information("RecentRepository: 数据库打开成功 {Path}", LogPrivacy.Format(_dbPath));
     }
 
     private void TryRebuild()
@@ -56,7 +56,7 @@ internal sealed class RecentRepository : IDisposable
         {
             var bak = _dbPath + $".bak.{DateTime.Now:yyyyMMddHHmmss}";
             File.Move(_dbPath, bak, overwrite: true);
-            Log.Warning("RecentRepository: 损坏的数据库已备份到 {Bak}", bak);
+            Log.Warning("RecentRepository: 损坏的数据库已备份到 {Bak}", LogPrivacy.Format(bak));
         }
         _conn = new SqliteConnection($"Data Source={_dbPath};Pooling=False");
         _conn.Open();
@@ -249,7 +249,7 @@ internal sealed class RecentRepository : IDisposable
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "RecentRepository: UpsertToTable({Table}) 失败 {Path}", tableName, item.NormalizedPath);
+            Log.Warning(ex, "RecentRepository: UpsertToTable({Table}) 失败 {Path}", tableName, LogPrivacy.Format(item.NormalizedPath));
         }
     }
 
@@ -300,7 +300,7 @@ internal sealed class RecentRepository : IDisposable
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "RecentRepository: UpsertDiscovery 失败 {Path}", item.NormalizedPath);
+            Log.Warning(ex, "RecentRepository: UpsertDiscovery 失败 {Path}", LogPrivacy.Format(item.NormalizedPath));
         }
     }
 
@@ -317,7 +317,7 @@ internal sealed class RecentRepository : IDisposable
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "RecentRepository: UpdateFavoriteIcon 失败 {Path}", normalizedPath);
+            Log.Warning(ex, "RecentRepository: UpdateFavoriteIcon 失败 {Path}", LogPrivacy.Format(normalizedPath));
         }
     }
 
@@ -331,6 +331,20 @@ internal sealed class RecentRepository : IDisposable
     }
 
     // 清空全表（Rebuild Index 使用）
+    public void UpdateExistsBySource(SourceKinds source, ExistsState state)
+    {
+        if (_conn is null) return;
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = """
+            UPDATE recent_items
+            SET exists_state = $state
+            WHERE (source_kinds & $source) != 0;
+            """;
+        cmd.Parameters.AddWithValue("$state", (int)state);
+        cmd.Parameters.AddWithValue("$source", (int)source);
+        cmd.ExecuteNonQuery();
+    }
+
     public void DeleteAll()
     {
         if (_conn is null) return;

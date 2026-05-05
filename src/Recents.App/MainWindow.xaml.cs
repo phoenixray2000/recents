@@ -325,12 +325,12 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
 
     private void ItemsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        TryOpenItem(ItemsList.SelectedItem as RecentItemViewModel);
+        TryOpenItem(ItemsList.SelectedItem as RecentItemViewModel, IsCtrlPressed());
     }
 
     private void FavoritesList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        TryOpenItem(FavoritesList.SelectedItem as RecentItemViewModel);
+        TryOpenItem(FavoritesList.SelectedItem as RecentItemViewModel, IsCtrlPressed());
     }
 
     private void FavoritesList_ContextMenuOpening(object sender, ContextMenuEventArgs e)
@@ -380,10 +380,16 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
 
     private void TryOpenSelectedItem() => TryOpenItem(ItemsList.SelectedItem as RecentItemViewModel);
 
-    private void TryOpenItem(RecentItemViewModel? vm)
+    private void TryOpenItem(RecentItemViewModel? vm, bool openContainingFolder = false)
     {
         if (vm != null)
         {
+            if (openContainingFolder && !vm.Item.IsFolder)
+            {
+                FileActionService.OpenContainingFolder(vm.DisplayPath);
+                return;
+            }
+
             // PRD §6.24：文件夹双击用 Explorer 打开，文件用默认程序打开
             // 现在全部委托给 FileActionService.OpenFile，它会自动处理文件夹激活优化
             FileActionService.OpenFile(vm.DisplayPath);
@@ -393,6 +399,8 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
             // 确保新建的外部进程能够顺利夺取前台焦点。
         }
     }
+
+    private static bool IsCtrlPressed() => (Keyboard.Modifiers & ModifierKeys.Control) != 0;
 
     // P0 拖拽支持 (PRD §6.8)
     // B4. 批量拖拽支持 (PRD §6.8)
@@ -882,10 +890,13 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
 
     private void TogglePreview()
     {
-        if (!_settings.Current.PreviewEnabled) return;
+        if (!_settings.Current.PreviewEnabled)
+        {
+            System.Windows.MessageBox.Show("Quick preview is disabled because the WebView2 runtime is unavailable.",
+                "Preview unavailable", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
         if (ItemsList.SelectedItem is not RecentItemViewModel vm) return;
-        if (vm.Item.IsFolder) return;   // §6.25.1: 文件夹不预览
-
         var pw = EnsurePreviewWindow();
 
         if (pw.IsVisible && pw.Tag as string == vm.DisplayPath)

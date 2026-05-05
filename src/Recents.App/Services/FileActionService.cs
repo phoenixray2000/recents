@@ -31,7 +31,7 @@ public class FileActionService
         }
         catch (Exception ex)
         {
-            Serilog.Log.Error(ex, "FileActionService: open file failed {Path}", path);
+            Serilog.Log.Error(ex, "FileActionService: open file failed {Path}", LogPrivacy.Format(path));
             System.Windows.MessageBox.Show(Loc.T("Error_OpenFailed_Message", ex.Message), Loc.T("Error_OpenFailed_Title"), System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
         }
     }
@@ -56,7 +56,29 @@ public class FileActionService
         }
         catch (Exception ex)
         {
-            Serilog.Log.Error(ex, "FileActionService: 无法定位文件 {Path}", path);
+            Serilog.Log.Error(ex, "FileActionService: 无法定位文件 {Path}", LogPrivacy.Format(path));
+        }
+    }
+
+    public static void OpenContainingFolder(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return;
+
+        try
+        {
+            var folderPath = Directory.Exists(path)
+                ? path
+                : Path.GetDirectoryName(path);
+
+            if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath))
+                return;
+
+            FolderActivationHelper.OpenOrActivateFolder(folderPath);
+            ActionExecuted?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "FileActionService: open containing folder failed {Path}", LogPrivacy.Format(path));
         }
     }
 

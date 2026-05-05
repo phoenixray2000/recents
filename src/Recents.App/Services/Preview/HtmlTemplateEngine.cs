@@ -305,6 +305,20 @@ public static class HtmlTemplateEngine
         </body></html>
         """;
 
+    public static string RenderFolder(string fileName) => $$"""
+        <!DOCTYPE html><html><head>{{BaseStyle}}
+        <style>body{display:flex;align-items:center;justify-content:center;
+        min-height:100vh;flex-direction:column;gap:8px;}
+        .icon{font-family:"Segoe Fluent Icons";font-size:48px;color:var(--muted);}
+        .msg{color:var(--muted);font-size:14px;}
+        .hint{color:var(--muted);font-size:12px;margin-top:4px;}
+        </style></head><body>
+        <div class="icon">&#xE8B7;</div>
+        <div class="msg">Folders cannot be previewed.</div>
+        <div class="hint">Press <b>Enter</b> to open in Explorer.</div>
+        </body></html>
+        """;
+
     public static string RenderTooLarge(string fileName, long size) => $$"""
         <!DOCTYPE html><html><head>{{BaseStyle}}
         <style>body{display:flex;align-items:center;justify-content:center;

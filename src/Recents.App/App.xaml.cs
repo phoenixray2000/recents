@@ -1,4 +1,5 @@
 using System.Windows;
+using Microsoft.Web.WebView2.Core;
 using Recents.App.Models;
 using Recents.App.Services;
 using Recents.App.Services.Sources;
@@ -48,6 +49,8 @@ public partial class App : WpfApp
 
             _settings = new SettingsService();
             _settings.Load();
+            LogPrivacy.VerboseLogging = _settings.Current.VerboseLogging;
+            DisablePreviewIfWebView2Missing();
 
             // 应用主题（必须在创建任何窗口前注入，避免闪烁）
             ThemeManager.Instance.Initialize(_settings.Current.Theme);
@@ -181,6 +184,22 @@ public partial class App : WpfApp
     private bool IsSystemSourceEnabled(SourceKinds kind) =>
         _settings.Current.SystemSources.FirstOrDefault(s => s.Kind == kind)?.Enabled ?? true;
 
+    private void DisablePreviewIfWebView2Missing()
+    {
+        if (!_settings.Current.PreviewEnabled) return;
+
+        try
+        {
+            _ = CoreWebView2Environment.GetAvailableBrowserVersionString();
+        }
+        catch (Exception ex)
+        {
+            _settings.Current.PreviewEnabled = false;
+            _settings.Save();
+            Log.Warning(ex, "WebView2 Runtime unavailable; preview disabled");
+        }
+    }
+
     private class RecentChangeObserver : IObserver<RecentChange>
     {
         private readonly RecentIndexService _index;
@@ -196,6 +215,8 @@ public partial class App : WpfApp
                 await _index.MergeAsync(change.Item);
             else if (change.Kind == RecentChangeKind.Removed)
                 await _index.RemoveAsync(change.Item.NormalizedPath);
+            else if (change.Kind == RecentChangeKind.SourceUnavailable)
+                await _index.MarkSourceExistsStateAsync(change.Item.Sources, ExistsState.Unknown);
         }
     }
 

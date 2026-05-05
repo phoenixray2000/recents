@@ -115,7 +115,7 @@ public partial class PreviewWindow : Window, IRecentDockWindow
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Preview prepare failed for {Path}", path);
+            Log.Warning(ex, "Preview prepare failed for {Path}", LogPrivacy.Format(path));
             doc = new PreviewDocument(PreviewKind.Unsupported,
                       HtmlTemplateEngine.RenderUnsupported(Path.GetFileName(path), Path.GetExtension(path)),
                       null, Path.GetFileName(path), path);

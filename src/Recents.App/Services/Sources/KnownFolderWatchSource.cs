@@ -1,6 +1,7 @@
 using System.IO;
 using System.Runtime.InteropServices;
 using Recents.App.Models;
+using Recents.App.Services;
 using Recents.App.Utils;
 using Serilog;
 
@@ -35,7 +36,7 @@ public sealed class KnownFolderWatchSource : IRecentSource, IDisposable
             return;
         }
 
-        Log.Information("KnownFolderWatch: 启动 {Name} -> {Path}", _config.DisplayName, _resolvedPath);
+        Log.Information("KnownFolderWatch: 启动 {Name} -> {Path}", _config.DisplayName, LogPrivacy.Format(_resolvedPath));
 
         // 1. 设置 watcher
         SetupWatcher(_resolvedPath);
@@ -101,7 +102,7 @@ public sealed class KnownFolderWatchSource : IRecentSource, IDisposable
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "KnownFolderWatch: 扫描目录异常 {Path}", path);
+            Log.Warning(ex, "KnownFolderWatch: 扫描目录异常 {Path}", LogPrivacy.Format(path));
         }
     }
 

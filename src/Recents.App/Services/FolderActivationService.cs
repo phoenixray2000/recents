@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace Recents.App.Services;
 
@@ -17,13 +18,21 @@ public static class FolderActivationHelper
 
         var target = NormalizeFolderPath(folderPath);
 
+        if (TryActivateOpenExplorerFolder(target))
+            return true;
+
+        return OpenFolderInExplorer(folderPath, target);
+    }
+
+    private static bool TryActivateOpenExplorerFolder(string target)
+    {
         try
         {
             var shellAppType = Type.GetTypeFromProgID("Shell.Application");
             if (shellAppType != null)
             {
                 dynamic? shell = Activator.CreateInstance(shellAppType);
-                dynamic windows = shell?.Windows();
+                dynamic? windows = shell?.Windows();
 
                 if (windows != null)
                 {
@@ -61,10 +70,10 @@ public static class FolderActivationHelper
             Serilog.Log.Warning(ex, "FolderActivationHelper: ShellWindows enumeration failed.");
         }
 
-        return OpenFolderInExplorer(folderPath);
+        return false;
     }
 
-    private static bool OpenFolderInExplorer(string folderPath)
+    private static bool OpenFolderInExplorer(string folderPath, string target)
     {
         try
         {
@@ -82,11 +91,18 @@ public static class FolderActivationHelper
                 UseShellExecute = true
             });
 
+            for (var attempt = 0; attempt < 20; attempt++)
+            {
+                Thread.Sleep(75);
+                if (TryActivateOpenExplorerFolder(target))
+                    break;
+            }
+
             return true;
         }
         catch (Exception ex)
         {
-            Serilog.Log.Error(ex, "FolderActivationHelper: OpenFolderInExplorer failed {Path}", folderPath);
+            Serilog.Log.Error(ex, "FolderActivationHelper: OpenFolderInExplorer failed {Path}", LogPrivacy.Format(folderPath));
             return false;
         }
     }

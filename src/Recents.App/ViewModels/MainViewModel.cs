@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Recents.App.Models;
 using Recents.App.Services;
+using Recents.App.Utils;
 
 namespace Recents.App.ViewModels;
 
@@ -226,33 +227,7 @@ public partial class MainViewModel : ObservableObject
         }
 
 
-        // 鎼滅储閫昏緫
-        if (string.IsNullOrWhiteSpace(SearchText)) return true;
-
-        var tokens = SearchText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (tokens.Length == 0) return true;
-
-        // 鎵╁睍鍚嶇簿纭尮閰嶏紙棣栧瓧绗︿负 .锛?
-        if (tokens.Length == 1 && tokens[0].StartsWith('.'))
-        {
-            return string.Equals(vm.Extension, tokens[0], StringComparison.OrdinalIgnoreCase);
-        }
-
-        // 璺緞鐗囨鍖归厤锛堝惈 \ 鎴?/锛?
-        if (tokens.Length == 1 && (tokens[0].Contains('\\') || tokens[0].Contains('/')))
-        {
-            return vm.DisplayPath.Contains(tokens[0].Replace('/', '\\'), StringComparison.OrdinalIgnoreCase);
-        }
-
-        // 澶?token AND 妯＄硦鍖归厤
-        foreach (var token in tokens)
-        {
-            bool match = vm.DisplayName.Contains(token, StringComparison.OrdinalIgnoreCase) ||
-                         vm.DisplayPath.Contains(token, StringComparison.OrdinalIgnoreCase);
-            if (!match) return false;
-        }
-
-        return true;
+        return PathMatcher.MatchesSearch(vm.Item, SearchText);
     }
     public void UpdateHotkey(string hotkey)
     {

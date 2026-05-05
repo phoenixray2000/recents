@@ -20,20 +20,22 @@ public class ExistsProbeService
     {
         if (item.Exists != ExistsState.Unknown) return;
 
-        await Task.Run(() =>
+        try
         {
-            try
+            var probe = Task.Run(() => File.Exists(item.NormalizedPath) || Directory.Exists(item.NormalizedPath));
+            var completed = await Task.WhenAny(probe, Task.Delay(TimeSpan.FromMilliseconds(1500))).ConfigureAwait(false);
+            if (completed != probe)
             {
-                var exists = File.Exists(item.NormalizedPath) || Directory.Exists(item.NormalizedPath);
-                item.Exists = exists ? ExistsState.Found : ExistsState.Missing;
-                
-                // Note: Updating DB and notifying UI is handled by RecentIndexService or via property updates
-                // However, item itself is just a model. We need to notify the VM.
+                item.Exists = ExistsState.Unknown;
+                return;
             }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "ExistsProbeService: 探测失败 {Path}", item.NormalizedPath);
-            }
-        });
+
+            item.Exists = await probe.ConfigureAwait(false) ? ExistsState.Found : ExistsState.Missing;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "ExistsProbeService: 探测失败 {Path}", LogPrivacy.Format(item.NormalizedPath));
+            item.Exists = ExistsState.Unknown;
+        }
     }
 }

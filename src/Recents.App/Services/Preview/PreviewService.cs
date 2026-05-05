@@ -40,6 +40,7 @@ public static class PreviewService
         return kind switch
         {
             PreviewKind.MissingFile  => new(kind, HtmlTemplateEngine.RenderMissing(path), null, title, path),
+            PreviewKind.Folder       => new(kind, HtmlTemplateEngine.RenderFolder(fileName), null, title, path),
             PreviewKind.TooLarge     => new(kind, HtmlTemplateEngine.RenderTooLarge(fileName, size), null, title, path),
             PreviewKind.Unsupported  => new(kind, HtmlTemplateEngine.RenderUnsupported(fileName, ext), null, title, path),
 

@@ -1,5 +1,6 @@
 using System.IO;
 using Recents.App.Models;
+using Recents.App.Services;
 using Recents.App.Utils;
 using Serilog;
 
@@ -29,11 +30,11 @@ public sealed class UserFolderWatchSource : IRecentSource, IDisposable
         var path = _config.Path;
         if (!Directory.Exists(path))
         {
-            Log.Warning("UserFolderWatch: 目录不存在，跳过 {Path}", path);
+            Log.Warning("UserFolderWatch: 目录不存在，跳过 {Path}", LogPrivacy.Format(path));
             return;
         }
 
-        Log.Information("UserFolderWatch: 启动 {Name} -> {Path}", _config.DisplayName, path);
+        Log.Information("UserFolderWatch: 启动 {Name} -> {Path}", _config.DisplayName, LogPrivacy.Format(path));
 
         SetupWatcher(path);
 
@@ -89,7 +90,7 @@ public sealed class UserFolderWatchSource : IRecentSource, IDisposable
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "UserFolderWatch: 扫描异常 {Path}", path);
+            Log.Warning(ex, "UserFolderWatch: 扫描异常 {Path}", LogPrivacy.Format(path));
         }
     }
 
@@ -108,7 +109,7 @@ public sealed class UserFolderWatchSource : IRecentSource, IDisposable
 
     private void HandleError(Exception ex, string path)
     {
-        Log.Error(ex, "UserFolderWatch: Watcher Error，触发重扫 {Path}", path);
+        Log.Error(ex, "UserFolderWatch: Watcher Error，触发重扫 {Path}", LogPrivacy.Format(path));
         Task.Run(() =>
         {
             var cutoff = DateTime.Now.AddDays(-_config.RecentLookbackDays);

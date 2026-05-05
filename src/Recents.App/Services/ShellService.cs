@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Interop;
 using System.Diagnostics;
 using System.IO;
+using Recents.App.Utils;
 
 namespace Recents.App.Services;
 
@@ -70,7 +71,7 @@ public static class ShellService
             }
             catch (Exception ex)
             {
-                Serilog.Log.Error(ex, "ShellService: Failed to show Open With dialog for {Path}", path);
+                Serilog.Log.Error(ex, "ShellService: Failed to show Open With dialog for {Path}", LogPrivacy.Format(path));
             }
             finally
             {
@@ -124,9 +125,21 @@ public static class ShellService
 
     public static BitmapSource? GetThumbnail(string path, int width, int height)
     {
-        if (string.IsNullOrEmpty(path) || !File.Exists(path) && !Directory.Exists(path))
+        if (string.IsNullOrEmpty(path) ||
+            path.StartsWith(@"\\", StringComparison.Ordinal) ||
+            CloudPlaceholderDetector.IsPlaceholder(path))
             return null;
 
+        var existsTask = Task.Run(() => File.Exists(path) || Directory.Exists(path));
+        if (!existsTask.Wait(TimeSpan.FromMilliseconds(1500)) || !existsTask.Result)
+            return null;
+
+        var thumbnailTask = Task.Run(() => GetThumbnailCore(path, width, height));
+        return thumbnailTask.Wait(TimeSpan.FromSeconds(3)) ? thumbnailTask.Result : null;
+    }
+
+    private static BitmapSource? GetThumbnailCore(string path, int width, int height)
+    {
         try
         {
             Guid guid = new Guid("bcc18b79-ba16-4aec-af64-3c41514a595e"); // IShellItemImageFactory

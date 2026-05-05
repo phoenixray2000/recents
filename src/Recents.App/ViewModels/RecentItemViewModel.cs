@@ -30,9 +30,11 @@ public partial class RecentItemViewModel : ObservableObject
         Item.RecentTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
 
     // 大小格式化
-    public string SizeDisplay => Item.SizeBytes.HasValue
-        ? FormatBytes(Item.SizeBytes.Value)
-        : string.Empty;
+    public string SizeDisplay => Item.IsFolder
+        ? "Folder"
+        : Item.SizeBytes.HasValue
+            ? FormatBytes(Item.SizeBytes.Value)
+            : "Unknown size";
 
     // 存在状态
     public bool   IsMissing  => Item.Exists == ExistsState.Missing;

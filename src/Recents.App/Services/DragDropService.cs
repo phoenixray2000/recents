@@ -46,12 +46,12 @@ public class DragDropService
                 var hr = SHParseDisplayName(paths[i], IntPtr.Zero, out pidlPtrs[i], 0, out _);
                 if (hr != 0)
                 {
-                    Log.Warning("DragDropService: SHParseDisplayName failed {Path}, hr={HResult}", paths[i], hr);
+                    Log.Warning("DragDropService: SHParseDisplayName failed {Path}, hr={HResult}", LogPrivacy.Format(paths[i]), hr);
                     return;
                 }
                 if (pidlPtrs[i] == IntPtr.Zero)
                 {
-                    Log.Warning("DragDropService: SHParseDisplayName returned null PIDL {Path}", paths[i]);
+                    Log.Warning("DragDropService: SHParseDisplayName returned null PIDL {Path}", LogPrivacy.Format(paths[i]));
                     return; // 任意一个失败则放弃整个 ShellIDList
                 }
                 // ILGetSize 返回 PIDL 完整字节数（含末尾2字节 null 终止符）

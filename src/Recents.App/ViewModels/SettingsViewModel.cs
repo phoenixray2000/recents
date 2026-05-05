@@ -8,6 +8,7 @@ using Recents.App.Models;
 using Recents.App.Services;
 using Recents.App.Services.Sources;
 using Forms = System.Windows.Forms;
+using Interaction = Microsoft.VisualBasic.Interaction;
 using ThemeMode = Recents.App.Models.AppSettings.ThemeMode;
 
 namespace Recents.App.ViewModels;
@@ -208,17 +209,48 @@ public partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private void AddNetworkPath()
     {
+        var path = Interaction.InputBox("Enter a UNC or mapped network path.", Loc.T("Settings_Btn_AddNetworkPath"), @"\\server\share");
+        if (string.IsNullOrWhiteSpace(path)) return;
+
+        path = path.Trim();
+        if (!path.StartsWith(@"\\", StringComparison.Ordinal) && !Path.IsPathRooted(path))
+        {
+            Forms.MessageBox.Show("Enter a UNC path like \\\\server\\share or a mapped drive path.", "Invalid network path",
+                Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Warning);
+            return;
+        }
+
+        var reachable = ProbeDirectory(path, TimeSpan.FromSeconds(3));
+        if (reachable != true)
+        {
+            Forms.MessageBox.Show("This network path did not respond within 3 seconds. It will be added and retried in the background.",
+                "Network path unavailable", Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Warning);
+        }
+
         var source = new SourceConfig
         {
             Kind = SourceKinds.UncFolderWatch,
-            Path = @"\\server\share",
-            DisplayName = Loc.T("Settings_NetworkPath_Default"),
-            Enabled = false,
-            RecentLookbackDays = 30
+            Path = path,
+            DisplayName = Path.GetFileName(path.TrimEnd('\\')) is { Length: > 0 } name ? name : path,
+            Enabled = true,
+            RecentLookbackDays = 7
         };
         _settings.Current.Sources.Add(source);
         CustomSources.Add(source);
         _ = SaveSourcesAndRescanAsync();
+    }
+
+    private static bool? ProbeDirectory(string path, TimeSpan timeout)
+    {
+        try
+        {
+            var task = Task.Run(() => Directory.Exists(path));
+            return task.Wait(timeout) ? task.Result : null;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     [RelayCommand]

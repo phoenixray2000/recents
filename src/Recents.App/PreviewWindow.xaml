@@ -14,12 +14,12 @@
 
     <!-- 外层阴影容器 -->
     <Border Margin="8"
-            Background="#1e1e2e"
+            Background="{DynamicResource BgMain}"
             CornerRadius="10"
-            BorderBrush="#3a3a5c"
+            BorderBrush="{DynamicResource WindowBorderBrush}"
             BorderThickness="1">
         <Border.Effect>
-            <DropShadowEffect BlurRadius="20" ShadowDepth="0" Opacity="0.6" Color="#000000"/>
+            <DropShadowEffect BlurRadius="20" ShadowDepth="0" Opacity="0.6" Color="{DynamicResource WindowShadowColor}"/>
         </Border.Effect>
 
         <Grid>
@@ -31,7 +31,7 @@
 
             <!-- ── 标题栏（可拖动）──────────────────────────── -->
             <Border Grid.Row="0"
-                    Background="#252535"
+                    Background="{DynamicResource BgTitleBar}"
                     CornerRadius="10,10,0,0"
                     MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
                 <Grid Margin="12,0">
@@ -47,7 +47,7 @@
                                FontFamily="Segoe Fluent Icons"
                                FontSize="16"
                                Text="&#xE8A5;"
-                               Foreground="#89b4fa"
+                               Foreground="{DynamicResource AccentBlue}"
                                VerticalAlignment="Center"
                                Margin="0,0,8,0"/>
 
@@ -55,7 +55,7 @@
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="FileNameText"
                                    Text="—"
-                                   Foreground="#cdd6f4"
+                                   Foreground="{DynamicResource TextPrimary}"
                                    FontSize="13"
                                    FontWeight="SemiBold"
                                    TextTrimming="CharacterEllipsis"/>
@@ -67,7 +67,7 @@
                             Content="&#xE8BB;"
                             FontFamily="Segoe Fluent Icons"
                             FontSize="14"
-                            Foreground="#6c7086"
+                            Foreground="{DynamicResource TextSecondary}"
                             Background="Transparent"
                             BorderThickness="0"
                             Padding="6,4"
@@ -83,7 +83,7 @@
                                             </Border>
                                             <ControlTemplate.Triggers>
                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter TargetName="bd" Property="Background" Value="#c0392b"/>
+                                                    <Setter TargetName="bd" Property="Background" Value="{DynamicResource ColorDanger}"/>
                                                     <Setter Property="Foreground" Value="White"/>
                                                 </Trigger>
                                             </ControlTemplate.Triggers>
@@ -101,7 +101,7 @@
                 <!-- 加载中指示器（WebView2 初始化时可见）-->
                 <TextBlock x:Name="LoadingText"
                            Text="Loading…"
-                           Foreground="#6c7086"
+                           Foreground="{DynamicResource TextSecondary}"
                            FontSize="14"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center"
@@ -114,9 +114,9 @@
 
             <!-- ── 底部状态栏 ──────────────────────────────────── -->
             <Border Grid.Row="2"
-                    Background="#252535"
+                    Background="{DynamicResource BgTitleBar}"
                     CornerRadius="0,0,10,10"
-                    BorderBrush="#3a3a5c"
+                    BorderBrush="{DynamicResource WindowBorderBrush}"
                     BorderThickness="0,1,0,0">
                 <Grid Margin="12,0">
                     <Grid.ColumnDefinitions>
@@ -126,19 +126,19 @@
                     
                     <TextBlock x:Name="FilePathText"
                                Grid.Column="0"
-                               Foreground="#6c7086"
+                               Foreground="{DynamicResource TextSecondary}"
                                FontSize="11"
                                VerticalAlignment="Center"
                                TextTrimming="CharacterEllipsis"/>
                     
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
                         <TextBlock x:Name="FileMetaText"
-                                   Foreground="#89b4fa"
+                                   Foreground="{DynamicResource AccentBlue}"
                                    FontSize="11"
                                    VerticalAlignment="Center"/>
-                        <TextBlock Text="  |  " Foreground="#4a4a6a" FontSize="11" VerticalAlignment="Center" Margin="8,0"/>
+                        <TextBlock Text="  |  " Foreground="{DynamicResource BorderMuted}" FontSize="11" VerticalAlignment="Center" Margin="8,0"/>
                         <TextBlock Text="Enter to Open"
-                                   Foreground="#4a4a6a"
+                                   Foreground="{DynamicResource TextTertiary}"
                                    FontSize="11"
                                    VerticalAlignment="Center"/>
                     </StackPanel>

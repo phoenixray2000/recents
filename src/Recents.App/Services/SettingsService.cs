@@ -89,7 +89,7 @@ public class SettingsService
             var ts      = DateTime.Now.ToString("yyyyMMddHHmmss");
             var bakPath = _settingsPath + $".bak.{ts}";
             File.Copy(_settingsPath, bakPath, overwrite: true);
-            Log.Warning("SettingsService: 损坏文件已备份到 {BakPath}", bakPath);
+            Log.Warning("SettingsService: 损坏文件已备份到 {BakPath}", LogPrivacy.Format(bakPath));
         }
         catch (Exception ex)
         {

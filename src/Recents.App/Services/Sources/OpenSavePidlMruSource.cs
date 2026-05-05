@@ -1,98 +1,119 @@
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
 using Microsoft.Win32;
 using Recents.App.Models;
 using Recents.App.Utils;
 using Serilog;
-using System.IO;
-using System.Runtime.InteropServices;
-using System.Text;
 
 namespace Recents.App.Services.Sources;
 
-// PRD §6.10 OpenSavePidlMRU (Registry) 数据源。
 public class OpenSavePidlMruSource : IRecentSource, IDisposable
 {
+    private static readonly TimeSpan PollInterval = TimeSpan.FromMinutes(5);
+
     private readonly AppSettings _settings;
     private readonly SimpleSubject<RecentChange> _subject = new();
+    private readonly CancellationTokenSource _pollCts = new();
+    private int _pollingStarted;
+
     public string Name => "Open/Save Dialog MRU";
     public SourceKinds Kind => SourceKinds.OpenSavePidlMru;
-    
+
     public OpenSavePidlMruSource(AppSettings settings)
     {
         _settings = settings;
     }
 
-    public async Task InitialScanAsync(CancellationToken ct)
+    public Task InitialScanAsync(CancellationToken ct) => Task.Run(() => Scan(ct), ct);
+
+    public IObservable<RecentChange> Watch()
     {
-        await Task.Run(async () =>
-        {
-            var basePath = @"Software\Microsoft\Windows\CurrentVersion\Explorer\ComDlg32\OpenSavePidlMRU";
-            var rootKey = Registry.CurrentUser.OpenSubKey(basePath);
-            if (rootKey == null) return;
+        if (Interlocked.Exchange(ref _pollingStarted, 1) == 0)
+            _ = Task.Run(() => PollLoopAsync(_pollCts.Token));
 
-            foreach (var extension in rootKey.GetSubKeyNames())
-            {
-                if (ct.IsCancellationRequested) break;
-                var extKey = rootKey.OpenSubKey(extension);
-                if (extKey == null) continue;
-
-                foreach (var valueName in extKey.GetValueNames())
-                {
-                    if (ct.IsCancellationRequested) break;
-                    if (int.TryParse(valueName, out _))
-                    {
-                        var data = extKey.GetValue(valueName) as byte[];
-                        if (data == null || data.Length == 0) continue;
-
-                        var path = GetPathFromPidl(data);
-                        if (string.IsNullOrEmpty(path)) continue;
-
-                        var ext = Path.GetExtension(path).ToLowerInvariant();
-                        var isDir = Directory.Exists(path);
-                        var exists = isDir ? Directory.Exists(path) : File.Exists(path);
-                        if (!exists) continue; // A9. 不存在的文件不显示
-
-                        var lwt = File.GetLastWriteTime(path);
-                        var item = new RecentItem
-                        {
-                            NormalizedPath = PathNormalizer.Normalize(path),
-                            DisplayName = Path.GetFileName(path),
-                            Extension = ext,
-                            ClassificationSource = FileTypeClassifier.Classify(ext, isDir, _settings.ClassificationSourceGroups),
-                            RecentTime = lwt,
-                            Sources = SourceKinds.OpenSavePidlMru,
-                            IsFolder = isDir,
-                            Exists = ExistsState.Found
-                        };
-                        _subject.OnNext(new RecentChange(RecentChangeKind.Added, item));
-                    }
-                }
-            }
-        }, ct).ConfigureAwait(false);
+        return _subject;
     }
 
-    public IObservable<RecentChange> Watch() => _subject;
+    private async Task PollLoopAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(PollInterval, ct).ConfigureAwait(false);
+                Scan(ct);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+        }
+    }
+
+    private void Scan(CancellationToken ct)
+    {
+        const string basePath = @"Software\Microsoft\Windows\CurrentVersion\Explorer\ComDlg32\OpenSavePidlMRU";
+        using var rootKey = Registry.CurrentUser.OpenSubKey(basePath);
+        if (rootKey == null) return;
+
+        foreach (var extension in rootKey.GetSubKeyNames())
+        {
+            if (ct.IsCancellationRequested) break;
+            using var extKey = rootKey.OpenSubKey(extension);
+            if (extKey == null) continue;
+
+            foreach (var valueName in extKey.GetValueNames())
+            {
+                if (ct.IsCancellationRequested) break;
+                if (!int.TryParse(valueName, out _)) continue;
+
+                var data = extKey.GetValue(valueName) as byte[];
+                if (data == null || data.Length == 0) continue;
+
+                var path = GetPathFromPidl(data);
+                if (string.IsNullOrEmpty(path)) continue;
+
+                var isDir = Directory.Exists(path);
+                var exists = isDir || File.Exists(path);
+                if (!exists) continue;
+
+                var ext = Path.GetExtension(path).ToLowerInvariant();
+                var lwt = isDir ? Directory.GetLastWriteTime(path) : File.GetLastWriteTime(path);
+                var item = new RecentItem
+                {
+                    NormalizedPath = PathNormalizer.Normalize(path),
+                    DisplayName = Path.GetFileName(path),
+                    Extension = ext,
+                    ClassificationSource = FileTypeClassifier.Classify(ext, isDir, _settings.ClassificationSourceGroups),
+                    RecentTime = lwt,
+                    Sources = Kind,
+                    IsFolder = isDir,
+                    Exists = ExistsState.Found
+                };
+                _subject.OnNext(new RecentChange(RecentChangeKind.Added, item));
+            }
+        }
+    }
 
     private string? GetPathFromPidl(byte[] pidlData)
     {
-        IntPtr pidl = Marshal.AllocCoTaskMem(pidlData.Length);
+        var pidl = Marshal.AllocCoTaskMem(pidlData.Length);
         try
         {
             Marshal.Copy(pidlData, 0, pidl, pidlData.Length);
-            StringBuilder path = new StringBuilder(260);
-            if (SHGetPathFromIDList(pidl, path))
-            {
-                return path.ToString();
-            }
+            var path = new StringBuilder(32767);
+            return SHGetPathFromIDList(pidl, path) ? path.ToString() : null;
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "OpenSavePidlMruSource: PIDL 解析失败");
+            Log.Warning(ex, "OpenSavePidlMruSource: PIDL parse failed");
+            return null;
         }
         finally
         {
             Marshal.FreeCoTaskMem(pidl);
         }
-        return null;
     }
 
     [DllImport("shell32.dll", CharSet = CharSet.Auto)]
@@ -100,6 +121,8 @@ public class OpenSavePidlMruSource : IRecentSource, IDisposable
 
     public void Dispose()
     {
+        _pollCts.Cancel();
+        _pollCts.Dispose();
         _subject.OnCompleted();
         _subject.Dispose();
     }

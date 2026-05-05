@@ -1,5 +1,5 @@
-using System.Drawing;
 using System.Runtime.InteropServices;
+using System.IO;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -7,9 +7,13 @@ using System.Windows.Media.Imaging;
 
 namespace Recents.App.Services;
 
-// PRD §6.6 图标提取工具
 public static class FileIconService
 {
+    private static readonly string CacheDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "Recents",
+        "icons");
+
     [StructLayout(LayoutKind.Sequential)]
     public struct SHFILEINFO
     {
@@ -36,34 +40,116 @@ public static class FileIconService
 
     public static ImageSource? GetIcon(string path, bool isFolder, bool isLarge = true)
     {
-        var shinfo = new SHFILEINFO();
-        uint flags = SHGFI_ICON | (isLarge ? SHGFI_LARGEICON : SHGFI_SMALLICON);
-        
-        // 如果文件不存在，使用属性获取默认图标
-        if (!System.IO.File.Exists(path) && !System.IO.Directory.Exists(path))
-            flags |= SHGFI_USEFILEATTRIBUTES;
+        var key = BuildCacheKey(path, isFolder, isLarge);
+        var cached = LoadCachedIcon(key);
+        if (cached != null) return cached;
 
-        var res = SHGetFileInfo(path, isFolder ? 0x10u : 0x80u, ref shinfo, (uint)Marshal.SizeOf(shinfo), flags);
+        var icon = LoadShellIcon(path, isFolder, isLarge);
+        if (icon is BitmapSource bitmap)
+            SaveCachedIcon(key, bitmap);
 
-        if (shinfo.hIcon != IntPtr.Zero)
-        {
-            try
-            {
-                var img = Imaging.CreateBitmapSourceFromHIcon(shinfo.hIcon, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-                img.Freeze();
-                return img;
-            }
-            finally
-            {
-                DestroyIcon(shinfo.hIcon);
-            }
-        }
-
-        return null;
+        return icon;
     }
 
     public static void ClearCache()
     {
-        // Icons are currently fetched on demand; this hook keeps the Settings action stable.
+        try
+        {
+            if (Directory.Exists(CacheDir))
+                Directory.Delete(CacheDir, recursive: true);
+        }
+        catch
+        {
+            // Settings action should never fail because cache cleanup failed.
+        }
+    }
+
+    private static ImageSource? LoadShellIcon(string path, bool isFolder, bool isLarge)
+    {
+        var shinfo = new SHFILEINFO();
+        var flags = SHGFI_ICON | (isLarge ? SHGFI_LARGEICON : SHGFI_SMALLICON);
+
+        if (!File.Exists(path) && !Directory.Exists(path))
+            flags |= SHGFI_USEFILEATTRIBUTES;
+
+        SHGetFileInfo(path, isFolder ? 0x10u : 0x80u, ref shinfo, (uint)Marshal.SizeOf(shinfo), flags);
+
+        if (shinfo.hIcon == IntPtr.Zero) return null;
+
+        try
+        {
+            var img = Imaging.CreateBitmapSourceFromHIcon(shinfo.hIcon, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+            img.Freeze();
+            return img;
+        }
+        finally
+        {
+            DestroyIcon(shinfo.hIcon);
+        }
+    }
+
+    private static string BuildCacheKey(string path, bool isFolder, bool isLarge)
+    {
+        var ext = isFolder ? "folder" : Path.GetExtension(path).ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(ext)) ext = "file";
+        var dpi = (int)Math.Round(GetDpiScale() * 100);
+        var size = isLarge ? "large" : "small";
+        return $"{Sanitize(ext)}_{isFolder}_{size}_{dpi}.png";
+    }
+
+    private static double GetDpiScale()
+    {
+        try
+        {
+            var source = PresentationSource.FromVisual(System.Windows.Application.Current?.MainWindow);
+            return source?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
+        }
+        catch
+        {
+            return 1.0;
+        }
+    }
+
+    private static BitmapSource? LoadCachedIcon(string key)
+    {
+        try
+        {
+            var path = Path.Combine(CacheDir, key);
+            if (!File.Exists(path)) return null;
+
+            using var stream = File.OpenRead(path);
+            var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+            var frame = decoder.Frames[0];
+            frame.Freeze();
+            return frame;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static void SaveCachedIcon(string key, BitmapSource source)
+    {
+        try
+        {
+            Directory.CreateDirectory(CacheDir);
+            var path = Path.Combine(CacheDir, key);
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(source));
+            using var stream = File.Create(path);
+            encoder.Save(stream);
+        }
+        catch
+        {
+            // Cache failures should not affect icon display.
+        }
+    }
+
+    private static string Sanitize(string value)
+    {
+        foreach (var c in Path.GetInvalidFileNameChars())
+            value = value.Replace(c, '_');
+        return value.TrimStart('.').Replace('\\', '_').Replace('/', '_');
     }
 }
