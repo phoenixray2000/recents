@@ -305,19 +305,83 @@ public static class HtmlTemplateEngine
         </body></html>
         """;
 
-    public static string RenderFolder(string fileName) => $$"""
-        <!DOCTYPE html><html><head>{{BaseStyle}}
-        <style>body{display:flex;align-items:center;justify-content:center;
-        min-height:100vh;flex-direction:column;gap:8px;}
-        .icon{font-family:"Segoe Fluent Icons";font-size:48px;color:var(--muted);}
-        .msg{color:var(--muted);font-size:14px;}
-        .hint{color:var(--muted);font-size:12px;margin-top:4px;}
-        </style></head><body>
-        <div class="icon">&#xE8B7;</div>
-        <div class="msg">Folders cannot be previewed.</div>
-        <div class="hint">Press <b>Enter</b> to open in Explorer.</div>
-        </body></html>
-        """;
+    public static string RenderFolder(FolderPreviewSummary summary)
+    {
+        var rows = new StringBuilder();
+        foreach (var entry in summary.Entries)
+        {
+            var icon = entry.IsFolder ? "&#xE8B7;" : "&#xE8A5;";
+            var type = entry.IsFolder ? "Folder" : "File";
+            var size = entry.IsFolder ? "" : FormatSize(entry.Size ?? 0);
+            rows.AppendLine($"""
+                <tr>
+                  <td class="name"><span class="item-icon">{icon}</span><span>{WebUtility.HtmlEncode(entry.Name)}</span></td>
+                  <td>{type}</td>
+                  <td class="size">{WebUtility.HtmlEncode(size)}</td>
+                  <td>{WebUtility.HtmlEncode(entry.LastWriteTime.ToString("yyyy-MM-dd HH:mm"))}</td>
+                </tr>
+                """);
+        }
+
+        var countSuffix = summary.IsTruncated ? "+" : "";
+        var error = string.IsNullOrWhiteSpace(summary.ErrorMessage)
+            ? ""
+            : $"""<div class="warning">{WebUtility.HtmlEncode(summary.ErrorMessage)}</div>""";
+        var empty = summary.Entries.Count == 0 && string.IsNullOrWhiteSpace(summary.ErrorMessage)
+            ? """<div class="empty">This folder is empty.</div>"""
+            : "";
+        var table = summary.Entries.Count == 0
+            ? ""
+            : $$"""
+              <table>
+                <thead>
+                  <tr><th>Name</th><th>Type</th><th>Size</th><th>Modified</th></tr>
+                </thead>
+                <tbody>{{rows}}</tbody>
+              </table>
+              """;
+
+        return $$"""
+            <!DOCTYPE html><html><head>{{BaseStyle}}
+            <style>
+            body{min-height:100vh;padding:18px 20px;}
+            .header{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px;}
+            .folder-icon{font-family:"Segoe Fluent Icons";font-size:34px;color:var(--accent);line-height:1;}
+            .title{font-size:18px;font-weight:600;line-height:1.2;word-break:break-word;}
+            .path{color:var(--muted);font-size:12px;margin-top:4px;word-break:break-all;}
+            .stats{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px 46px;}
+            .stat{border:1px solid var(--border);border-radius:6px;background:var(--surface);padding:5px 9px;color:var(--muted);}
+            .stat b{color:var(--text);font-weight:600;}
+            table{width:100%;border-collapse:collapse;font-size:13px;}
+            th,td{border-bottom:1px solid var(--border);padding:7px 8px;text-align:left;vertical-align:middle;}
+            th{color:var(--muted);font-weight:600;background:rgba(255,255,255,.025);position:sticky;top:0;}
+            td{color:var(--muted);}
+            .name{color:var(--text);display:flex;align-items:center;gap:8px;min-width:0;}
+            .name span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+            .item-icon{font-family:"Segoe Fluent Icons";color:var(--muted);flex:0 0 auto;}
+            .size{white-space:nowrap;}
+            .hint,.empty,.warning{color:var(--muted);font-size:12px;margin-left:46px;margin-bottom:12px;}
+            .warning{color:var(--warning);}
+            </style></head><body>
+            <div class="header">
+              <div class="folder-icon">&#xE8B7;</div>
+              <div>
+                <div class="title">{{WebUtility.HtmlEncode(summary.Name)}}</div>
+                <div class="path">{{WebUtility.HtmlEncode(summary.Path)}}</div>
+              </div>
+            </div>
+            <div class="stats">
+              <div class="stat"><b>{{summary.FolderCount}}{{countSuffix}}</b> folders</div>
+              <div class="stat"><b>{{summary.FileCount}}{{countSuffix}}</b> files</div>
+              <div class="stat"><b>{{summary.Entries.Count}}</b> shown</div>
+            </div>
+            <div class="hint">Press <b>Enter</b> to open in Explorer.</div>
+            {{error}}
+            {{empty}}
+            {{table}}
+            </body></html>
+            """;
+    }
 
     public static string RenderTooLarge(string fileName, long size) => $$"""
         <!DOCTYPE html><html><head>{{BaseStyle}}

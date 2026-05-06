@@ -51,6 +51,7 @@ public partial class SettingsViewModel : ObservableObject
     public ObservableCollection<SourceConfig> KnownSources { get; }
     public ObservableCollection<SourceConfig> CustomSources { get; }
     public IReadOnlyList<int> MaxRecentItemOptions { get; } = new[] { 100, 200, 500, 1000 };
+    public IReadOnlyList<int> OpenWithMaxAppOptions { get; } = new[] { 1, 2, 3, 5, 10 };
 
 
     public record LanguageOption(string Code, string DisplayName);
@@ -97,6 +98,7 @@ public partial class SettingsViewModel : ObservableObject
         _startMinimized = settings.Current.StartMinimized;
         _hotkey = settings.Current.Hotkey;
         _maxRecentItems = settings.Current.MaxRecentItems;
+        _openWithMaxAppsPerType = settings.Current.OpenWithMaxAppsPerType;
         _excludedExtensionsText = Join(settings.Current.ExcludedExtensions);
         _excludedPathsText = Join(settings.Current.ExcludedPaths);
         _excludedKeywordsText = Join(settings.Current.ExcludedKeywords);
@@ -120,6 +122,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _startMinimized;
     [ObservableProperty] private string _hotkey = "Alt+Shift+Z";
     [ObservableProperty] private int _maxRecentItems;
+    [ObservableProperty] private int _openWithMaxAppsPerType = 3;
     [ObservableProperty] private string _excludedExtensionsText = string.Empty;
     [ObservableProperty] private string _excludedPathsText = string.Empty;
     [ObservableProperty] private string _excludedKeywordsText = string.Empty;
@@ -160,6 +163,7 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnStartMinimizedChanged(bool value) { _settings.Current.StartMinimized = value; SaveAndNotify(); }
     partial void OnHotkeyChanged(string value) { _settings.Current.Hotkey = value; SaveAndNotify(); }
     partial void OnMaxRecentItemsChanged(int value) { _settings.Current.MaxRecentItems = value; SaveAndNotify(); }
+    partial void OnOpenWithMaxAppsPerTypeChanged(int value) { _settings.Current.OpenWithMaxAppsPerType = Math.Clamp(value, 1, 10); SaveAndNotify(); }
     partial void OnExcludedExtensionsTextChanged(string value) { _settings.Current.ExcludedExtensions = Split(value); SaveAndNotify(); }
     partial void OnExcludedPathsTextChanged(string value) { _settings.Current.ExcludedPaths = Split(value); SaveAndNotify(); }
     partial void OnExcludedKeywordsTextChanged(string value) { _settings.Current.ExcludedKeywords = Split(value); SaveAndNotify(); }

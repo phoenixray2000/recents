@@ -16,8 +16,29 @@ public record PreviewDocument(
     string      FilePath
 );
 
+public record FolderPreviewEntry(
+    string   Name,
+    string   Path,
+    bool     IsFolder,
+    long?    Size,
+    DateTime LastWriteTime
+);
+
+public record FolderPreviewSummary(
+    string                         Name,
+    string                         Path,
+    int                            FolderCount,
+    int                            FileCount,
+    bool                           IsTruncated,
+    IReadOnlyList<FolderPreviewEntry> Entries,
+    string?                        ErrorMessage
+);
+
 public static class PreviewService
 {
+    private const int FolderPreviewMaxItems = 80;
+    private const int FolderPreviewMaxScannedItems = 1000;
+
     /// <summary>
     /// 异步准备预览内容。不抛异常；错误情况以 Kind=Unsupported/MissingFile 返回。
     /// </summary>
@@ -40,7 +61,7 @@ public static class PreviewService
         return kind switch
         {
             PreviewKind.MissingFile  => new(kind, HtmlTemplateEngine.RenderMissing(path), null, title, path),
-            PreviewKind.Folder       => new(kind, HtmlTemplateEngine.RenderFolder(fileName), null, title, path),
+            PreviewKind.Folder       => new(kind, HtmlTemplateEngine.RenderFolder(BuildFolderPreview(path)), null, title, path),
             PreviewKind.TooLarge     => new(kind, HtmlTemplateEngine.RenderTooLarge(fileName, size), null, title, path),
             PreviewKind.Unsupported  => new(kind, HtmlTemplateEngine.RenderUnsupported(fileName, ext), null, title, path),
 
@@ -116,5 +137,103 @@ public static class PreviewService
         {
             return $"// Failed to read file: {ex.Message}";
         }
+    }
+
+    private static FolderPreviewSummary BuildFolderPreview(string path)
+    {
+        var name = GetFolderDisplayName(path);
+        var entries = new List<FolderPreviewEntry>();
+        var folderCount = 0;
+        var fileCount = 0;
+        var isTruncated = false;
+
+        try
+        {
+            foreach (var entryPath in Directory.EnumerateFileSystemEntries(path))
+            {
+                if (entries.Count >= FolderPreviewMaxScannedItems)
+                {
+                    isTruncated = true;
+                    break;
+                }
+
+                if (!TryCreateFolderPreviewEntry(entryPath, out var entry))
+                    continue;
+
+                entries.Add(entry);
+                if (entry.IsFolder)
+                    folderCount++;
+                else
+                    fileCount++;
+            }
+
+            var visibleEntries = entries
+                .OrderByDescending(e => e.LastWriteTime)
+                .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
+                .Take(FolderPreviewMaxItems)
+                .ToList();
+
+            return new FolderPreviewSummary(
+                name,
+                path,
+                folderCount,
+                fileCount,
+                isTruncated,
+                visibleEntries,
+                null);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or System.Security.SecurityException)
+        {
+            return new FolderPreviewSummary(
+                name,
+                path,
+                folderCount,
+                fileCount,
+                isTruncated,
+                entries,
+                ex.Message);
+        }
+    }
+
+    private static bool TryCreateFolderPreviewEntry(string path, out FolderPreviewEntry entry)
+    {
+        entry = default!;
+
+        try
+        {
+            var attributes = File.GetAttributes(path);
+            var isFolder = attributes.HasFlag(FileAttributes.Directory);
+            var name = Path.GetFileName(path);
+            if (string.IsNullOrWhiteSpace(name))
+                name = path;
+
+            long? size = null;
+            DateTime lastWriteTime;
+
+            if (isFolder)
+            {
+                lastWriteTime = Directory.GetLastWriteTime(path);
+            }
+            else
+            {
+                var fileInfo = new FileInfo(path);
+                size = fileInfo.Length;
+                lastWriteTime = fileInfo.LastWriteTime;
+            }
+
+            entry = new FolderPreviewEntry(name, path, isFolder, size, lastWriteTime);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string GetFolderDisplayName(string path)
+    {
+        var trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var name = Path.GetFileName(trimmed);
+        return string.IsNullOrWhiteSpace(name) ? path : name;
     }
 }

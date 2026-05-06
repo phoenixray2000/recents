@@ -102,7 +102,6 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         {
             if (_previewWindow?.IsVisible != true) return;
             if (ItemsList.SelectedItem is not RecentItemViewModel vm) return;
-            if (vm.Item.IsFolder) return;
 
             // 取消上一次待发的刷新
             _previewNavCts?.Cancel();
@@ -650,10 +649,12 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         // the foreground, which is exactly what we wanted; now dismiss Recents.
         if (_pendingActionHide)
         {
+            if (_contextMenuOpen)
+                return;
+
             _pendingActionHide = false;
             _actionHideCts?.Cancel();
-            if (!_contextMenuOpen)
-                HideWindowGroup();
+            HideWindowGroup();
             return;
         }
 
@@ -862,6 +863,12 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         menu.Closed += (_, _) =>
         {
             _contextMenuOpen = false;
+            if (_pendingActionHide)
+            {
+                _pendingActionHide = false;
+                _actionHideCts?.Cancel();
+                HideWindowGroup();
+            }
         };
 
         menu.IsOpen = true;

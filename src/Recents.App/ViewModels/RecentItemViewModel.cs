@@ -139,13 +139,15 @@ public partial class RecentItemViewModel : ObservableObject
     public string SourcesLabel => BuildSourcesLabel(Item.Sources);
 
     private readonly RecentIndexService _indexService;
+    private readonly OpenWithService _openWithService;
     private readonly ExistsProbeService? _probeService;
     public RecentItem Item { get; }
 
-    public RecentItemViewModel(RecentItem item, RecentIndexService indexService, ExistsProbeService? probeService = null)
+    public RecentItemViewModel(RecentItem item, RecentIndexService indexService, OpenWithService openWithService, ExistsProbeService? probeService = null)
     {
         Item = item;
         _indexService = indexService;
+        _openWithService = openWithService;
         _probeService = probeService;
 
         if (Item.Exists == ExistsState.Unknown && _probeService != null)
@@ -172,6 +174,7 @@ public partial class RecentItemViewModel : ObservableObject
     }
 
     public string OpenDisabledReason => IsMissing ? Loc.T("Error_FileMissing") : string.Empty;
+    public IReadOnlyList<OpenWithAppConfig> OpenWithApps => _openWithService.GetAppsFor(Item);
 
     [RelayCommand(CanExecute = nameof(CanActionExecute))]
     private void Open() => FileActionService.OpenFile(Item.NormalizedPath);
@@ -180,7 +183,19 @@ public partial class RecentItemViewModel : ObservableObject
     private void Reveal() => FileActionService.RevealInExplorer(Item.NormalizedPath);
 
     [RelayCommand(CanExecute = nameof(CanActionExecute))]
-    private void OpenWith() => ShellService.ShowOpenWithDialog(Item.NormalizedPath);
+    private void OpenWithApp(OpenWithAppConfig? app)
+    {
+        if (app is null) return;
+        _openWithService.OpenWith(Item, app);
+        OnPropertyChanged(nameof(OpenWithApps));
+    }
+
+    [RelayCommand(CanExecute = nameof(CanActionExecute))]
+    private void ChooseOpenWithApp()
+    {
+        _openWithService.ChooseAndOpen(Item);
+        OnPropertyChanged(nameof(OpenWithApps));
+    }
 
     private bool CanActionExecute() => !IsMissing;
 

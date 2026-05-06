@@ -387,6 +387,27 @@
                                     </StackPanel>
                                 </Grid>
                             </Border>
+
+                            <TextBlock Text="{loc:T Key=Settings_Field_OpenWith}" Style="{StaticResource FieldLabel}"/>
+                            <Border Style="{StaticResource SettingsCard}" Padding="16,12">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="{loc:T Key=Settings_Lbl_OpenWithMaxApps}"
+                                                   Foreground="{DynamicResource TextPrimary}" FontWeight="Medium" FontSize="13"/>
+                                        <TextBlock Text="{loc:T Key=Settings_Lbl_OpenWithMaxAppsDesc}"
+                                                   Foreground="{DynamicResource TextSecondary}" FontSize="11" Margin="0,2,16,0"/>
+                                    </StackPanel>
+                                    <ComboBox Grid.Column="1"
+                                              ItemsSource="{Binding OpenWithMaxAppOptions}"
+                                              SelectedItem="{Binding OpenWithMaxAppsPerType}"
+                                              Style="{StaticResource PremiumComboBox}"
+                                              Width="120" HorizontalAlignment="Right"/>
+                                </Grid>
+                            </Border>
                         </StackPanel>
                     </ScrollViewer>
                 </TabItem>

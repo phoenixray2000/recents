@@ -9,6 +9,7 @@ namespace Recents.App.Services;
 public class FileActionService
 {
     public static event Action? ActionExecuted;
+    public static void NotifyActionExecuted() => ActionExecuted?.Invoke();
 
     public static void OpenFile(string path)
     {

@@ -157,7 +157,8 @@
   <data name="Status_Hint_Open" xml:space="preserve"><value>Enter Open</value></data>
 
   <data name="Action_Open" xml:space="preserve"><value>Open</value></data>
-  <data name="Action_OpenWith" xml:space="preserve"><value>Open With...</value></data>
+  <data name="Action_OpenWith" xml:space="preserve"><value>Open With</value></data>
+  <data name="Action_ChooseOtherApp" xml:space="preserve"><value>Choose another app...</value></data>
   <data name="Action_Reveal" xml:space="preserve"><value>Reveal in Explorer</value></data>
   <data name="Action_CopyPath" xml:space="preserve"><value>Copy Full Path</value></data>
   <data name="Action_CopyFileName" xml:space="preserve"><value>Copy File Name</value></data>
@@ -176,6 +177,11 @@
   <data name="Lang_Chinese" xml:space="preserve"><value>中文</value></data>
 
   <data name="Settings_Field_Theme" xml:space="preserve"><value>Theme</value></data>
+  <data name="Settings_Field_OpenWith" xml:space="preserve"><value>Open With</value></data>
+  <data name="Settings_Lbl_OpenWithMaxApps" xml:space="preserve"><value>Apps per file type</value></data>
+  <data name="Settings_Lbl_OpenWithMaxAppsDesc" xml:space="preserve"><value>Keep the most recently used apps for each extension and folders.</value></data>
+  <data name="OpenWith_SelectApp_Title" xml:space="preserve"><value>Choose an app</value></data>
+  <data name="OpenWith_SelectApp_Filter" xml:space="preserve"><value>Applications and shortcuts (*.lnk;*.exe;*.cmd;*.bat)|*.lnk;*.exe;*.cmd;*.bat|All files (*.*)|*.*</value></data>
   <data name="Theme_FollowSystem" xml:space="preserve"><value>Follow system</value></data>
   <data name="Theme_Dark" xml:space="preserve"><value>Dark</value></data>
   <data name="Theme_Light" xml:space="preserve"><value>Light</value></data>

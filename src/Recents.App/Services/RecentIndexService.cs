@@ -17,6 +17,7 @@ public class RecentIndexService : IDisposable
 {
     private const int RemovedSourceMask = (1 << 4) | (1 << 5);
     private readonly SettingsService _settingsService;
+    private readonly OpenWithService _openWithService;
     private readonly RecentRepository _repo;
     private readonly ExistsProbeService _probeService;
     private readonly object _mergeLock = new();
@@ -37,6 +38,7 @@ public class RecentIndexService : IDisposable
     public RecentIndexService(SettingsService settingsService)
     {
         _settingsService = settingsService;
+        _openWithService = new OpenWithService(settingsService);
         _probeService = new ExistsProbeService(this);
         var dir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -72,7 +74,7 @@ public class RecentIndexService : IDisposable
             {
                 // 每次启动都重新探测收藏项是否存在（不依赖上次缓存的状态）
                 item.Exists = ExistsState.Unknown;
-                favVMs.Add(new RecentItemViewModel(item, this, _probeService));
+                favVMs.Add(new RecentItemViewModel(item, this, _openWithService, _probeService));
             }
 
             // 2. 加载最近项
@@ -104,7 +106,7 @@ public class RecentIndexService : IDisposable
                 if (!PathMatcher.IsWhitelisted(item.NormalizedPath, _settingsService.Current.WhitelistedPaths)) continue;
                 if (PathMatcher.ContainsExcludedKeyword(item, _settingsService.Current.ExcludedKeywords)) continue;
 
-                recVMs.Add(new RecentItemViewModel(item, this, _probeService));
+                recVMs.Add(new RecentItemViewModel(item, this, _openWithService, _probeService));
             }
 
             // 3. 同步合并索引
@@ -217,7 +219,7 @@ public class RecentIndexService : IDisposable
 
                 incoming.LastSeenTime = DateTime.UtcNow;
                 _repo.UpsertDiscovery(incoming);
-                var vm = new RecentItemViewModel(incoming, this, _probeService);
+                var vm = new RecentItemViewModel(incoming, this, _openWithService, _probeService);
                 _index[incoming.NormalizedPath] = vm;
                 InsertSorted(vm);
             }
@@ -389,7 +391,7 @@ public class RecentIndexService : IDisposable
                     item.ClassificationSource = FileTypeClassifier.Classify(item.Extension, item.IsFolder, _settingsService.Current.ClassificationSourceGroups);
 
                     _repo.UpsertDiscovery(item);
-                    var newVm = new RecentItemViewModel(item, this, _probeService);
+                    var newVm = new RecentItemViewModel(item, this, _openWithService, _probeService);
                     _index[normalized] = newVm;
 
                     // 加入最近列表

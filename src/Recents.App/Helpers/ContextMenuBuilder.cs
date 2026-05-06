@@ -26,7 +26,7 @@ public static class ContextMenuBuilder
         var menu = new ContextMenu();
 
         menu.Items.Add(CreateItem("\uED25", Loc.T("Action_Open"), vm.OpenCommand));
-        menu.Items.Add(CreateItem("\uE7BC", Loc.T("Action_OpenWith"), vm.OpenWithCommand));
+        menu.Items.Add(CreateOpenWithMenu(vm));
         menu.Items.Add(CreateItem("\uE81D", Loc.T("Action_Reveal"), vm.RevealCommand));
         menu.Items.Add(new Separator());
         menu.Items.Add(CreateItem("\uE8C8", Loc.T("Action_CopyPath"), vm.CopyPathCommand));
@@ -40,9 +40,43 @@ public static class ContextMenuBuilder
         return menu;
     }
 
+    private static MenuItem CreateOpenWithMenu(RecentItemViewModel vm)
+    {
+        var menu = new MenuItem
+        {
+            Header = CreateHeader("\uE7BC", Loc.T("Action_OpenWith")),
+            IsEnabled = !vm.IsMissing
+        };
+
+        foreach (var app in vm.OpenWithApps)
+        {
+            menu.Items.Add(CreateItem("\uE756", app.DisplayName, vm.OpenWithAppCommand, app));
+        }
+
+        if (menu.Items.Count > 0)
+            menu.Items.Add(new Separator());
+
+        menu.Items.Add(CreateItem("\uE8A7", Loc.T("Action_ChooseOtherApp"), vm.ChooseOpenWithAppCommand));
+        return menu;
+    }
+
     private static MenuItem CreateItem(
         string icon, string label,
         System.Windows.Input.ICommand command,
+        object? commandParameter = null,
+        bool isDanger = false)
+    {
+        return new MenuItem
+        {
+            Header = CreateHeader(icon, label, isDanger),
+            Command = command,
+            CommandParameter = commandParameter
+        };
+    }
+
+    private static StackPanel CreateHeader(
+        string icon,
+        string label,
         bool isDanger = false)
     {
         var iconColor = isDanger
@@ -71,10 +105,6 @@ public static class ContextMenuBuilder
             Foreground = textColor
         });
 
-        return new MenuItem
-        {
-            Header = sp,
-            Command = command
-        };
+        return sp;
     }
 }

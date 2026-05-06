@@ -22,6 +22,8 @@ public class AppSettings
     public bool  StartMinimized   { get; set; } = false;
     public bool PreviewEnabled { get; set; } = true;
     public bool ShowSystemAndHiddenFiles { get; set; } = false;
+    public int OpenWithMaxAppsPerType { get; set; } = 3;
+    public Dictionary<string, List<OpenWithAppConfig>> OpenWithHistory { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     // 界面语言（空 = 跟随系统；支持 "en-US"、"zh-CN" 等 BCP 47 标识）
     public string Language { get; set; } = "";
@@ -88,4 +90,13 @@ public class SystemSourceConfig
 {
     public SourceKinds Kind { get; set; }
     public bool Enabled { get; set; } = true;
+}
+
+public class OpenWithAppConfig
+{
+    public string DisplayName { get; set; } = string.Empty;
+    public string ExecutablePath { get; set; } = string.Empty;
+    public string ArgumentsTemplate { get; set; } = "\"{path}\"";
+    public string WorkingDirectoryTemplate { get; set; } = "{folder}";
+    public DateTime LastUsedUtc { get; set; } = DateTime.UtcNow;
 }

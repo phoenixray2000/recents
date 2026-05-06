@@ -41,6 +41,7 @@ public class SettingsService
             Log.Information("SettingsService: 首次运行，创建默认 settings.json");
             Current = CreateDefault();
             EnsureSystemSources(Current);
+            EnsureOpenWithSettings(Current);
             Save();
             return;
         }
@@ -51,6 +52,7 @@ public class SettingsService
             var loaded  = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions);
             Current     = loaded ?? CreateDefault();
             EnsureSystemSources(Current);
+            EnsureOpenWithSettings(Current);
             Log.Information("SettingsService: 配置加载成功，Sources={Count}", Current.Sources.Count);
         }
         catch (Exception ex)
@@ -59,6 +61,7 @@ public class SettingsService
             Log.Error(ex, "SettingsService: settings.json 损坏，已备份并重建默认值");
             Current = CreateDefault();
             EnsureSystemSources(Current);
+            EnsureOpenWithSettings(Current);
             Save();
         }
     }
@@ -133,6 +136,28 @@ public class SettingsService
         {
             if (settings.SystemSources.All(s => s.Kind != kind))
                 settings.SystemSources.Add(new SystemSourceConfig { Kind = kind, Enabled = true });
+        }
+    }
+
+    private static void EnsureOpenWithSettings(AppSettings settings)
+    {
+        settings.OpenWithMaxAppsPerType = Math.Clamp(settings.OpenWithMaxAppsPerType, 1, 10);
+        settings.OpenWithHistory = settings.OpenWithHistory is null
+            ? new Dictionary<string, List<OpenWithAppConfig>>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, List<OpenWithAppConfig>>(settings.OpenWithHistory, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var key in settings.OpenWithHistory.Keys.ToList())
+        {
+            var items = settings.OpenWithHistory[key]
+                .Where(a => !string.IsNullOrWhiteSpace(a.ExecutablePath))
+                .OrderByDescending(a => a.LastUsedUtc)
+                .Take(settings.OpenWithMaxAppsPerType)
+                .ToList();
+
+            if (items.Count == 0)
+                settings.OpenWithHistory.Remove(key);
+            else
+                settings.OpenWithHistory[key] = items;
         }
     }
 
