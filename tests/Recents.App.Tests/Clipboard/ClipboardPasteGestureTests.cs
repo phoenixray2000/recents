@@ -12,9 +12,9 @@ public sealed class ClipboardPasteGestureTests
     [InlineData(ModifierKeys.Shift, false)]
     [InlineData(ModifierKeys.Control, true)]
     [InlineData(ModifierKeys.Control | ModifierKeys.Alt, true)]
-    public void ShouldPastePlainTextOnDoubleClick_OnlyRequiresControl(ModifierKeys modifiers, bool expected)
+    public void ShouldPastePlainTextOnClick_OnlyRequiresControl(ModifierKeys modifiers, bool expected)
     {
-        Assert.Equal(expected, ClipboardPasteGesture.ShouldPastePlainTextOnDoubleClick(modifiers));
+        Assert.Equal(expected, ClipboardPasteGesture.ShouldPastePlainTextOnClick(modifiers));
     }
 
     [Theory]

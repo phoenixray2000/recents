@@ -7,6 +7,13 @@ namespace Recents.App.Services;
 // Dynamic status bar text, color, and keyboard hints.
 public partial class StatusHintService : ObservableObject
 {
+    public enum HintMode
+    {
+        None,
+        File,
+        Clipboard
+    }
+
     public enum AppStatus
     {
         Ready,
@@ -21,7 +28,7 @@ public partial class StatusHintService : ObservableObject
 
     private AppStatus _currentStatus = AppStatus.Ready;
     private int _currentCount = 0;
-    private bool _hintHasSelection = false;
+    private HintMode _hintMode = HintMode.None;
     private bool _hintCanDrag = false;
 
     [ObservableProperty]
@@ -43,7 +50,7 @@ public partial class StatusHintService : ObservableObject
             // Re-render localized strings on language switch.
             SetStatus(_currentStatus);
             UpdateCount(_currentCount);
-            UpdateHint(_hintHasSelection, _hintCanDrag);
+            UpdateHint(_hintMode, _hintCanDrag);
         };
     }
 
@@ -93,16 +100,16 @@ public partial class StatusHintService : ObservableObject
         ItemCount = Loc.T("Status_ItemCount", count);
     }
 
-    public void UpdateHint(bool hasSelection, bool canDrag)
+    public void UpdateHint(HintMode mode, bool canDrag)
     {
-        _hintHasSelection = hasSelection;
+        _hintMode = mode;
         _hintCanDrag = canDrag;
-        if (!hasSelection)
-            KeyboardHint = Loc.T("Status_Hint_Navigate");
-        else if (canDrag)
-            KeyboardHint = Loc.T("Status_Hint_OpenDrag");
-        else
-            KeyboardHint = Loc.T("Status_Hint_Open");
+        KeyboardHint = mode switch
+        {
+            HintMode.File => canDrag ? Loc.T("Status_Hint_FileDrag") : Loc.T("Status_Hint_File"),
+            HintMode.Clipboard => canDrag ? Loc.T("Status_Hint_ClipboardDrag") : Loc.T("Status_Hint_Clipboard"),
+            _ => Loc.T("Status_Hint_Navigate")
+        };
     }
 
     private static SolidColorBrush Brush(byte r, byte g, byte b)

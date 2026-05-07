@@ -69,7 +69,7 @@
   <data name="Clipboard_Action_Copy" xml:space="preserve"><value>Copy</value></data>
   <data name="Clipboard_Action_ToggleFavorite" xml:space="preserve"><value>Toggle favorite</value></data>
   <data name="Clipboard_Action_Delete" xml:space="preserve"><value>Delete</value></data>
-  <data name="PopPaste_Hint" xml:space="preserve"><value>Up/Down navigate · Enter paste · Ctrl+Double-click plain text · Esc close</value></data>
+  <data name="PopPaste_Hint" xml:space="preserve"><value>↑↓ Navigate · Enter/Double-click paste · Space preview · Ctrl+Click plain text · Esc close</value></data>
   <data name="Main_Density_Standard" xml:space="preserve"><value>Standard view</value></data>
   <data name="Main_Density_Compact" xml:space="preserve"><value>Compact view</value></data>
   <data name="Main_Sort_NewestFirst" xml:space="preserve"><value>Newest first</value></data>
@@ -146,14 +146,14 @@
   <data name="Settings_Clipboard_EnterBehavior" xml:space="preserve"><value>Enter behavior</value></data>
   <data name="Settings_Clipboard_PasteToActiveApp" xml:space="preserve"><value>Paste to active app</value></data>
   <data name="Settings_Clipboard_CopyOnly" xml:space="preserve"><value>Copy only</value></data>
-  <data name="Settings_Clipboard_PlainTextPasteHint" xml:space="preserve"><value>Ctrl+Double-click a clipboard item to paste as plain text.</value></data>
+  <data name="Settings_Clipboard_PlainTextPasteHint" xml:space="preserve"><value>Ctrl+Click a clipboard item to paste as plain text.</value></data>
   <data name="Settings_Clipboard_ResetPopPasteHotkey" xml:space="preserve"><value>Reset Pop Paste hotkey</value></data>
   <data name="Settings_Clipboard_Field_Maintenance" xml:space="preserve"><value>Maintenance</value></data>
   <data name="Settings_Clipboard_ClearHistory" xml:space="preserve"><value>Clear clipboard history</value></data>
   <data name="Settings_Clipboard_OpenDataFolder" xml:space="preserve"><value>Open data folder</value></data>
   <data name="Settings_Clipboard_CompactBlobs" xml:space="preserve"><value>Compact orphan blobs</value></data>
   <data name="Clipboard_Action_PasteToActiveApp" xml:space="preserve"><value>Paste to active app</value></data>
-  <data name="Clipboard_Action_PastePlainTextToActiveApp" xml:space="preserve"><value>Paste as Plain Text (Ctrl+Double-click)</value></data>
+  <data name="Clipboard_Action_PastePlainTextToActiveApp" xml:space="preserve"><value>Paste as Plain Text (Ctrl+Click)</value></data>
   <data name="Clipboard_Action_CopyPlainText" xml:space="preserve"><value>Copy as Plain Text</value></data>
   <data name="Clipboard_Action_CopyHtml" xml:space="preserve"><value>Copy as HTML</value></data>
   <data name="Clipboard_Action_CopyRichText" xml:space="preserve"><value>Copy as Rich Text</value></data>
@@ -218,6 +218,10 @@
   <data name="Status_Hint_Navigate" xml:space="preserve"><value>Up/Down Navigate</value></data>
   <data name="Status_Hint_OpenDrag" xml:space="preserve"><value>Enter Open | Drag to share</value></data>
   <data name="Status_Hint_Open" xml:space="preserve"><value>Enter Open</value></data>
+  <data name="Status_Hint_File" xml:space="preserve"><value>↑↓ Navigate · Enter/Double-click open · Ctrl+Click reveal</value></data>
+  <data name="Status_Hint_FileDrag" xml:space="preserve"><value>↑↓ Navigate · Enter/Double-click open · Ctrl+Click reveal · Drag share</value></data>
+  <data name="Status_Hint_Clipboard" xml:space="preserve"><value>↑↓ Navigate · Enter/Double-click paste · Ctrl+Click plain text</value></data>
+  <data name="Status_Hint_ClipboardDrag" xml:space="preserve"><value>↑↓ Navigate · Enter/Double-click paste · Ctrl+Click plain text · Drag share</value></data>
 
   <data name="Action_Open" xml:space="preserve"><value>Open</value></data>
   <data name="Action_OpenWith" xml:space="preserve"><value>Open With</value></data>

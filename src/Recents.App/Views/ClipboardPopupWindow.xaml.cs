@@ -2,14 +2,16 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
 using System.Runtime.InteropServices;
+using Recents.App.Services;
 using Recents.App.Services.Clipboard;
 using Recents.App.ViewModels;
 using WpfKeyEventArgs = System.Windows.Input.KeyEventArgs;
 
 namespace Recents.App.Views;
 
-public partial class ClipboardPopupWindow : Window, IRecentDockWindow
+public partial class ClipboardPopupWindow : Window, IRecentDockWindow, IPreviewCommandHost
 {
     private const int GWL_EXSTYLE = -20;
     private const int WS_EX_NOACTIVATE = 0x08000000;
@@ -23,6 +25,8 @@ public partial class ClipboardPopupWindow : Window, IRecentDockWindow
 
     private readonly ClipboardPasteService _pasteService;
     private readonly ClipboardPopupViewModel _viewModel;
+    private PreviewWindow? _previewWindow;
+    private CancellationTokenSource? _previewNavCts;
     private bool _accepting;
 
     public ClipboardPopupWindow(ClipboardPopupViewModel viewModel, ClipboardPasteService pasteService)
@@ -38,6 +42,12 @@ public partial class ClipboardPopupWindow : Window, IRecentDockWindow
             ItemsList.MaxHeight = _viewModel.MaxRows * 58;
             Height = Math.Min(780, 112 + ItemsList.MaxHeight);
             ItemsList.SelectedIndex = ItemsList.Items.Count > 0 ? 0 : -1;
+        };
+        Closed += (_, _) =>
+        {
+            ClosePreview();
+            if (_previewWindow is not null)
+                App.WindowGroupFocusService.UnregisterWindow(_previewWindow);
         };
     }
 
@@ -66,6 +76,7 @@ public partial class ClipboardPopupWindow : Window, IRecentDockWindow
         next = Math.Clamp(next, 0, count - 1);
         ItemsList.SelectedIndex = next;
         ItemsList.ScrollIntoView(ItemsList.SelectedItem);
+        SchedulePreviewRefresh();
     }
 
     public void AppendSearchText(string text)
@@ -75,6 +86,7 @@ public partial class ClipboardPopupWindow : Window, IRecentDockWindow
 
         _viewModel.SearchText += text;
         ItemsList.SelectedIndex = ItemsList.Items.Count > 0 ? 0 : -1;
+        SchedulePreviewRefresh();
     }
 
     public void BackspaceSearchText()
@@ -84,12 +96,14 @@ public partial class ClipboardPopupWindow : Window, IRecentDockWindow
 
         _viewModel.SearchText = _viewModel.SearchText[..^1];
         ItemsList.SelectedIndex = ItemsList.Items.Count > 0 ? 0 : -1;
+        SchedulePreviewRefresh();
     }
 
     public void ClearSearchText()
     {
         _viewModel.SearchText = string.Empty;
         ItemsList.SelectedIndex = ItemsList.Items.Count > 0 ? 0 : -1;
+        SchedulePreviewRefresh();
     }
 
     private void ApplyNoActivateStyle()
@@ -118,6 +132,13 @@ public partial class ClipboardPopupWindow : Window, IRecentDockWindow
             return;
         }
 
+        if (e.Key == Key.Space && Keyboard.Modifiers == ModifierKeys.None)
+        {
+            TogglePreview();
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key is Key.Down or Key.Up)
         {
             ItemsList.Focus();
@@ -139,12 +160,122 @@ public partial class ClipboardPopupWindow : Window, IRecentDockWindow
 
     private async void ItemsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        await AcceptSelectedAsync(_pasteService.ShouldPastePlainTextOnDoubleClick());
+        await AcceptSelectedAsync();
+    }
+
+    private async void ItemsList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (!_pasteService.ShouldPastePlainTextOnClick() || e.ChangedButton != MouseButton.Left)
+            return;
+
+        if (e.OriginalSource is not DependencyObject source ||
+            FindParent<System.Windows.Controls.Button>(source) != null)
+        {
+            return;
+        }
+
+        var listBoxItem = FindParent<ListBoxItem>(source);
+        if (listBoxItem?.DataContext is not ClipboardItemViewModel { HasPlainText: true } item)
+            return;
+
+        ItemsList.SelectedItem = item;
+        e.Handled = true;
+        await AcceptSelectedAsync(pastePlainText: true);
     }
 
     private void Window_Deactivated(object sender, EventArgs e)
     {
         if (!_accepting && IsKeyboardFocusWithin)
             Close();
+    }
+
+    private void TogglePreview()
+    {
+        if (!_pasteService.IsPreviewEnabled)
+        {
+            System.Windows.MessageBox.Show("Quick preview is disabled because the WebView2 runtime is unavailable.",
+                "Preview unavailable", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var item = _viewModel.SelectedItem;
+        if (item is null)
+            return;
+
+        var previewKey = "clipboard:" + item.Item.Id;
+        var previewWindow = EnsurePreviewWindow();
+        if (previewWindow.IsVisible && previewWindow.Tag as string == previewKey)
+        {
+            ClosePreview();
+            return;
+        }
+
+        previewWindow.Tag = previewKey;
+        previewWindow.PositionRelativeTo(this);
+        if (previewWindow.Owner is null)
+            previewWindow.Owner = this;
+        previewWindow.Show();
+        _ = previewWindow.ShowClipboardItemAsync(item.Item);
+    }
+
+    private PreviewWindow EnsurePreviewWindow()
+    {
+        if (_previewWindow is null)
+        {
+            _previewWindow = new PreviewWindow(this, App.WindowGroupFocusService);
+            App.WindowGroupFocusService.RegisterWindow(_previewWindow);
+        }
+
+        return _previewWindow;
+    }
+
+    private void SchedulePreviewRefresh()
+    {
+        if (_previewWindow?.IsVisible != true)
+            return;
+
+        _previewNavCts?.Cancel();
+        _previewNavCts = new CancellationTokenSource();
+        var token = _previewNavCts.Token;
+
+        _ = Task.Delay(100, token).ContinueWith(t =>
+        {
+            if (t.IsCanceled) return;
+            Dispatcher.Invoke(() =>
+            {
+                if (_previewWindow?.IsVisible != true || _viewModel.SelectedItem is null)
+                    return;
+
+                _previewWindow.Tag = "clipboard:" + _viewModel.SelectedItem.Item.Id;
+                _ = _previewWindow.ShowClipboardItemAsync(_viewModel.SelectedItem.Item);
+            });
+        }, TaskScheduler.Default);
+    }
+
+    public void ClosePreview()
+    {
+        if (_previewWindow?.IsVisible == true)
+        {
+            _previewWindow.Hide();
+            _previewWindow.Tag = null;
+        }
+    }
+
+    public void SelectNextAndRefreshPreview() => MoveSelection(1);
+
+    public void SelectPreviousAndRefreshPreview() => MoveSelection(-1);
+
+    public void OpenSelectedItem() => _ = AcceptSelectedAsync();
+
+    public void CopySelectedItemPath()
+    {
+    }
+
+    private static T? FindParent<T>(DependencyObject child) where T : DependencyObject
+    {
+        DependencyObject? parentObject = VisualTreeHelper.GetParent(child);
+        if (parentObject is null) return null;
+        if (parentObject is T parent) return parent;
+        return FindParent<T>(parentObject);
     }
 }

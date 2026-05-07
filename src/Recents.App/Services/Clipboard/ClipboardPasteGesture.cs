@@ -17,10 +17,10 @@ internal static class ClipboardPasteGesture
     [DllImport("user32.dll")]
     private static extern short GetAsyncKeyState(int vKey);
 
-    public static bool ShouldPastePlainTextOnDoubleClick() =>
+    public static bool ShouldPastePlainTextOnClick() =>
         IsKeyDown(VK_CONTROL) || IsKeyDown(VK_LCONTROL) || IsKeyDown(VK_RCONTROL);
 
-    public static bool ShouldPastePlainTextOnDoubleClick(ModifierKeys modifiers) =>
+    public static bool ShouldPastePlainTextOnClick(ModifierKeys modifiers) =>
         (modifiers & ModifierKeys.Control) != 0;
 
     public static bool IsPassthroughModifierVirtualKey(int virtualKey) =>

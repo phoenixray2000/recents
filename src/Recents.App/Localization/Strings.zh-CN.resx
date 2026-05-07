@@ -69,7 +69,7 @@
   <data name="Clipboard_Action_Copy" xml:space="preserve"><value>复制</value></data>
   <data name="Clipboard_Action_ToggleFavorite" xml:space="preserve"><value>切换收藏</value></data>
   <data name="Clipboard_Action_Delete" xml:space="preserve"><value>删除</value></data>
-  <data name="PopPaste_Hint" xml:space="preserve"><value>上下键选择 · Enter 粘贴 · Ctrl+双击纯文本 · Esc 关闭</value></data>
+  <data name="PopPaste_Hint" xml:space="preserve"><value>↑↓ 导航 · 回车/双击粘贴 · 空格预览 · Ctrl+单击纯文本 · Esc 关闭</value></data>
   <data name="Main_Density_Standard" xml:space="preserve"><value>标准视图</value></data>
   <data name="Main_Density_Compact" xml:space="preserve"><value>紧凑视图</value></data>
   <data name="Main_Sort_NewestFirst" xml:space="preserve"><value>最近优先</value></data>
@@ -146,14 +146,14 @@
   <data name="Settings_Clipboard_EnterBehavior" xml:space="preserve"><value>回车行为</value></data>
   <data name="Settings_Clipboard_PasteToActiveApp" xml:space="preserve"><value>粘贴到当前应用</value></data>
   <data name="Settings_Clipboard_CopyOnly" xml:space="preserve"><value>仅复制</value></data>
-  <data name="Settings_Clipboard_PlainTextPasteHint" xml:space="preserve"><value>按住 Ctrl 双击剪贴板条目，可粘贴为纯文本。</value></data>
+  <data name="Settings_Clipboard_PlainTextPasteHint" xml:space="preserve"><value>按住 Ctrl 单击剪贴板条目，可粘贴为纯文本。</value></data>
   <data name="Settings_Clipboard_ResetPopPasteHotkey" xml:space="preserve"><value>重置 Pop Paste 快捷键</value></data>
   <data name="Settings_Clipboard_Field_Maintenance" xml:space="preserve"><value>维护</value></data>
   <data name="Settings_Clipboard_ClearHistory" xml:space="preserve"><value>清空剪贴板历史</value></data>
   <data name="Settings_Clipboard_OpenDataFolder" xml:space="preserve"><value>打开数据目录</value></data>
   <data name="Settings_Clipboard_CompactBlobs" xml:space="preserve"><value>清理孤立 blob</value></data>
   <data name="Clipboard_Action_PasteToActiveApp" xml:space="preserve"><value>粘贴到当前应用</value></data>
-  <data name="Clipboard_Action_PastePlainTextToActiveApp" xml:space="preserve"><value>粘贴为纯文本 (Ctrl+双击)</value></data>
+  <data name="Clipboard_Action_PastePlainTextToActiveApp" xml:space="preserve"><value>粘贴为纯文本 (Ctrl+单击)</value></data>
   <data name="Clipboard_Action_CopyPlainText" xml:space="preserve"><value>复制为纯文本</value></data>
   <data name="Clipboard_Action_CopyHtml" xml:space="preserve"><value>复制为 HTML</value></data>
   <data name="Clipboard_Action_CopyRichText" xml:space="preserve"><value>复制为富文本</value></data>
@@ -218,6 +218,10 @@
   <data name="Status_Hint_Navigate" xml:space="preserve"><value>↑↓ 导航</value></data>
   <data name="Status_Hint_OpenDrag" xml:space="preserve"><value>回车 打开 | 拖拽 分享</value></data>
   <data name="Status_Hint_Open" xml:space="preserve"><value>回车 打开</value></data>
+  <data name="Status_Hint_File" xml:space="preserve"><value>↑↓ 导航 · 回车/双击打开 · Ctrl+单击所在位置</value></data>
+  <data name="Status_Hint_FileDrag" xml:space="preserve"><value>↑↓ 导航 · 回车/双击打开 · Ctrl+单击所在位置 · 拖拽分享</value></data>
+  <data name="Status_Hint_Clipboard" xml:space="preserve"><value>↑↓ 导航 · 回车/双击粘贴 · Ctrl+单击纯文本</value></data>
+  <data name="Status_Hint_ClipboardDrag" xml:space="preserve"><value>↑↓ 导航 · 回车/双击粘贴 · Ctrl+单击纯文本 · 拖拽分享</value></data>
 
   <data name="Action_Open" xml:space="preserve"><value>打开</value></data>
   <data name="Action_OpenWith" xml:space="preserve"><value>打开方式</value></data>

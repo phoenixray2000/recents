@@ -69,7 +69,7 @@ public partial class ClipboardItemViewModel : ObservableObject
         }
     }
 
-    public Visibility ThumbnailVisibility => Item.Type == ClipboardPayloadType.Image && !string.IsNullOrWhiteSpace(Item.ThumbnailPath)
+    public Visibility ThumbnailVisibility => FindThumbnailSourcePath() is not null
         ? Visibility.Visible
         : Visibility.Collapsed;
 
@@ -83,7 +83,8 @@ public partial class ClipboardItemViewModel : ObservableObject
         {
             if (_thumbnailLoaded) return _thumbnail;
             _thumbnailLoaded = true;
-            if (string.IsNullOrWhiteSpace(Item.ThumbnailPath) || !File.Exists(Item.ThumbnailPath))
+            var path = FindThumbnailSourcePath();
+            if (path is null)
                 return null;
 
             try
@@ -91,7 +92,7 @@ public partial class ClipboardItemViewModel : ObservableObject
                 var bitmap = new BitmapImage();
                 bitmap.BeginInit();
                 bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.UriSource = new Uri(Item.ThumbnailPath);
+                bitmap.UriSource = new Uri(path);
                 bitmap.DecodePixelWidth = 96;
                 bitmap.EndInit();
                 bitmap.Freeze();
@@ -105,6 +106,17 @@ public partial class ClipboardItemViewModel : ObservableObject
             return _thumbnail;
         }
     }
+
+    private string? FindThumbnailSourcePath()
+    {
+        if (Item.Type != ClipboardPayloadType.Image)
+            return null;
+
+        return ExistingPath(Item.ThumbnailPath) ?? ExistingPath(Item.ImagePath);
+    }
+
+    private static string? ExistingPath(string? path) =>
+        !string.IsNullOrWhiteSpace(path) && File.Exists(path) ? path : null;
 
     public ClipboardItemViewModel(ClipboardItem item, ClipboardStoreService store, ClipboardActionService actions)
     {

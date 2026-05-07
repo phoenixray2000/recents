@@ -85,14 +85,8 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         };
 
         // B2. 动态键盘提示
-        ItemsList.SelectionChanged += (s, e) => 
-        {
-            var hasSelection = ItemsList.SelectedItem != null;
-            var selectedItem = ItemsList.SelectedItem as RecentItemViewModel;
-            var selectedClipboard = ItemsList.SelectedItem as ClipboardItemViewModel;
-            var canDrag = selectedItem is { IsMissing: false } || selectedClipboard != null;
-            _viewModel.Status.UpdateHint(hasSelection, canDrag);
-        };
+        ItemsList.SelectionChanged += (s, e) => UpdateStatusHintFromSelection();
+        FavoritesList.SelectionChanged += (s, e) => UpdateStatusHintFromSelection();
 
         _windowGroupFocusService = App.WindowGroupFocusService;
         _windowGroupFocusService.RegisterWindow(this);
@@ -331,14 +325,45 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         }
     }
 
+    private void UpdateStatusHintFromSelection()
+    {
+        var item = GetStatusHintSelection();
+        var mode = item switch
+        {
+            ClipboardItemViewModel or ClipboardFavoriteViewModel => StatusHintService.HintMode.Clipboard,
+            RecentItemViewModel => StatusHintService.HintMode.File,
+            _ => StatusHintService.HintMode.None
+        };
+        var canDrag = item switch
+        {
+            RecentItemViewModel { IsMissing: false } => true,
+            ClipboardItemViewModel => true,
+            ClipboardFavoriteViewModel => true,
+            _ => false
+        };
+
+        _viewModel.Status.UpdateHint(mode, canDrag);
+    }
+
+    private object? GetStatusHintSelection()
+    {
+        if (FavoritesList.SelectedItem is not null &&
+            (FavoritesList.IsKeyboardFocusWithin || FavoritesList.IsMouseOver || ItemsList.SelectedItem is null))
+        {
+            return FavoritesList.SelectedItem;
+        }
+
+        return ItemsList.SelectedItem ?? FavoritesList.SelectedItem;
+    }
+
     private void ItemsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        TryOpenItem(ItemsList.SelectedItem, IsCtrlPressed());
+        TryOpenItem(ItemsList.SelectedItem);
     }
 
     private void FavoritesList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        TryOpenItem(FavoritesList.SelectedItem, IsCtrlPressed());
+        TryOpenItem(FavoritesList.SelectedItem);
     }
 
     private void FavoritesList_ContextMenuOpening(object sender, ContextMenuEventArgs e)
@@ -389,16 +414,12 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
     {
         if (item is ClipboardItemViewModel clip)
         {
-            _ = ShouldPastePlainTextOnClipboardDoubleClick() && clip.HasPlainText
-                ? _clipboardActions.PastePlainTextToActiveAppAsync(clip.Item)
-                : _clipboardActions.PasteToActiveAppAsync(clip.Item);
+            _ = _clipboardActions.PasteToActiveAppAsync(clip.Item);
             return;
         }
         if (item is ClipboardFavoriteViewModel favorite)
         {
-            _ = ShouldPastePlainTextOnClipboardDoubleClick() && favorite.HasPlainText
-                ? _clipboardActions.PastePlainTextToActiveAppAsync(favorite.Item.ToClipboardItem())
-                : _clipboardActions.PasteToActiveAppAsync(favorite.Item.ToClipboardItem());
+            _ = _clipboardActions.PasteToActiveAppAsync(favorite.Item.ToClipboardItem());
             return;
         }
 
@@ -425,10 +446,8 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         }
     }
 
-    private static bool IsCtrlPressed() => (Keyboard.Modifiers & ModifierKeys.Control) != 0;
-
-    private bool ShouldPastePlainTextOnClipboardDoubleClick() =>
-        ClipboardPasteGesture.ShouldPastePlainTextOnDoubleClick();
+    private static bool IsCtrlPressed() =>
+        ClipboardPasteGesture.ShouldPastePlainTextOnClick(Keyboard.Modifiers);
 
     // P0 拖拽支持 (PRD §6.8)
     // B4. 批量拖拽支持 (PRD §6.8)
@@ -436,12 +455,73 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
 
     private void ItemsList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        if (TryHandleCtrlClickListItem(e))
+            return;
+
         _dragStartPoint = e.GetPosition(null);
     }
 
     private void FavoritesList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        if (TryHandleCtrlClickListItem(e))
+            return;
+
         _dragStartPoint = e.GetPosition(null);
+    }
+
+    private bool TryHandleCtrlClickListItem(MouseButtonEventArgs e)
+    {
+        if (!IsCtrlPressed() || e.ChangedButton != MouseButton.Left)
+            return false;
+
+        if (e.OriginalSource is not DependencyObject source ||
+            FindParent<System.Windows.Controls.Button>(source) != null ||
+            IsFavoritesDragHandleSource(source))
+        {
+            return false;
+        }
+
+        var listBoxItem = FindParent<ListBoxItem>(source);
+        if (listBoxItem?.DataContext is null)
+            return false;
+
+        switch (listBoxItem.DataContext)
+        {
+            case RecentItemViewModel recent:
+                TryOpenItem(recent, openContainingFolder: true);
+                e.Handled = true;
+                return true;
+
+            case ClipboardItemViewModel { HasPlainText: true } clip:
+                _ = _clipboardActions.PastePlainTextToActiveAppAsync(clip.Item);
+                e.Handled = true;
+                return true;
+
+            case ClipboardFavoriteViewModel { HasPlainText: true } favorite:
+                _ = _clipboardActions.PastePlainTextToActiveAppAsync(favorite.Item.ToClipboardItem());
+                e.Handled = true;
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
+    private static bool IsFavoritesDragHandleSource(DependencyObject source)
+    {
+        var current = source;
+        while (current is not null)
+        {
+            if (current is FrameworkElement { Cursor: not null } element &&
+                element.Cursor == System.Windows.Input.Cursors.SizeNS)
+            {
+                return true;
+            }
+
+            current = VisualTreeHelper.GetParent(current);
+        }
+
+        return false;
     }
 
     private void FavoritesDragHandle_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)

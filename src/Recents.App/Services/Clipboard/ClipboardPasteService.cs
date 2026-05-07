@@ -134,10 +134,12 @@ public sealed class ClipboardPasteService : IDisposable
             respectPopPasteEnterBehavior: true);
     }
 
-    public bool ShouldPastePlainTextOnDoubleClick()
+    public bool ShouldPastePlainTextOnClick()
     {
-        return ClipboardPasteGesture.ShouldPastePlainTextOnDoubleClick();
+        return ClipboardPasteGesture.ShouldPastePlainTextOnClick();
     }
+
+    public bool IsPreviewEnabled => _settings.Current.PreviewEnabled;
 
     private void HidePopupImmediately()
     {
