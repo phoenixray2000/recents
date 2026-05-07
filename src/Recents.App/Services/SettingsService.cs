@@ -42,6 +42,8 @@ public class SettingsService
             Current = CreateDefault();
             EnsureSystemSources(Current);
             EnsureOpenWithSettings(Current);
+            EnsureClassificationGroups(Current);
+            EnsureClipboardSettings(Current);
             Save();
             return;
         }
@@ -53,6 +55,8 @@ public class SettingsService
             Current     = loaded ?? CreateDefault();
             EnsureSystemSources(Current);
             EnsureOpenWithSettings(Current);
+            EnsureClassificationGroups(Current);
+            EnsureClipboardSettings(Current);
             Log.Information("SettingsService: 配置加载成功，Sources={Count}", Current.Sources.Count);
         }
         catch (Exception ex)
@@ -62,6 +66,8 @@ public class SettingsService
             Current = CreateDefault();
             EnsureSystemSources(Current);
             EnsureOpenWithSettings(Current);
+            EnsureClassificationGroups(Current);
+            EnsureClipboardSettings(Current);
             Save();
         }
     }
@@ -159,6 +165,54 @@ public class SettingsService
             else
                 settings.OpenWithHistory[key] = items;
         }
+    }
+
+    private static void EnsureClassificationGroups(AppSettings settings)
+    {
+        settings.ClassificationSourceGroups ??= new Dictionary<string, List<string>>();
+        if (!settings.ClassificationSourceGroups.TryGetValue("Documents", out var documents))
+        {
+            documents = new List<string>();
+            settings.ClassificationSourceGroups["Documents"] = documents;
+        }
+
+        var codeExtensions = new[]
+        {
+            ".py", ".js", ".ts", ".tsx", ".cs", ".cpp", ".c", ".h", ".java", ".go", ".rs",
+            ".json", ".xml", ".yaml", ".yml", ".html", ".css", ".sql"
+        };
+
+        if (settings.ClassificationSourceGroups.Remove("Code", out var oldCode))
+        {
+            foreach (var ext in oldCode)
+            {
+                if (!documents.Contains(ext, StringComparer.OrdinalIgnoreCase))
+                    documents.Add(ext);
+            }
+        }
+
+        foreach (var ext in codeExtensions)
+        {
+            if (!documents.Contains(ext, StringComparer.OrdinalIgnoreCase))
+                documents.Add(ext);
+        }
+    }
+
+    private static void EnsureClipboardSettings(AppSettings settings)
+    {
+        settings.MaxClipboardItems = Math.Clamp(settings.MaxClipboardItems, 50, 5000);
+        settings.ClipboardRetentionDays = Math.Clamp(settings.ClipboardRetentionDays, 1, 3650);
+        settings.MaxClipboardTextChars = Math.Clamp(settings.MaxClipboardTextChars, 1000, 1_000_000);
+        settings.MaxClipboardImageBytes = Math.Clamp(settings.MaxClipboardImageBytes, 1024 * 1024, 200L * 1024 * 1024);
+        settings.PopPasteMaxRows = Math.Clamp(settings.PopPasteMaxRows, 3, 30);
+        settings.ClipboardSensitivePatterns ??= new List<string>();
+        settings.ClipboardExcludedSourceApps ??= new List<string>();
+        settings.PopPasteHotkey = string.IsNullOrWhiteSpace(settings.PopPasteHotkey)
+            ? "Alt+Shift+V"
+            : settings.PopPasteHotkey;
+        settings.PopPasteEnterBehavior = string.IsNullOrWhiteSpace(settings.PopPasteEnterBehavior)
+            ? "PasteToActiveApp"
+            : settings.PopPasteEnterBehavior;
     }
 
     private static SourceConfig MakeKnownFolderSource(string folderGuid, string displayName) =>

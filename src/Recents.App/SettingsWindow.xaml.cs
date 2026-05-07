@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Controls;
 using Recents.App.ViewModels;
+using WpfTextBox = System.Windows.Controls.TextBox;
 
 using Recents.App.Views;
 
@@ -23,6 +24,17 @@ public partial class SettingsWindow : Window, IRecentDockWindow
         e.Handled = true;
 
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (key == Key.Escape)
+        {
+            Keyboard.ClearFocus();
+            return;
+        }
+
+        if (key is Key.Back or Key.Delete)
+        {
+            SetShortcutValue(sender, string.Empty);
+            return;
+        }
 
         // Ignore modifier keys by themselves
         if (key == Key.LeftCtrl || key == Key.RightCtrl ||
@@ -42,10 +54,25 @@ public partial class SettingsWindow : Window, IRecentDockWindow
 
         sb.Append(key.ToString());
 
-        if (DataContext is SettingsViewModel vm)
+        SetShortcutValue(sender, sb.ToString());
+    }
+
+    private void SetShortcutValue(object sender, string value)
+    {
+        if (DataContext is not SettingsViewModel vm)
+            return;
+
+        if (sender is WpfTextBox tb)
         {
-            vm.Hotkey = sb.ToString();
+            if (string.Equals(tb.Tag as string, "PopPasteHotkey", StringComparison.Ordinal))
+            {
+                vm.PopPasteHotkey = string.IsNullOrWhiteSpace(value) ? "Alt+Shift+V" : value;
+                return;
+            }
+
         }
+
+        vm.Hotkey = string.IsNullOrWhiteSpace(value) ? "Alt+Shift+Z" : value;
     }
 
     private void Hyperlink_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)

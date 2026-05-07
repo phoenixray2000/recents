@@ -20,6 +20,7 @@ public class RecentIndexService : IDisposable
     private readonly OpenWithService _openWithService;
     private readonly RecentRepository _repo;
     private readonly ExistsProbeService _probeService;
+    private readonly string _internalClipboardDataPath;
     private readonly object _mergeLock = new();
     private readonly System.Threading.Channels.Channel<RecentItem> _mergeQueue;
     private bool _isProcessingQueue = false;
@@ -44,6 +45,7 @@ public class RecentIndexService : IDisposable
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Recents");
         Directory.CreateDirectory(dir);
+        _internalClipboardDataPath = Path.Combine(dir, "clipboard");
         _repo = new RecentRepository(Path.Combine(dir, "index.db"));
 
         // Initialize merge queue (PRD optimization)
@@ -72,6 +74,12 @@ public class RecentIndexService : IDisposable
             var favVMs = new List<RecentItemViewModel>();
             foreach (var item in favorites)
             {
+                if (IsInternalClipboardDataPath(item.NormalizedPath))
+                {
+                    _repo.DeleteFavorite(item.NormalizedPath);
+                    continue;
+                }
+
                 // 每次启动都重新探测收藏项是否存在（不依赖上次缓存的状态）
                 item.Exists = ExistsState.Unknown;
                 favVMs.Add(new RecentItemViewModel(item, this, _openWithService, _probeService));
@@ -83,6 +91,15 @@ public class RecentIndexService : IDisposable
 
             foreach (var item in items)
             {
+                if (IsInternalClipboardDataPath(item.NormalizedPath) || item.Exists == ExistsState.Missing)
+                {
+                    _repo.Delete(item.NormalizedPath);
+                    continue;
+                }
+
+                // 恢复旧 DB 记录时不能信任上次缓存的 Found；重新探测，缺失的非收藏项会被 VM 回调剔除。
+                item.Exists = ExistsState.Unknown;
+
                 var activeSources = item.Sources & ~(SourceKinds)RemovedSourceMask;
                 if (activeSources == SourceKinds.None)
                 {
@@ -185,6 +202,12 @@ public class RecentIndexService : IDisposable
         if (incoming.NormalizedPath.StartsWith(recentDir, StringComparison.OrdinalIgnoreCase) &&
             incoming.NormalizedPath.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))
             return;
+
+        if (IsInternalClipboardDataPath(incoming.NormalizedPath))
+        {
+            await RemoveAsync(incoming.NormalizedPath);
+            return;
+        }
 
         // A7. 用户排除路径过滤
         if (!PathMatcher.IsWhitelisted(incoming.NormalizedPath, _settingsService.Current.WhitelistedPaths) ||
@@ -367,6 +390,7 @@ public class RecentIndexService : IDisposable
     {
         var normalized = PathNormalizer.Normalize(path);
         if (string.IsNullOrEmpty(normalized)) return;
+        if (IsInternalClipboardDataPath(normalized)) return;
 
         await Task.Run(() =>
         {
@@ -518,6 +542,25 @@ public class RecentIndexService : IDisposable
         }).ConfigureAwait(false);
     }
 
+    public async Task SetFavoriteOrderAsync(string normalizedPath, int order)
+    {
+        await Task.Run(() =>
+        {
+            lock (_mergeLock)
+            {
+                if (!_index.TryGetValue(normalizedPath, out var vm)) return;
+                vm.Item.FavoriteOrder = order;
+                _repo.UpsertFavorite(vm.Item);
+                _repo.Upsert(vm.Item);
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+                {
+                    vm.Refresh();
+                    IndexChanged?.Invoke();
+                });
+            }
+        }).ConfigureAwait(false);
+    }
+
     private void InsertSorted(RecentItemViewModel vm)
     {
         int pos = 0;
@@ -570,6 +613,26 @@ public class RecentIndexService : IDisposable
         catch
         {
             return null;
+        }
+    }
+
+    private bool IsInternalClipboardDataPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return false;
+
+        try
+        {
+            var normalizedPath = Path.GetFullPath(path)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var clipboardRoot = Path.GetFullPath(_internalClipboardDataPath)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            return normalizedPath.Equals(clipboardRoot, StringComparison.OrdinalIgnoreCase) ||
+                   normalizedPath.StartsWith(clipboardRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
         }
     }
 

@@ -13,6 +13,8 @@ public partial class StatusHintService : ObservableObject
         Initializing,
         Indexing,
         Watching,
+        ClipboardCapturing,
+        PopPasteActive,
         Partial,
         Error
     }
@@ -65,6 +67,14 @@ public partial class StatusHintService : ObservableObject
             case AppStatus.Watching:
                 StatusText = Loc.T("Status_Watching");
                 StatusColor = Brush(0x63, 0xC5, 0x54);
+                break;
+            case AppStatus.ClipboardCapturing:
+                StatusText = Loc.T("Status_ClipboardCapturing");
+                StatusColor = Brush(0x60, 0xCD, 0xFF);
+                break;
+            case AppStatus.PopPasteActive:
+                StatusText = Loc.T("Status_PopPasteActive");
+                StatusColor = Brush(0x60, 0xCD, 0xFF);
                 break;
             case AppStatus.Partial:
                 StatusText = Loc.T("Status_Partial");

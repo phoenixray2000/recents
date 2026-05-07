@@ -15,15 +15,22 @@ using Serilog;
 
 using Recents.App.Views;
 using Recents.App.Helpers;
+using Recents.App.Services.Clipboard;
 using System.Threading;
 
 namespace Recents.App;
 
 public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
 {
+    private const string InternalReorderFormat = "InternalReorder";
+    private const string ClipboardItemIdFormat = "Recents.ClipboardItemId";
+
     private readonly MainViewModel _viewModel;
     private readonly SettingsService _settings;
     private readonly RecentIndexService _indexService;
+    private readonly ClipboardStoreService _clipboardStore;
+    private readonly ClipboardActionService _clipboardActions;
+    private readonly ClipboardDragDropService _clipboardDragDrop;
     private readonly Func<Task> _rebuildIndexAsync;
     private readonly Func<Task> _restartSourcesAsync;
     private TrayService? _tray;
@@ -36,7 +43,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
     private CancellationTokenSource? _actionHideCts;
     private bool _contextMenuOpen;
     private bool _pendingActionHide;
-    private RecentItemViewModel? _favoritesDragItem;
+    private object? _favoritesDragItem;
     private FavoriteDragAdorner? _dragAdorner;
     private AdornerLayer? _favAdornerLayer;
 
@@ -44,6 +51,9 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         MainViewModel viewModel,
         SettingsService settings,
         RecentIndexService indexService,
+        ClipboardStoreService clipboardStore,
+        ClipboardActionService clipboardActions,
+        ClipboardDragDropService clipboardDragDrop,
         Func<Task> rebuildIndexAsync,
         Func<Task> restartSourcesAsync)
     {
@@ -51,6 +61,9 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         _viewModel = viewModel;
         _settings = settings;
         _indexService = indexService;
+        _clipboardStore = clipboardStore;
+        _clipboardActions = clipboardActions;
+        _clipboardDragDrop = clipboardDragDrop;
         _rebuildIndexAsync = rebuildIndexAsync;
         _restartSourcesAsync = restartSourcesAsync;
         DataContext = _viewModel;
@@ -76,7 +89,8 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         {
             var hasSelection = ItemsList.SelectedItem != null;
             var selectedItem = ItemsList.SelectedItem as RecentItemViewModel;
-            var canDrag = hasSelection && selectedItem != null && !selectedItem.IsMissing;
+            var selectedClipboard = ItemsList.SelectedItem as ClipboardItemViewModel;
+            var canDrag = selectedItem is { IsMissing: false } || selectedClipboard != null;
             _viewModel.Status.UpdateHint(hasSelection, canDrag);
         };
 
@@ -101,25 +115,13 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         ItemsList.SelectionChanged += (s, e) =>
         {
             if (_previewWindow?.IsVisible != true) return;
-            if (ItemsList.SelectedItem is not RecentItemViewModel vm) return;
+            SchedulePreviewRefresh(ItemsList.SelectedItem);
+        };
 
-            // 取消上一次待发的刷新
-            _previewNavCts?.Cancel();
-            _previewNavCts = new System.Threading.CancellationTokenSource();
-            var token = _previewNavCts.Token;
-
-            _ = Task.Delay(100, token).ContinueWith(t =>
-            {
-                if (t.IsCanceled) return;
-                Dispatcher.Invoke(() =>
-                {
-                    if (_previewWindow?.IsVisible == true)
-                    {
-                        _previewWindow.Tag = vm.DisplayPath;
-                        _ = _previewWindow.ShowFileAsync(vm.DisplayPath);
-                    }
-                });
-            }, TaskScheduler.Default);
+        FavoritesList.SelectionChanged += (s, e) =>
+        {
+            if (_previewWindow?.IsVisible != true) return;
+            SchedulePreviewRefresh(FavoritesList.SelectedItem);
         };
     }
 
@@ -271,6 +273,13 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
             }
             if (e.Key == Key.C)
             {
+                if (_viewModel.IsClipboardMode && ItemsList.SelectedItem is ClipboardItemViewModel clip)
+                {
+                    _ = _clipboardActions.CopyToClipboardAsync(clip);
+                    e.Handled = true;
+                    return;
+                }
+
                 var selectedItems = GetSelectedItems().ToList();
                 if (selectedItems.Count > 0)
                 {
@@ -301,7 +310,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
                 _previewWindow.Hide();
 
             if (FavoritesList.IsFocused)
-                TryOpenItem(FavoritesList.SelectedItem as RecentItemViewModel);
+                TryOpenItem(FavoritesList.SelectedItem);
             else
                 TryOpenSelectedItem();
 
@@ -324,12 +333,12 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
 
     private void ItemsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        TryOpenItem(ItemsList.SelectedItem as RecentItemViewModel, IsCtrlPressed());
+        TryOpenItem(ItemsList.SelectedItem, IsCtrlPressed());
     }
 
     private void FavoritesList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        TryOpenItem(FavoritesList.SelectedItem as RecentItemViewModel, IsCtrlPressed());
+        TryOpenItem(FavoritesList.SelectedItem, IsCtrlPressed());
     }
 
     private void FavoritesList_ContextMenuOpening(object sender, ContextMenuEventArgs e)
@@ -337,10 +346,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         if (e.OriginalSource is DependencyObject source)
         {
             var listBoxItem = FindParent<ListBoxItem>(source);
-            if (listBoxItem?.DataContext is RecentItemViewModel vm)
-            {
-                OpenDynamicContextMenu(vm, listBoxItem);
-            }
+            OpenContextMenuForItem(listBoxItem?.DataContext, listBoxItem);
         }
         e.Handled = true;
     }
@@ -377,7 +383,27 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         return null;
     }
 
-    private void TryOpenSelectedItem() => TryOpenItem(ItemsList.SelectedItem as RecentItemViewModel);
+    private void TryOpenSelectedItem() => TryOpenItem(ItemsList.SelectedItem);
+
+    private void TryOpenItem(object? item, bool openContainingFolder = false)
+    {
+        if (item is ClipboardItemViewModel clip)
+        {
+            _ = ShouldPastePlainTextOnClipboardDoubleClick() && clip.HasPlainText
+                ? _clipboardActions.PastePlainTextToActiveAppAsync(clip.Item)
+                : _clipboardActions.PasteToActiveAppAsync(clip.Item);
+            return;
+        }
+        if (item is ClipboardFavoriteViewModel favorite)
+        {
+            _ = ShouldPastePlainTextOnClipboardDoubleClick() && favorite.HasPlainText
+                ? _clipboardActions.PastePlainTextToActiveAppAsync(favorite.Item.ToClipboardItem())
+                : _clipboardActions.PasteToActiveAppAsync(favorite.Item.ToClipboardItem());
+            return;
+        }
+
+        TryOpenItem(item as RecentItemViewModel, openContainingFolder);
+    }
 
     private void TryOpenItem(RecentItemViewModel? vm, bool openContainingFolder = false)
     {
@@ -401,6 +427,9 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
 
     private static bool IsCtrlPressed() => (Keyboard.Modifiers & ModifierKeys.Control) != 0;
 
+    private bool ShouldPastePlainTextOnClipboardDoubleClick() =>
+        ClipboardPasteGesture.ShouldPastePlainTextOnDoubleClick();
+
     // P0 拖拽支持 (PRD §6.8)
     // B4. 批量拖拽支持 (PRD §6.8)
     private System.Windows.Point? _dragStartPoint;
@@ -417,9 +446,9 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
 
     private void FavoritesDragHandle_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (sender is FrameworkElement fe && fe.DataContext is RecentItemViewModel vm)
+        if (sender is FrameworkElement fe && fe.DataContext is RecentItemViewModel or ClipboardFavoriteViewModel)
         {
-            _favoritesDragItem = vm;
+            _favoritesDragItem = fe.DataContext;
             _dragStartPoint = e.GetPosition(null);
             e.Handled = false; // let MouseMove fire
         }
@@ -435,6 +464,18 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
             {
                 var source = e.OriginalSource as DependencyObject;
                 if (source != null && FindParent<System.Windows.Controls.Button>(source) != null) return;
+
+                if (_viewModel.IsClipboardMode && ItemsList.SelectedItems.Count == 1 &&
+                    ItemsList.SelectedItem is ClipboardItemViewModel clipVm)
+                {
+                    var clipboardDataObj = _clipboardDragDrop.CreateDataObject(
+                        clipVm.Item,
+                        Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
+                    clipboardDataObj.SetData(ClipboardItemIdFormat, clipVm.Item.Id);
+                    _dragStartPoint = null;
+                    System.Windows.DragDrop.DoDragDrop(ItemsList, clipboardDataObj, System.Windows.DragDropEffects.Copy);
+                    return;
+                }
 
                 var selectedVms = GetSelectedItems().Where(v => !v.IsMissing).ToList();
 
@@ -469,11 +510,11 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
             _dragStartPoint = null;
 
             _favAdornerLayer = AdornerLayer.GetAdornerLayer(FavoritesList);
-            _dragAdorner = new FavoriteDragAdorner(FavoritesList, vm.DisplayName);
+            _dragAdorner = new FavoriteDragAdorner(FavoritesList, GetFavoriteDisplayName(vm));
             _favAdornerLayer?.Add(_dragAdorner);
 
             var dataObj = new System.Windows.DataObject();
-            dataObj.SetData("InternalReorder", vm);
+            dataObj.SetData(InternalReorderFormat, vm);
             System.Windows.DragDrop.DoDragDrop(FavoritesList, dataObj, System.Windows.DragDropEffects.Move);
 
             if (_dragAdorner != null) { _favAdornerLayer?.Remove(_dragAdorner); _dragAdorner = null; }
@@ -483,54 +524,71 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         {
             // Normal mode: external file drag only, no reorder
             if (source != null && FindParent<System.Windows.Controls.Button>(source) != null) return;
-            var selected = FavoritesList.SelectedItem as RecentItemViewModel;
-            if (selected == null || selected.IsMissing) return;
+            var selected = FavoritesList.SelectedItem;
+            if (selected is RecentItemViewModel recent && recent.IsMissing) return;
             _dragStartPoint = null;
-            var dataObj = DragDropService.CreateDataObject(new[] { selected.DisplayPath });
+            var dataObj = selected switch
+            {
+                RecentItemViewModel recentVm => DragDropService.CreateDataObject(new[] { recentVm.DisplayPath }),
+                ClipboardFavoriteViewModel clipVm => _clipboardDragDrop.CreateDataObject(
+                    clipVm.Item.ToClipboardItem(),
+                    Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)),
+                _ => null
+            };
+            if (dataObj is null) return;
             System.Windows.DragDrop.DoDragDrop(FavoritesList, dataObj,
-                System.Windows.DragDropEffects.Copy | System.Windows.DragDropEffects.Link);
+                selected is ClipboardFavoriteViewModel ? System.Windows.DragDropEffects.Copy : System.Windows.DragDropEffects.Copy | System.Windows.DragDropEffects.Link);
         }
     }
 
     private async void FavoritesList_Drop(object sender, System.Windows.DragEventArgs e)
     {
-        if (e.Data.GetDataPresent("InternalReorder"))
+        if (e.Data.GetDataPresent(InternalReorderFormat))
         {
-            var draggedVm = e.Data.GetData("InternalReorder") as RecentItemViewModel;
+            var draggedVm = e.Data.GetData(InternalReorderFormat);
             if (draggedVm == null) return;
 
-            // 找到放置点对应的项索引
-            var pos = e.GetPosition(FavoritesList);
-            var result = VisualTreeHelper.HitTest(FavoritesList, pos);
-            if (result == null) return;
-
-            var hitItem = FindParent<ListBoxItem>(result.VisualHit);
-            if (hitItem != null)
-            {
-                var targetVm = hitItem.DataContext as RecentItemViewModel;
-                if (targetVm != null && targetVm != draggedVm)
-                {
-                    int targetIndex = _viewModel.FavoritesView.Cast<object>().ToList().IndexOf(targetVm);
-                    await _indexService.ReorderFavoritesAsync(draggedVm.Item.NormalizedPath, targetIndex);
-                }
-            }
+            var ordered = _viewModel.FavoritesView.Cast<object>().ToList();
+            var targetIndex = GetFavoriteDropIndex(e.GetPosition(FavoritesList));
+            ordered.Remove(draggedVm);
+            targetIndex = Math.Clamp(targetIndex, 0, ordered.Count);
+            ordered.Insert(targetIndex, draggedVm);
+            await _viewModel.ApplyUnifiedFavoriteOrderAsync(ordered);
+            FavoritesDragLine.Visibility = Visibility.Collapsed;
+            e.Handled = true;
+            return;
+        }
+        else if (e.Data.GetDataPresent(ClipboardItemIdFormat))
+        {
+            var itemId = e.Data.GetData(ClipboardItemIdFormat) as string;
+            if (!string.IsNullOrWhiteSpace(itemId))
+                await _clipboardStore.AddToFavoritesAsync(itemId);
+            e.Handled = true;
+            return;
         }
         else if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
         {
             var files = (string[])e.Data.GetData(System.Windows.DataFormats.FileDrop);
             if (files != null)
             {
-                foreach (var file in files)
+                foreach (var file in files.Where(p => !IsClipboardDataPath(p)))
                 {
                     await _indexService.AddFavoriteByPathAsync(file);
                 }
             }
+            e.Handled = true;
         }
     }
 
     private void FavoritesList_DragOver(object sender, System.Windows.DragEventArgs e)
     {
-        if (!e.Data.GetDataPresent("InternalReorder")) return;
+        if (e.Data.GetDataPresent(ClipboardItemIdFormat))
+        {
+            e.Effects = System.Windows.DragDropEffects.Copy;
+            e.Handled = true;
+            return;
+        }
+        if (!e.Data.GetDataPresent(InternalReorderFormat)) return;
         e.Effects = System.Windows.DragDropEffects.Move;
         e.Handled = true;
 
@@ -544,6 +602,25 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
     private void FavoritesList_DragLeave(object sender, System.Windows.DragEventArgs e)
     {
         FavoritesDragLine.Visibility = Visibility.Collapsed;
+    }
+
+    private bool IsClipboardDataPath(string path)
+    {
+        try
+        {
+            var fullPath = System.IO.Path.GetFullPath(path)
+                .TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
+            var dataRoot = System.IO.Path.GetFullPath(_clipboardStore.DataDirectory)
+                .TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
+
+            return fullPath.Equals(dataRoot, StringComparison.OrdinalIgnoreCase) ||
+                   fullPath.StartsWith(dataRoot + System.IO.Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+                   fullPath.StartsWith(dataRoot + System.IO.Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private void UpdateInsertionLine(System.Windows.Point posInList)
@@ -568,11 +645,12 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
     }
 
     private IEnumerable<RecentItemViewModel> GetSelectedItems() =>
-        ItemsList.SelectedItems.Cast<RecentItemViewModel>();
+        ItemsList.SelectedItems.OfType<RecentItemViewModel>();
 
     // 提供给 App 激活窗口时调用的公共方法
     public void ShowAndFocus()
     {
+        _clipboardActions.CapturePasteTargetFromForeground();
         EnsureWindowInVisibleRange();
         Show();
         Activate();
@@ -761,7 +839,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
             return;
         }
 
-        var viewModel = new SettingsViewModel(_settings, _indexService, _restartSourcesAsync, _rebuildIndexAsync);
+        var viewModel = new SettingsViewModel(_settings, _indexService, _clipboardStore, _restartSourcesAsync, _rebuildIndexAsync);
         viewModel.SettingsChanged += ApplySettings;
         _settingsWindow = new SettingsWindow(viewModel)
         {
@@ -784,7 +862,9 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
     {
         Topmost = _settings.Current.AlwaysOnTop;
         _viewModel.UpdateHotkey(_settings.Current.Hotkey);
+        _viewModel.UpdatePopPasteHotkey(_settings.Current.PopPasteHotkey);
         _viewModel.ItemsView.Refresh();
+        _viewModel.ClipboardItemsView.Refresh();
         _viewModel.FavoritesView.Refresh();
     }
 
@@ -842,10 +922,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         if (e.OriginalSource is DependencyObject source)
         {
             var listBoxItem = FindParent<ListBoxItem>(source);
-            if (listBoxItem?.DataContext is RecentItemViewModel vm)
-            {
-                OpenDynamicContextMenu(vm, listBoxItem);
-            }
+            OpenContextMenuForItem(listBoxItem?.DataContext, listBoxItem);
         }
         e.Handled = true;
     }
@@ -872,6 +949,76 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         };
 
         menu.IsOpen = true;
+    }
+
+    private void OpenClipboardContextMenu(ClipboardItemViewModel vm, UIElement placementTarget)
+    {
+        var menu = ClipboardContextMenuBuilder.Build(vm);
+        menu.PlacementTarget = placementTarget;
+
+        _contextMenuOpen = true;
+        menu.Closed += (_, _) =>
+        {
+            _contextMenuOpen = false;
+        };
+
+        menu.IsOpen = true;
+    }
+
+    private void OpenClipboardFavoriteContextMenu(ClipboardFavoriteViewModel vm, UIElement placementTarget)
+    {
+        var menu = ClipboardContextMenuBuilder.Build(vm);
+        menu.PlacementTarget = placementTarget;
+
+        _contextMenuOpen = true;
+        menu.Closed += (_, _) => { _contextMenuOpen = false; };
+        menu.IsOpen = true;
+    }
+
+    private void OpenContextMenuForItem(object? item, UIElement? placementTarget)
+    {
+        if (placementTarget is null) return;
+        switch (item)
+        {
+            case RecentItemViewModel recent:
+                OpenDynamicContextMenu(recent, placementTarget);
+                break;
+            case ClipboardItemViewModel clip:
+                OpenClipboardContextMenu(clip, placementTarget);
+                break;
+            case ClipboardFavoriteViewModel favorite:
+                OpenClipboardFavoriteContextMenu(favorite, placementTarget);
+                break;
+        }
+    }
+
+    private int GetFavoriteDropIndex(System.Windows.Point posInList)
+    {
+        var items = _viewModel.FavoritesView.Cast<object>().ToList();
+        for (var i = 0; i < items.Count; i++)
+        {
+            if (FavoritesList.ItemContainerGenerator.ContainerFromItem(items[i]) is not FrameworkElement container)
+                continue;
+            var itemPos = container.TranslatePoint(new System.Windows.Point(0, 0), FavoritesList);
+            if (posInList.Y < itemPos.Y + container.ActualHeight / 2)
+                return i;
+        }
+
+        return items.Count;
+    }
+
+    private static string GetFavoriteDisplayName(object? item) => item switch
+    {
+        RecentItemViewModel recent => recent.DisplayName,
+        ClipboardFavoriteViewModel clip => clip.DisplayName,
+        _ => string.Empty
+    };
+
+    private void ClipSubChip_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_viewModel == null) return;
+        if (sender is System.Windows.Controls.RadioButton rb)
+            _viewModel.ClipboardSubFilter = rb.Tag?.ToString() ?? "All";
     }
 
     private static T? FindParent<T>(DependencyObject child) where T : DependencyObject
@@ -903,23 +1050,79 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
                 "Preview unavailable", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
-        if (ItemsList.SelectedItem is not RecentItemViewModel vm) return;
+
+        var item = GetPreviewCandidate();
+        var previewKey = GetPreviewKey(item);
+        if (previewKey is null) return;
+
         var pw = EnsurePreviewWindow();
 
-        if (pw.IsVisible && pw.Tag as string == vm.DisplayPath)
+        if (pw.IsVisible && pw.Tag as string == previewKey)
         {
             // 二次 Space → 关闭
             pw.Hide();
         }
         else
         {
-            pw.Tag = vm.DisplayPath;
+            pw.Tag = previewKey;
             pw.PositionRelativeTo(this);
             if (pw.Owner == null) pw.Owner = this;
             pw.Show();
-            _ = pw.ShowFileAsync(vm.DisplayPath);
+            _ = ShowPreviewForItemAsync(pw, item);
         }
     }
+
+    private void SchedulePreviewRefresh(object? item)
+    {
+        var previewKey = GetPreviewKey(item);
+        if (previewKey is null) return;
+
+        _previewNavCts?.Cancel();
+        _previewNavCts = new System.Threading.CancellationTokenSource();
+        var token = _previewNavCts.Token;
+
+        _ = Task.Delay(100, token).ContinueWith(t =>
+        {
+            if (t.IsCanceled) return;
+            Dispatcher.Invoke(() =>
+            {
+                if (_previewWindow?.IsVisible == true)
+                {
+                    _previewWindow.Tag = previewKey;
+                    _ = ShowPreviewForItemAsync(_previewWindow, item);
+                }
+            });
+        }, TaskScheduler.Default);
+    }
+
+    private object? GetPreviewCandidate()
+    {
+        if (Keyboard.FocusedElement is DependencyObject focused)
+        {
+            var focusedList = focused as System.Windows.Controls.ListBox ??
+                              FindParent<System.Windows.Controls.ListBox>(focused);
+            if (focusedList == FavoritesList)
+                return FavoritesList.SelectedItem;
+        }
+
+        return ItemsList.SelectedItem ?? FavoritesList.SelectedItem;
+    }
+
+    private static string? GetPreviewKey(object? item) => item switch
+    {
+        RecentItemViewModel recent => recent.DisplayPath,
+        ClipboardItemViewModel clip => "clipboard:" + clip.Item.Id,
+        ClipboardFavoriteViewModel favorite => "clipboard-favorite:" + favorite.Item.Id,
+        _ => null
+    };
+
+    private static Task ShowPreviewForItemAsync(PreviewWindow previewWindow, object? item) => item switch
+    {
+        RecentItemViewModel recent => previewWindow.ShowFileAsync(recent.DisplayPath),
+        ClipboardItemViewModel clip => previewWindow.ShowClipboardItemAsync(clip.Item),
+        ClipboardFavoriteViewModel favorite => previewWindow.ShowClipboardItemAsync(favorite.Item.ToClipboardItem()),
+        _ => Task.CompletedTask
+    };
 
     public void PrewarmPreview()
     {

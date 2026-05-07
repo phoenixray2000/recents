@@ -1,4 +1,5 @@
 using Markdig;
+using Recents.App.Services.Clipboard;
 using System.IO;
 using System.Net;
 using System.Text;
@@ -173,6 +174,146 @@ public static class HtmlTemplateEngine
               <button onclick="navigator.clipboard.writeText(document.querySelector('pre').innerText)">Copy</button>
             </div>
             <pre>{{escaped}}</pre>
+            </body></html>
+            """;
+    }
+
+    public static string RenderClipboardHtml(string fragment, string title)
+    {
+        return RenderSafeHtml(fragment, title, baseHref: null);
+    }
+
+    public static string RenderHtmlFile(string html, string fileName, string? baseHref)
+    {
+        return RenderSafeHtml(html, fileName, baseHref);
+    }
+
+    private static string RenderSafeHtml(string html, string title, string? baseHref)
+    {
+        var sanitized = HtmlSanitizer.SanitizeFragment(html);
+        var iframeDocument = BuildSafeIframeDocument(sanitized, baseHref);
+        var srcDoc = WebUtility.HtmlEncode(iframeDocument);
+        return $$"""
+            <!DOCTYPE html><html><head>{{BaseStyle}}
+            <style>
+            body { padding: 0; overflow: hidden; }
+            .toolbar {
+                position: sticky; top: 0;
+                background: var(--surface); border-bottom: 1px solid var(--border);
+                padding: 8px 14px; color: var(--muted); font-size: 12px; z-index: 10;
+            }
+            iframe {
+                display: block; width: 100%; height: calc(100vh - 37px);
+                border: 0; background: #fff;
+            }
+            </style></head><body>
+            <div class="toolbar">{{WebUtility.HtmlEncode(title)}} · rendered safely</div>
+            <iframe sandbox="" referrerpolicy="no-referrer" srcdoc="{{srcDoc}}"></iframe>
+            </body></html>
+            """;
+    }
+
+    private static string BuildSafeIframeDocument(string sanitized, string? baseHref)
+    {
+        var injection = BuildHtmlPreviewHeadInjection(baseHref);
+        if (TryInjectIntoHead(sanitized, injection, out var withHeadInjection))
+            return withHeadInjection;
+
+        return $$"""
+            <!DOCTYPE html><html><head>{{injection}}</head><body>{{sanitized}}</body></html>
+            """;
+    }
+
+    private static string BuildHtmlPreviewHeadInjection(string? baseHref)
+    {
+        var normalizedBase = string.IsNullOrWhiteSpace(baseHref)
+            ? ""
+            : baseHref.TrimEnd('/') + "/";
+        var baseTag = string.IsNullOrWhiteSpace(normalizedBase)
+            ? ""
+            : $"""<base href="{WebUtility.HtmlEncode(normalizedBase)}">""";
+
+        return $$"""
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width,initial-scale=1">
+            {{baseTag}}
+            <style>
+            html,body{margin:0;min-height:100%;background:#fff;color:#111;font-family:"Segoe UI",system-ui,sans-serif;}
+            body{padding:16px;line-height:1.55;}
+            img,video,canvas{max-width:100%;height:auto;}
+            table{border-collapse:collapse;max-width:100%;}
+            td,th{border:1px solid #d1d5db;padding:4px 7px;}
+            pre{white-space:pre-wrap;word-break:break-word;}
+            </style>
+            """;
+    }
+
+    private static bool TryInjectIntoHead(string html, string injection, out string result)
+    {
+        var headStart = html.IndexOf("<head", StringComparison.OrdinalIgnoreCase);
+        if (headStart < 0)
+        {
+            result = string.Empty;
+            return false;
+        }
+
+        var headOpenEnd = html.IndexOf('>', headStart);
+        if (headOpenEnd < 0)
+        {
+            result = string.Empty;
+            return false;
+        }
+
+        result = html.Insert(headOpenEnd + 1, injection);
+        return true;
+    }
+
+    public static string RenderClipboardFiles(
+        IReadOnlyList<(string Path, bool IsFolder, bool Exists)> entries,
+        string title)
+    {
+        var rows = new StringBuilder();
+        foreach (var entry in entries)
+        {
+            var icon = entry.IsFolder ? "&#xE8B7;" : "&#xE8A5;";
+            var type = entry.IsFolder ? "Folder" : "File";
+            var exists = entry.Exists ? "Yes" : "Missing";
+            rows.AppendLine($"""
+                <tr>
+                  <td class="name"><span class="item-icon">{icon}</span><span>{WebUtility.HtmlEncode(System.IO.Path.GetFileName(entry.Path))}</span></td>
+                  <td>{type}</td>
+                  <td>{exists}</td>
+                  <td class="path">{WebUtility.HtmlEncode(entry.Path)}</td>
+                </tr>
+                """);
+        }
+
+        return $$"""
+            <!DOCTYPE html><html><head>{{BaseStyle}}
+            <style>
+            body{min-height:100vh;padding:18px 20px;}
+            .header{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+            .icon{font-family:"Segoe Fluent Icons";font-size:30px;color:var(--accent);}
+            .title{font-size:17px;font-weight:600;}
+            .hint{color:var(--muted);font-size:12px;margin:0 0 12px 40px;}
+            table{width:100%;border-collapse:collapse;font-size:13px;}
+            th,td{border-bottom:1px solid var(--border);padding:7px 8px;text-align:left;vertical-align:middle;}
+            th{color:var(--muted);font-weight:600;background:rgba(255,255,255,.025);position:sticky;top:0;}
+            td{color:var(--muted);}
+            .name{color:var(--text);display:flex;align-items:center;gap:8px;min-width:160px;}
+            .name span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+            .item-icon{font-family:"Segoe Fluent Icons";color:var(--muted);flex:0 0 auto;}
+            .path{word-break:break-all;}
+            </style></head><body>
+            <div class="header">
+              <div class="icon">&#xE8B7;</div>
+              <div class="title">{{WebUtility.HtmlEncode(title)}}</div>
+            </div>
+            <div class="hint">Clipboard file list · {{entries.Count}} paths</div>
+            <table>
+              <thead><tr><th>Name</th><th>Type</th><th>Exists</th><th>Path</th></tr></thead>
+              <tbody>{{rows}}</tbody>
+            </table>
             </body></html>
             """;
     }

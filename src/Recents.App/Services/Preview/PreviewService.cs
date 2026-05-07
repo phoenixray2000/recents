@@ -84,6 +84,10 @@ public static class PreviewService
                                            HtmlTemplateEngine.RenderText(await ReadTextSafeAsync(path), fileName, kind == PreviewKind.Code),
                                            null, title, path),
 
+            PreviewKind.Html         => new(kind,
+                                           HtmlTemplateEngine.RenderHtmlFile(await ReadTextSafeAsync(path), fileName, virtualBase),
+                                           null, title, path),
+
             PreviewKind.Csv          => new(kind,
                                            HtmlTemplateEngine.RenderCsv(await ReadTextSafeAsync(path), fileName),
                                            null, title, path),

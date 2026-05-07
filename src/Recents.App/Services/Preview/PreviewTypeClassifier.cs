@@ -12,6 +12,7 @@ public enum PreviewKind
     Pdf,
     Image,
     Text,
+    Html,
     Csv,
     Code,
     Markdown,
@@ -81,6 +82,9 @@ public static class PreviewTypeClassifier
 
         if (ext == ".csv")
             return size > TextLimit ? (PreviewKind.TooLarge, size) : (PreviewKind.Csv, size);
+
+        if (ext is ".html" or ".htm")
+            return size > TextLimit ? (PreviewKind.TooLarge, size) : (PreviewKind.Html, size);
 
         if (TextExts.Contains(ext))
             return size > TextLimit ? (PreviewKind.TooLarge, size) : (PreviewKind.Text, size);

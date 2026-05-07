@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Input;
 using Microsoft.Web.WebView2.Core;
+using Recents.App.Models;
 using Recents.App.Services.Preview;
 using Serilog;
 using Recents.App.Services;
@@ -21,7 +22,9 @@ public partial class PreviewWindow : Window, IRecentDockWindow
 
     private bool _webView2Ready = false;
     private string? _pendingPath = null;    // 在 WebView2 初始化完成前缓存的路径
+    private ClipboardItem? _pendingClipboardItem = null;
     private string? _currentPath = null;
+    private ClipboardItem? _currentClipboardItem = null;
     private string? _imageDimensions = null;
     private readonly IPreviewCommandHost _commandHost;
     private readonly IWindowGroupFocusService _windowGroupFocusService;
@@ -73,6 +76,12 @@ public partial class PreviewWindow : Window, IRecentDockWindow
                 _pendingPath = null;
                 await ShowFileAsync(path);
             }
+            else if (_pendingClipboardItem != null)
+            {
+                var item = _pendingClipboardItem;
+                _pendingClipboardItem = null;
+                await ShowClipboardItemAsync(item);
+            }
         }
         catch (Exception ex) when (ex.Message.Contains("WebView2 Runtime"))
         {
@@ -102,6 +111,7 @@ public partial class PreviewWindow : Window, IRecentDockWindow
         // 重复路径不重新加载（按↑↓时避免不必要的重渲染）
         if (_currentPath == path) return;
         _currentPath = path;
+        _currentClipboardItem = null;
         _imageDimensions = null; // 重置尺寸信息
         UpdateHeader(path);
 
@@ -129,6 +139,82 @@ public partial class PreviewWindow : Window, IRecentDockWindow
         else if (doc.Html != null)
         {
             WebView.NavigateToString(doc.Html);
+        }
+    }
+
+    public async Task ShowClipboardItemAsync(ClipboardItem item)
+    {
+        if (!_webView2Ready)
+        {
+            _pendingClipboardItem = item;
+            return;
+        }
+
+        var previewKey = "clipboard:" + item.Id;
+        if (_currentPath == previewKey) return;
+        _currentPath = previewKey;
+        _currentClipboardItem = item;
+        _imageDimensions = null;
+        UpdateClipboardHeader(item);
+
+        try
+        {
+            switch (item.Type)
+            {
+                case ClipboardPayloadType.Text:
+                    WebView.NavigateToString(HtmlTemplateEngine.RenderText(
+                        item.PlainText ?? ReadFirstExisting(item.BlobPath) ?? string.Empty,
+                        "Clipboard text",
+                        isCode: false));
+                    break;
+
+                case ClipboardPayloadType.Html:
+                    WebView.NavigateToString(HtmlTemplateEngine.RenderClipboardHtml(
+                        ReadFirstExisting(item.HtmlBlobPath, item.BlobPath) ??
+                        System.Net.WebUtility.HtmlEncode(item.PlainText ?? item.PreviewText),
+                        "Clipboard HTML"));
+                    break;
+
+                case ClipboardPayloadType.RichText:
+                    WebView.NavigateToString(HtmlTemplateEngine.RenderText(
+                        item.PlainText ?? ReadFirstExisting(item.RtfBlobPath, item.BlobPath) ?? string.Empty,
+                        "Clipboard rich text",
+                        isCode: false));
+                    break;
+
+                case ClipboardPayloadType.Image:
+                    if (!string.IsNullOrWhiteSpace(item.ImagePath) && File.Exists(item.ImagePath))
+                    {
+                        RemapVirtualHost(item.ImagePath);
+                        WebView.NavigateToString(HtmlTemplateEngine.RenderImage(
+                            MakeMediaUri(item.ImagePath),
+                            Path.GetFileName(item.ImagePath)));
+                    }
+                    else
+                    {
+                        WebView.NavigateToString(HtmlTemplateEngine.RenderMissing(item.ImagePath ?? item.PreviewText));
+                    }
+                    break;
+
+                case ClipboardPayloadType.Files:
+                    await ShowClipboardFilesAsync(item);
+                    break;
+
+                default:
+                    WebView.NavigateToString(HtmlTemplateEngine.RenderText(
+                        item.PlainText ?? item.PreviewText,
+                        "Clipboard item",
+                        isCode: false));
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Clipboard preview failed for {Id}", item.Id);
+            WebView.NavigateToString(HtmlTemplateEngine.RenderText(
+                item.PreviewText,
+                "Clipboard preview unavailable",
+                isCode: false));
         }
     }
 
@@ -181,6 +267,42 @@ public partial class PreviewWindow : Window, IRecentDockWindow
         }
     }
 
+    private async Task ShowClipboardFilesAsync(ClipboardItem item)
+    {
+        var existing = item.FilePaths
+            .Where(p => File.Exists(p.Path) || Directory.Exists(p.Path))
+            .ToList();
+
+        if (existing.Count == 1)
+        {
+            await ShowFileAsync(existing[0].Path);
+            return;
+        }
+
+        var entries = item.FilePaths
+            .Select(p => (
+                p.Path,
+                p.IsFolder,
+                Exists: File.Exists(p.Path) || Directory.Exists(p.Path)))
+            .ToList();
+
+        WebView.NavigateToString(HtmlTemplateEngine.RenderClipboardFiles(entries, item.PreviewText));
+    }
+
+    private static string? ReadFirstExisting(params string?[] paths)
+    {
+        foreach (var path in paths)
+        {
+            if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+                return File.ReadAllText(path);
+        }
+
+        return null;
+    }
+
+    private static string MakeMediaUri(string path) =>
+        VirtualHostBase.TrimEnd('/') + "/" + Uri.EscapeDataString(Path.GetFileName(path));
+
     private void UpdateHeader(string path)
     {
         try
@@ -214,6 +336,46 @@ public partial class PreviewWindow : Window, IRecentDockWindow
             };
         }
         catch { /* 忽略 IO 异常 */ }
+    }
+
+    private void UpdateClipboardHeader(ClipboardItem item)
+    {
+        FileNameText.Text = item.Type switch
+        {
+            ClipboardPayloadType.Text => "Clipboard text",
+            ClipboardPayloadType.Files => "Clipboard files",
+            ClipboardPayloadType.Image => "Clipboard image",
+            ClipboardPayloadType.Html => "Clipboard HTML",
+            ClipboardPayloadType.RichText => "Clipboard rich text",
+            _ => "Clipboard item"
+        };
+
+        var parts = new List<string> { item.CreatedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm") };
+        if (item.TextLength.HasValue)
+            parts.Add($"{item.TextLength.Value:N0} chars");
+        if (item.ImageWidth.HasValue && item.ImageHeight.HasValue)
+            parts.Add($"{item.ImageWidth} × {item.ImageHeight}");
+        else if (item.Type == ClipboardPayloadType.Image && !string.IsNullOrWhiteSpace(_imageDimensions))
+            parts.Add(_imageDimensions);
+        if (item.SizeBytes.HasValue)
+            parts.Add(FormatSize(item.SizeBytes.Value));
+        if (!string.IsNullOrWhiteSpace(item.SourceAppName))
+            parts.Add(item.SourceAppName);
+
+        FileMetaText.Text = string.Join("  ·  ", parts);
+        FilePathText.Text = item.Type == ClipboardPayloadType.Files
+            ? string.Join(Environment.NewLine, item.FilePaths.Select(p => p.Path))
+            : item.ImagePath ?? item.HtmlBlobPath ?? item.RtfBlobPath ?? item.BlobPath ?? item.PreviewText;
+
+        FileIconText.Text = item.Type switch
+        {
+            ClipboardPayloadType.Text => "\uE8C8",
+            ClipboardPayloadType.Files => "\uE8B7",
+            ClipboardPayloadType.Image => "\uEB9F",
+            ClipboardPayloadType.Html => "\uE736",
+            ClipboardPayloadType.RichText => "\uE8D2",
+            _ => "\uE946"
+        };
     }
 
     private static string FormatSize(long bytes) =>
@@ -286,6 +448,7 @@ public partial class PreviewWindow : Window, IRecentDockWindow
     {
         Hide();
         _currentPath = null;
+        _currentClipboardItem = null;
     }
 
     private void OpenCurrentFile() => _commandHost.OpenSelectedItem();
@@ -303,7 +466,10 @@ public partial class PreviewWindow : Window, IRecentDockWindow
                 {
                     var val = parts[1].Split("\"")[0];
                     _imageDimensions = val;
-                    if (_currentPath != null) UpdateHeader(_currentPath);
+                    if (_currentClipboardItem is not null)
+                        UpdateClipboardHeader(_currentClipboardItem);
+                    else if (_currentPath != null)
+                        UpdateHeader(_currentPath);
                 }
             }
         }

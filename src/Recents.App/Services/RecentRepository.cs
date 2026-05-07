@@ -86,6 +86,11 @@ internal sealed class RecentRepository : IDisposable
         }
 
         cmd.CommandText = """
+            CREATE TABLE IF NOT EXISTS schema_version (
+                version INTEGER PRIMARY KEY,
+                applied_utc TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS recent_items (
                 normalized_path      TEXT PRIMARY KEY,
                 display_name         TEXT NOT NULL,
@@ -140,6 +145,29 @@ internal sealed class RecentRepository : IDisposable
             FROM recent_items WHERE is_favorite = 1;
             """;
         cmd.ExecuteNonQuery();
+
+        ApplyCodeToDocumentsMigration();
+    }
+
+    private void ApplyCodeToDocumentsMigration()
+    {
+        using var check = _conn!.CreateCommand();
+        const int version = 2026050701;
+        check.CommandText = "SELECT COUNT(*) FROM schema_version WHERE version = $version;";
+        check.Parameters.AddWithValue("$version", version);
+        if (Convert.ToInt32(check.ExecuteScalar()) > 0)
+            return;
+
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = """
+            UPDATE recent_items SET category_source = 'Documents' WHERE category_source = 'Code';
+            UPDATE favorites SET category_source = 'Documents' WHERE category_source = 'Code';
+            INSERT INTO schema_version (version, applied_utc) VALUES ($version, $applied);
+            """;
+        cmd.Parameters.AddWithValue("$version", version);
+        cmd.Parameters.AddWithValue("$applied", DateTime.UtcNow.ToString("O"));
+        cmd.ExecuteNonQuery();
+        Log.Information("RecentRepository: migrated Code classification to Documents");
     }
 
     // 从 SQLite 加载最多 maxItems 条记录（按 recent_time DESC），供启动时灌入内存

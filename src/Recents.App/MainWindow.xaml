@@ -7,6 +7,7 @@
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:utils="clr-namespace:Recents.App.Utils"
         xmlns:loc="clr-namespace:Recents.App.Localization"
+        xmlns:helpers="clr-namespace:Recents.App.Helpers"
         mc:Ignorable="d"
         Title="{loc:T Key=Main_Title}" Height="760" Width="600" MinHeight="520" MinWidth="600"
         WindowStartupLocation="CenterScreen" 
@@ -219,6 +220,142 @@
                 </Button>
             </Grid>
         </DataTemplate>
+
+        <DataTemplate x:Key="ClipboardItemTemplate" DataType="{x:Type vm:ClipboardItemViewModel}">
+            <Grid Margin="4" MinHeight="54">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Width="44" Height="44" CornerRadius="6"
+                        Background="{DynamicResource BgInput}"
+                        BorderBrush="{DynamicResource BorderMuted}"
+                        BorderThickness="1"
+                        VerticalAlignment="Center" Margin="0,0,14,0">
+                    <Grid>
+                        <Image Source="{Binding Thumbnail}" Stretch="UniformToFill"
+                               Visibility="{Binding ThumbnailVisibility}"/>
+                        <TextBlock Text="{Binding TypeIcon}" FontFamily="Segoe Fluent Icons"
+                                   FontSize="18" Foreground="{DynamicResource TextSecondary}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Visibility="{Binding IconVisibility}"/>
+                    </Grid>
+                </Border>
+
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border CornerRadius="4" Background="{DynamicResource AccentBlue}"
+                                Padding="5,1" Margin="0,0,8,0" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding TypeLabel}" FontSize="10" Foreground="White" FontWeight="SemiBold"/>
+                        </Border>
+                        <TextBlock Text="{Binding DisplayText}" FontWeight="SemiBold" FontSize="13"
+                                   Foreground="{DynamicResource TextPrimary}"
+                                   TextTrimming="CharacterEllipsis" MaxWidth="360"/>
+                    </StackPanel>
+                    <TextBlock Text="{Binding Metadata}" FontSize="11"
+                               Foreground="{DynamicResource TextTertiary}"
+                               TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="&#xE8C8;" Command="{Binding CopyCommand}"
+                            FontFamily="Segoe Fluent Icons" Style="{StaticResource ActionButtonStyle}"
+                            Width="32" Height="32" ToolTip="{loc:T Key=Clipboard_Action_Copy}"/>
+                    <Button Content="&#xE735;" Command="{Binding ToggleFavoriteCommand}"
+                            FontFamily="Segoe Fluent Icons" Width="32" Height="32" ToolTip="{loc:T Key=Clipboard_Action_ToggleFavorite}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Item.IsFavorite}" Value="True">
+                                        <Setter Property="Foreground" Value="{DynamicResource AccentBlue}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Button Content="&#xE74D;" Command="{Binding DeleteCommand}"
+                            FontFamily="Segoe Fluent Icons" Style="{StaticResource ActionButtonStyle}"
+                            Width="32" Height="32" ToolTip="{loc:T Key=Clipboard_Action_Delete}"/>
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="ClipboardFavoriteItemTemplate" DataType="{x:Type vm:ClipboardFavoriteViewModel}">
+            <Grid Margin="2,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Width="24" Height="32" Cursor="SizeNS"
+                        Background="Transparent"
+                        PreviewMouseLeftButtonDown="FavoritesDragHandle_PreviewMouseLeftButtonDown">
+                    <TextBlock Text="&#xE784;" FontFamily="Segoe Fluent Icons" FontSize="14"
+                               Foreground="{DynamicResource TextTertiary}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               IsHitTestVisible="False"/>
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DataContext.IsFavoritesEditMode,
+                                             RelativeSource={RelativeSource AncestorType=Window}}"
+                                             Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                </Border>
+
+                <Border Grid.Column="1" Width="24" Height="24" CornerRadius="5"
+                        Background="{DynamicResource BgInput}"
+                        VerticalAlignment="Center" Margin="0,0,8,0">
+                    <Grid>
+                        <Image Source="{Binding Thumbnail}" Stretch="UniformToFill"
+                               Visibility="{Binding ThumbnailVisibility}"/>
+                        <TextBlock Text="{Binding TypeIcon}" FontFamily="Segoe Fluent Icons" FontSize="13"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Visibility="{Binding IconVisibility}"/>
+                    </Grid>
+                </Border>
+
+                <TextBlock Grid.Column="2" Text="{Binding DisplayName}" FontWeight="SemiBold"
+                           FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                           ToolTip="{Binding DisplayPath}"
+                           Foreground="{DynamicResource TextPrimary}"/>
+
+                <Button Grid.Column="3" Content="&#xE735;" Command="{Binding RemoveFavoriteCommand}"
+                        FontFamily="Segoe Fluent Icons" Width="28" Height="32"
+                        ToolTip="{loc:T Key=Main_Favorites_Unpin}"
+                        Foreground="{DynamicResource AccentBlue}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DataContext.IsFavoritesEditMode,
+                                             RelativeSource={RelativeSource AncestorType=Window}}"
+                                             Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+            </Grid>
+        </DataTemplate>
+
+        <helpers:MainItemTemplateSelector x:Key="MainItemTemplateSelector"
+                                          RecentTemplate="{StaticResource SharedRecentItemTemplate}"
+                                          ClipboardTemplate="{StaticResource ClipboardItemTemplate}"/>
+        <helpers:FavoritesItemTemplateSelector x:Key="FavoritesItemTemplateSelector"
+                                               RecentTemplate="{StaticResource FavoritesItemTemplate}"
+                                               ClipboardTemplate="{StaticResource ClipboardFavoriteItemTemplate}"/>
     </Window.Resources>
 
     <Border BorderBrush="{DynamicResource WindowBorderBrush}" BorderThickness="1" 
@@ -332,12 +469,19 @@
 
             <!-- Filter Area -->
             <Grid Grid.Row="2" Margin="24,0,24,10">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0">
                 <StackPanel Orientation="Horizontal">
                     <RadioButton Content="{loc:T Key=Main_Filter_AllFiles}" IsChecked="True" Style="{StaticResource FilterPill}" Checked="Chip_Checked" Tag="All"/>
                     <RadioButton Content="{loc:T Key=Main_Filter_Documents}" Style="{StaticResource FilterPill}" Tag="Documents" Checked="Chip_Checked"/>
                     <RadioButton Content="{loc:T Key=Main_Filter_Images}" Style="{StaticResource FilterPill}" Tag="Images" Checked="Chip_Checked"/>
-                    <RadioButton Content="{loc:T Key=Main_Filter_Code}" Style="{StaticResource FilterPill}" Tag="Code" Checked="Chip_Checked"/>
                     <RadioButton Content="{loc:T Key=Main_Filter_Folders}" Style="{StaticResource FilterPill}" Tag="Folders" Checked="Chip_Checked"/>
+                    <Rectangle Width="1" Height="18" Fill="{DynamicResource BorderMuted}" Margin="0,5,8,5"/>
+                    <RadioButton Content="{loc:T Key=Main_Filter_Clipboard}" Style="{StaticResource FilterPill}" Tag="Clipboard" Checked="Chip_Checked"/>
 
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
@@ -376,6 +520,17 @@
                         </Button.ContextMenu>
                     </Button>
                     <Button Content="&#xE8A9;" FontFamily="Segoe Fluent Icons" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource TextSecondary}" Margin="8,0,0,0" Visibility="Collapsed"/>
+                </StackPanel>
+                </Grid>
+
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,8,0,0"
+                            Visibility="{Binding IsClipboardMode, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <RadioButton Content="{loc:T Key=Main_ClipSub_All}" IsChecked="True" Style="{StaticResource FilterPill}" Tag="All" Checked="ClipSubChip_Checked"/>
+                    <RadioButton Content="{loc:T Key=Main_ClipSub_Text}" Style="{StaticResource FilterPill}" Tag="Text" Checked="ClipSubChip_Checked"/>
+                    <RadioButton Content="{loc:T Key=Main_ClipSub_Files}" Style="{StaticResource FilterPill}" Tag="Files" Checked="ClipSubChip_Checked"/>
+                    <RadioButton Content="{loc:T Key=Main_ClipSub_Images}" Style="{StaticResource FilterPill}" Tag="Images" Checked="ClipSubChip_Checked"/>
+                    <RadioButton Content="{loc:T Key=Main_ClipSub_Html}" Style="{StaticResource FilterPill}" Tag="Html" Checked="ClipSubChip_Checked"/>
+                    <RadioButton Content="{loc:T Key=Main_ClipSub_RichText}" Style="{StaticResource FilterPill}" Tag="RichText" Checked="ClipSubChip_Checked"/>
                 </StackPanel>
             </Grid>
 
@@ -431,7 +586,7 @@
 
                 <ListBox x:Name="ItemsList" Background="Transparent" BorderThickness="0"
                          SelectionMode="Extended"
-                         ItemsSource="{Binding ItemsView}"
+                         ItemsSource="{Binding ActiveItemsView}"
                          VirtualizingPanel.IsVirtualizing="True"
                          VirtualizingPanel.VirtualizationMode="Recycling"
                          VirtualizingPanel.ScrollUnit="Pixel"
@@ -453,9 +608,9 @@
                             </Style.Triggers>
                         </Style>
                     </ListBox.Style>
-                    <ListBox.ItemTemplate>
-                        <StaticResource ResourceKey="SharedRecentItemTemplate"/>
-                    </ListBox.ItemTemplate>
+                    <ListBox.ItemTemplateSelector>
+                        <StaticResource ResourceKey="MainItemTemplateSelector"/>
+                    </ListBox.ItemTemplateSelector>
                 </ListBox>
 
             </Grid>
@@ -515,7 +670,7 @@
 
                 <ListBox x:Name="FavoritesList" Grid.Row="1" Background="Transparent" BorderThickness="0" ItemsSource="{Binding FavoritesView}" Padding="4"
                          ItemContainerStyle="{StaticResource FavoritesItemStyle}"
-                         ItemTemplate="{StaticResource FavoritesItemTemplate}"
+                         ItemTemplateSelector="{StaticResource FavoritesItemTemplateSelector}"
                          MouseDoubleClick="FavoritesList_MouseDoubleClick"
                          PreviewMouseLeftButtonDown="FavoritesList_PreviewMouseLeftButtonDown"
                          ContextMenuOpening="ItemsList_ContextMenuOpening"

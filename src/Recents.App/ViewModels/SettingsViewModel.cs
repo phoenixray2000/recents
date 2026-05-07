@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using Recents.App.Localization;
 using Recents.App.Models;
 using Recents.App.Services;
+using Recents.App.Services.Clipboard;
 using Recents.App.Services.Sources;
 using Forms = System.Windows.Forms;
 using Interaction = Microsoft.VisualBasic.Interaction;
@@ -17,6 +18,7 @@ public partial class SettingsViewModel : ObservableObject
 {
     private readonly SettingsService _settings;
     private readonly RecentIndexService _indexService;
+    private readonly ClipboardStoreService _clipboardStore;
     private readonly Func<Task> _restartSourcesAsync;
     private readonly Func<Task> _rebuildIndexAsync;
     private readonly SemaphoreSlim _sourceSaveLock = new(1, 1);
@@ -70,14 +72,23 @@ public partial class SettingsViewModel : ObservableObject
         new ThemeOption(ThemeMode.Light,        Loc.T("Theme_Light")),
     };
 
+    public record StringOption(string Value, string DisplayName);
+    public IReadOnlyList<StringOption> PopPasteEnterBehaviorOptions { get; } = new[]
+    {
+        new StringOption("PasteToActiveApp", Loc.T("Settings_Clipboard_PasteToActiveApp")),
+        new StringOption("CopyOnly", Loc.T("Settings_Clipboard_CopyOnly")),
+    };
+
     public SettingsViewModel(
         SettingsService settings,
         RecentIndexService indexService,
+        ClipboardStoreService clipboardStore,
         Func<Task> restartSourcesAsync,
         Func<Task> rebuildIndexAsync)
     {
         _settings = settings;
         _indexService = indexService;
+        _clipboardStore = clipboardStore;
         _restartSourcesAsync = restartSourcesAsync;
         _rebuildIndexAsync = rebuildIndexAsync;
         SystemSources = new ObservableCollection<SystemSourceInfo>
@@ -113,6 +124,25 @@ public partial class SettingsViewModel : ObservableObject
         _showSystemAndHiddenFiles = settings.Current.ShowSystemAndHiddenFiles;
         _selectedLanguage = settings.Current.Language ?? "";
         _selectedTheme = settings.Current.Theme;
+
+        _enableClipboardHistory = settings.Current.EnableClipboardHistory;
+        _captureTextClipboard = settings.Current.CaptureTextClipboard;
+        _captureFileClipboard = settings.Current.CaptureFileClipboard;
+        _captureImageClipboard = settings.Current.CaptureImageClipboard;
+        _captureHtmlClipboard = settings.Current.CaptureHtmlClipboard;
+        _captureRichTextClipboard = settings.Current.CaptureRichTextClipboard;
+        _maxClipboardItems = settings.Current.MaxClipboardItems;
+        _clipboardRetentionDays = settings.Current.ClipboardRetentionDays;
+        _maxClipboardTextChars = settings.Current.MaxClipboardTextChars;
+        _maxClipboardImageSizeMb = Math.Max(1, (int)(settings.Current.MaxClipboardImageBytes / 1024 / 1024));
+        _ignoreSensitiveText = settings.Current.IgnoreSensitiveText;
+        _ignoreSystemAndHiddenFilesInClipboard = settings.Current.IgnoreSystemAndHiddenFilesInClipboard;
+        _clipboardSensitivePatternsText = Join(settings.Current.ClipboardSensitivePatterns);
+        _clipboardExcludedSourceAppsText = string.Join(", ", settings.Current.ClipboardExcludedSourceApps);
+        _popPasteHotkey = settings.Current.PopPasteHotkey;
+        _popPasteEnterBehavior = settings.Current.PopPasteEnterBehavior;
+        _restoreClipboardAfterPaste = settings.Current.RestoreClipboardAfterPaste;
+        _clipboardDataPath = _clipboardStore.DataDirectory;
     }
 
     [ObservableProperty] private bool _launchAtStartup;
@@ -135,6 +165,24 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _showSystemAndHiddenFiles;
     [ObservableProperty] private string _selectedLanguage = "";
     [ObservableProperty] private ThemeMode _selectedTheme = ThemeMode.FollowSystem;
+    [ObservableProperty] private bool _enableClipboardHistory;
+    [ObservableProperty] private bool _captureTextClipboard = true;
+    [ObservableProperty] private bool _captureFileClipboard = true;
+    [ObservableProperty] private bool _captureImageClipboard = true;
+    [ObservableProperty] private bool _captureHtmlClipboard = true;
+    [ObservableProperty] private bool _captureRichTextClipboard = true;
+    [ObservableProperty] private int _maxClipboardItems = 500;
+    [ObservableProperty] private int _clipboardRetentionDays = 30;
+    [ObservableProperty] private int _maxClipboardTextChars = 50_000;
+    [ObservableProperty] private int _maxClipboardImageSizeMb = 20;
+    [ObservableProperty] private bool _ignoreSensitiveText = true;
+    [ObservableProperty] private bool _ignoreSystemAndHiddenFilesInClipboard = true;
+    [ObservableProperty] private string _clipboardSensitivePatternsText = string.Empty;
+    [ObservableProperty] private string _clipboardExcludedSourceAppsText = string.Empty;
+    [ObservableProperty] private string _popPasteHotkey = "Alt+Shift+V";
+    [ObservableProperty] private string _popPasteEnterBehavior = "PasteToActiveApp";
+    [ObservableProperty] private bool _restoreClipboardAfterPaste;
+    [ObservableProperty] private string _clipboardDataPath = string.Empty;
 
     partial void OnSelectedLanguageChanged(string value)
     {
@@ -177,11 +225,83 @@ public partial class SettingsViewModel : ObservableObject
         _settings.Current.ShowSystemAndHiddenFiles = value;
         SaveAndNotify();
     }
+    partial void OnEnableClipboardHistoryChanged(bool value) { _settings.Current.EnableClipboardHistory = value; SaveAndNotify(); }
+    partial void OnCaptureTextClipboardChanged(bool value) { _settings.Current.CaptureTextClipboard = value; SaveAndNotify(); }
+    partial void OnCaptureFileClipboardChanged(bool value) { _settings.Current.CaptureFileClipboard = value; SaveAndNotify(); }
+    partial void OnCaptureImageClipboardChanged(bool value) { _settings.Current.CaptureImageClipboard = value; SaveAndNotify(); }
+    partial void OnCaptureHtmlClipboardChanged(bool value) { _settings.Current.CaptureHtmlClipboard = value; SaveAndNotify(); }
+    partial void OnCaptureRichTextClipboardChanged(bool value) { _settings.Current.CaptureRichTextClipboard = value; SaveAndNotify(); }
+    partial void OnMaxClipboardItemsChanged(int value) { _settings.Current.MaxClipboardItems = Math.Clamp(value, 50, 5000); SaveAndNotify(); }
+    partial void OnClipboardRetentionDaysChanged(int value) { _settings.Current.ClipboardRetentionDays = Math.Clamp(value, 1, 3650); SaveAndNotify(); }
+    partial void OnMaxClipboardTextCharsChanged(int value) { _settings.Current.MaxClipboardTextChars = Math.Clamp(value, 1000, 1_000_000); SaveAndNotify(); }
+    partial void OnMaxClipboardImageSizeMbChanged(int value)
+    {
+        _settings.Current.MaxClipboardImageBytes = Math.Clamp(value, 1, 200) * 1024L * 1024L;
+        SaveAndNotify();
+    }
+    partial void OnIgnoreSensitiveTextChanged(bool value) { _settings.Current.IgnoreSensitiveText = value; SaveAndNotify(); }
+    partial void OnIgnoreSystemAndHiddenFilesInClipboardChanged(bool value) { _settings.Current.IgnoreSystemAndHiddenFilesInClipboard = value; SaveAndNotify(); }
+    partial void OnClipboardSensitivePatternsTextChanged(string value) { _settings.Current.ClipboardSensitivePatterns = SplitLinesOnly(value); SaveAndNotify(); }
+    partial void OnClipboardExcludedSourceAppsTextChanged(string value) { _settings.Current.ClipboardExcludedSourceApps = Split(value); SaveAndNotify(); }
+    partial void OnPopPasteHotkeyChanged(string value) { _settings.Current.PopPasteHotkey = value; SaveAndNotify(); }
+    partial void OnPopPasteEnterBehaviorChanged(string value)
+    {
+        _settings.Current.PopPasteEnterBehavior = string.IsNullOrWhiteSpace(value) ? "PasteToActiveApp" : value;
+        SaveAndNotify();
+    }
+    partial void OnRestoreClipboardAfterPasteChanged(bool value) { _settings.Current.RestoreClipboardAfterPaste = value; SaveAndNotify(); }
 
     [RelayCommand]
     private void ResetHotkey()
     {
         Hotkey = "Alt+Shift+Z";
+    }
+
+    [RelayCommand]
+    private void ResetPopPasteHotkey()
+    {
+        PopPasteHotkey = "Alt+Shift+V";
+    }
+
+    [RelayCommand]
+    private void PauseClipboard10Minutes()
+    {
+        _settings.Current.ClipboardPausedUntilUtc = DateTime.UtcNow.AddMinutes(10);
+        SaveAndNotify();
+    }
+
+    [RelayCommand]
+    private void PauseClipboard1Hour()
+    {
+        _settings.Current.ClipboardPausedUntilUtc = DateTime.UtcNow.AddHours(1);
+        SaveAndNotify();
+    }
+
+    [RelayCommand]
+    private void ResumeClipboard()
+    {
+        _settings.Current.ClipboardPausedUntilUtc = null;
+        SaveAndNotify();
+    }
+
+    [RelayCommand]
+    private async Task ClearClipboardHistory()
+    {
+        await _clipboardStore.ClearHistoryAsync();
+        StatusMessage = "Clipboard history cleared";
+    }
+
+    [RelayCommand]
+    private void OpenClipboardDataFolder()
+    {
+        OpenFolder(ClipboardDataPath);
+    }
+
+    [RelayCommand]
+    private async Task CompactClipboardBlobs()
+    {
+        await _clipboardStore.CompactOrphanBlobsAsync();
+        StatusMessage = "Clipboard blobs compacted";
     }
 
     [RelayCommand]
@@ -356,6 +476,11 @@ public partial class SettingsViewModel : ObservableObject
 
     private static List<string> Split(string value) =>
         value.Split(new[] { '\r', '\n', ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    private static List<string> SplitLinesOnly(string value) =>
+        value.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 

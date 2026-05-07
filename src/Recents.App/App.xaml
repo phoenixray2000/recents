@@ -333,7 +333,7 @@
                             <Border CornerRadius="4" Background="{DynamicResource AccentBlue}"
                                     Padding="5,1" Margin="6,0,0,0" VerticalAlignment="Center"
                                     Visibility="{Binding BadgeVisibility}">
-                                <TextBlock Text="{Binding ClassificationSource}" FontSize="10" Foreground="White" FontWeight="SemiBold"/>
+                                <TextBlock Text="{Binding ClassificationSourceLabel}" FontSize="10" Foreground="White" FontWeight="SemiBold"/>
                             </Border>
                         </StackPanel>
                         <StackPanel x:Name="DetailsStack" Orientation="Horizontal" Margin="0,2,0,0">

@@ -5,18 +5,21 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Recents.App.Models;
 using Recents.App.Services;
+using Recents.App.Services.Clipboard;
 using Recents.App.Utils;
 
 namespace Recents.App.ViewModels;
 
-// PRD 搂13 / 搂6.6 涓昏鍥炬ā鍨?
+// PRD §13 / §6.6 主视图模型
 public partial class MainViewModel : ObservableObject
 {
     private readonly RecentIndexService _indexService;
+    private readonly ClipboardStoreService _clipboardStore;
     private readonly HotkeyService _hotkeyService;
     private readonly StatusHintService _statusHint;
     private readonly SettingsService _settingsService;
     private readonly System.Windows.Threading.DispatcherTimer _updateTimer;
+    private readonly ObservableCollection<object> _unifiedFavorites = new();
 
     [ObservableProperty]
     private string _searchText = string.Empty;
@@ -33,11 +36,23 @@ public partial class MainViewModel : ObservableObject
         ClassificationSource
     }
 
+    public enum ContentMode
+    {
+        Recent,
+        Clipboard
+    }
+
+    [ObservableProperty]
+    private ContentMode _currentMode = ContentMode.Recent;
+
     [ObservableProperty]
     private SortOption _currentSort = SortOption.RecentTime;
 
     [ObservableProperty]
     private string _currentChipFilter = "All";
+
+    [ObservableProperty]
+    private string _clipboardSubFilter = "All";
 
     [ObservableProperty]
     private AppSettings.ViewDensity _currentDensity = AppSettings.ViewDensity.Standard;
@@ -60,13 +75,22 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ToggleFavoritesEditMode() => IsFavoritesEditMode = !IsFavoritesEditMode;
 
-    // UI 缁戝畾鐨勮繃婊ゅ悗瑙嗗浘
+    // UI 绑定的过滤后视图
     public ICollectionView ItemsView { get; }
+    public ICollectionView ClipboardItemsView { get; }
+    public ICollectionView ActiveItemsView => IsClipboardMode ? ClipboardItemsView : ItemsView;
     public ICollectionView FavoritesView { get; }
+    public bool IsClipboardMode => CurrentMode == ContentMode.Clipboard;
 
-    public MainViewModel(RecentIndexService indexService, HotkeyService hotkeyService, StatusHintService statusHint, SettingsService settingsService)
+    public MainViewModel(
+        RecentIndexService indexService,
+        ClipboardStoreService clipboardStore,
+        HotkeyService hotkeyService,
+        StatusHintService statusHint,
+        SettingsService settingsService)
     {
         _indexService = indexService;
+        _clipboardStore = clipboardStore;
         _hotkeyService = hotkeyService;
         _statusHint = statusHint;
         _settingsService = settingsService;
@@ -78,18 +102,21 @@ public partial class MainViewModel : ObservableObject
 
         ItemsView = CollectionViewSource.GetDefaultView(_indexService.Items);
         ItemsView.Filter = FilterItem;
+        ClipboardItemsView = CollectionViewSource.GetDefaultView(_clipboardStore.Items);
+        ClipboardItemsView.Filter = FilterClipboardItem;
 
-        // 鏀惰棌澶圭幇鍦ㄧ粦瀹氬埌鐙珛鐨?Favorites 闆嗗悎 (PRD 搂6.18 / User Feedback)
-        FavoritesView = CollectionViewSource.GetDefaultView(_indexService.Favorites);
+        FavoritesView = CollectionViewSource.GetDefaultView(_unifiedFavorites);
+        FavoritesView.SortDescriptions.Add(new SortDescription("FavoriteOrder", ListSortDirection.Ascending));
+        RebuildUnifiedFavorites();
 
-        // 鍒濆鍚屾璁℃暟
+        // 初始同步计数
         RefreshVisibleCount();
         UpdateHasItems();
         UpdateHasFavorites();
         
         ApplySort();
 
-        // Throttled updates (PRD/User Feedback: 鍚姩鍜岄噸鎵椂闃叉 Dispatcher 娣规病瀵艰嚧鐨勯樆濉?
+        // Throttled updates (PRD/User Feedback: 启动和重扫时防止 Dispatcher 淹没导致阻塞)
         _updateTimer = new System.Windows.Threading.DispatcherTimer(
             System.Windows.Threading.DispatcherPriority.Background,
             System.Windows.Application.Current.Dispatcher)
@@ -102,6 +129,7 @@ public partial class MainViewModel : ObservableObject
             RefreshVisibleCount();
             UpdateHasItems();
             UpdateHasFavorites();
+            RebuildUnifiedFavorites();
             FavoritesView.Refresh();
         };
 
@@ -120,38 +148,73 @@ public partial class MainViewModel : ObservableObject
 
         _indexService.Favorites.CollectionChanged += (s, e) =>
         {
+            RebuildUnifiedFavorites();
+            if (!_updateTimer.IsEnabled) _updateTimer.Start();
+        };
+
+        _clipboardStore.Items.CollectionChanged += (s, e) =>
+        {
+            if (IsInitializing && _clipboardStore.Items.Count > 0)
+                IsInitializing = false;
+
+            if (!_updateTimer.IsEnabled) _updateTimer.Start();
+        };
+
+        _clipboardStore.Favorites.CollectionChanged += (s, e) =>
+        {
+            RebuildUnifiedFavorites();
             if (!_updateTimer.IsEnabled) _updateTimer.Start();
         };
     }
 
 
-    partial void OnCurrentChipFilterChanged(string value) => RefreshItemsView();
+    partial void OnCurrentModeChanged(ContentMode value)
+    {
+        OnPropertyChanged(nameof(IsClipboardMode));
+        OnPropertyChanged(nameof(ActiveItemsView));
+        ApplySort();
+        RefreshItemsView();
+    }
+
+    partial void OnCurrentChipFilterChanged(string value)
+    {
+        CurrentMode = value == "Clipboard" ? ContentMode.Clipboard : ContentMode.Recent;
+        RefreshItemsView();
+    }
+
+    partial void OnClipboardSubFilterChanged(string value) => RefreshItemsView();
 
     partial void OnCurrentSortChanged(SortOption value) => ApplySort();
 
     private void ApplySort()
     {
         ItemsView.SortDescriptions.Clear();
+        ClipboardItemsView.SortDescriptions.Clear();
         switch (CurrentSort)
         {
             case SortOption.RecentTime:
                 ItemsView.SortDescriptions.Add(new SortDescription("Item.RecentTime", ListSortDirection.Descending));
+                ClipboardItemsView.SortDescriptions.Add(new SortDescription("Item.LastUsedUtc", ListSortDirection.Descending));
+                ClipboardItemsView.SortDescriptions.Add(new SortDescription("Item.CreatedUtc", ListSortDirection.Descending));
                 break;
             case SortOption.DisplayName:
                 ItemsView.SortDescriptions.Add(new SortDescription("Item.DisplayName", ListSortDirection.Ascending));
+                ClipboardItemsView.SortDescriptions.Add(new SortDescription("PreviewText", ListSortDirection.Ascending));
                 break;
             case SortOption.Size:
                 ItemsView.SortDescriptions.Add(new SortDescription("Item.SizeBytes", ListSortDirection.Descending));
+                ClipboardItemsView.SortDescriptions.Add(new SortDescription("Item.SizeBytes", ListSortDirection.Descending));
                 break;
             case SortOption.ClassificationSource:
                 ItemsView.SortDescriptions.Add(new SortDescription("Item.Extension", ListSortDirection.Ascending));
+                ClipboardItemsView.SortDescriptions.Add(new SortDescription("TypeLabel", ListSortDirection.Ascending));
                 break;
         }
     }
 
     partial void OnSearchTextChanged(string value)
     {
-        // 鎼滅储璇嶅彉鍖栨椂閲嶆柊搴旂敤杩囨护
+        // 搜索词变化时重新应用过滤
         RefreshItemsView();
     }
 
@@ -160,6 +223,7 @@ public partial class MainViewModel : ObservableObject
     {
         SearchText = string.Empty;
         CurrentChipFilter = "All";
+        ClipboardSubFilter = "All";
         RefreshItemsView();
     }
 
@@ -173,19 +237,21 @@ public partial class MainViewModel : ObservableObject
     private void RefreshItemsView()
     {
         ItemsView.Refresh();
+        ClipboardItemsView.Refresh();
+        OnPropertyChanged(nameof(ActiveItemsView));
         UpdateHasItems();
         RefreshVisibleCount();
     }
 
     private void RefreshVisibleCount()
     {
-        var count = ItemsView.Cast<object>().Count();
+        var count = ActiveItemsView.Cast<object>().Count();
         _statusHint.UpdateCount(count);
     }
 
     private void UpdateHasItems()
     {
-        HasItems = ItemsView.Cast<object>().Any();
+        HasItems = ActiveItemsView.Cast<object>().Any();
     }
 
     public bool CombinedFavoritesVisibility => HasFavorites && IsFavoritesDrawerOpen;
@@ -195,33 +261,95 @@ public partial class MainViewModel : ObservableObject
 
     private void UpdateHasFavorites()
     {
-        HasFavorites = _indexService.Favorites.Any();
-        // 濡傛灉鍙樻垚浜嗘病鏈夋敹钘忥紝鑷姩閲嶇疆鎵撳紑鐘舵€佷负 true锛堟柟渚夸笅娆℃湁鏀惰棌鏃舵樉绀猴級
+        HasFavorites = _unifiedFavorites.Any();
+        // 如果变成没有收藏，自动重置打开状态为 true，方便下次有收藏时显示
         if (!HasFavorites) IsFavoritesDrawerOpen = true;
         OnPropertyChanged(nameof(CombinedFavoritesVisibility));
     }
 
     partial void OnIsFavoritesDrawerOpenChanged(bool value) => OnPropertyChanged(nameof(CombinedFavoritesVisibility));
 
+    public async Task ApplyUnifiedFavoriteOrderAsync(IReadOnlyList<object> orderedItems)
+    {
+        for (var i = 0; i < orderedItems.Count; i++)
+        {
+            var order = i + 1;
+            switch (orderedItems[i])
+            {
+                case RecentItemViewModel recent:
+                    await _indexService.SetFavoriteOrderAsync(recent.Item.NormalizedPath, order);
+                    recent.Item.FavoriteOrder = order;
+                    recent.Refresh();
+                    break;
+                case ClipboardFavoriteViewModel clip:
+                    await _clipboardStore.SetFavoriteOrderAsync(clip.Item.Id, order);
+                    clip.Item.FavoriteOrder = order;
+                    clip.Refresh();
+                    break;
+            }
+        }
+
+        RebuildUnifiedFavorites();
+        FavoritesView.Refresh();
+        UpdateHasFavorites();
+    }
+
+    private void RebuildUnifiedFavorites()
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is not null && !dispatcher.CheckAccess())
+        {
+            dispatcher.BeginInvoke(new Action(RebuildUnifiedFavorites));
+            return;
+        }
+
+        var merged = OrderFavoritesForDisplay(
+            _indexService.Favorites.Cast<object>().Concat(_clipboardStore.Favorites.Cast<object>()));
+
+        _unifiedFavorites.Clear();
+        foreach (var item in merged)
+            _unifiedFavorites.Add(item);
+    }
+
+    internal static List<object> OrderFavoritesForDisplay(IEnumerable<object> favorites) =>
+        favorites
+            .OrderBy(GetFavoriteOrder)
+            .ThenBy(GetFavoriteTieBreaker)
+            .ToList();
+
+    private static int GetFavoriteOrder(object item) => item switch
+    {
+        RecentItemViewModel recent => recent.Item.FavoriteOrder,
+        ClipboardFavoriteViewModel clip => clip.Item.FavoriteOrder,
+        _ => int.MaxValue
+    };
+
+    private static DateTime GetFavoriteTieBreaker(object item) => item switch
+    {
+        RecentItemViewModel recent => recent.Item.FavoriteTime ?? DateTime.MinValue,
+        ClipboardFavoriteViewModel clip => clip.Item.CreatedUtc,
+        _ => DateTime.MinValue
+    };
+
     private bool FilterItem(object obj)
     {
         if (obj is not RecentItemViewModel vm) return false;
 
-        // 1. 鏂囦欢澶规帓闄ら€昏緫 (PRD 搂17 / User Request: 鎵€鏈夌殑鏂囦欢澶逛笉瑕佹樉绀哄湪鍏ㄩ儴鏂囦欢涓?
-        // 褰撳浜庘€濆叏閮ㄦ枃浠垛€濇爣绛炬椂锛屾枃浠跺す鏃犺鏄惁鏀惰棌閮戒笉鏄剧ず
+        // 1. 文件夹排除逻辑 (PRD §17 / User Request: 所有文件夹不显示在全部文件中)
+        // 当处于“全部文件”标签时，文件夹无论是否收藏都不显示
         if (CurrentChipFilter == "All" && vm.Item.IsFolder) return false;
 
-        // 2. 绯荤粺/闅愯棌鏂囦欢杩囨护锛堟敹钘忓す椤硅眮鍏嶆瑙勫垯锛屼絾浠嶅彈 Chip 绫诲瀷杩囨护锛?
+        // 2. 系统/隐藏文件过滤（收藏夹项豁免此规则，但仍受 Chip 类型过滤）
         if (!vm.Item.IsFavorite && ShouldHideBySystemAndHiddenRule(vm.Item, _settingsService.Current)) return false;
 
-        // 3. 椤堕儴 Chip 绫诲瀷杩囨护 (ChipFilter)
+        // 3. 顶部 Chip 类型过滤 (ChipFilter)
         if (CurrentChipFilter == "Folders")
         {
             if (!vm.Item.IsFolder) return false;
         }
         else if (CurrentChipFilter != "All")
         {
-            // 鍏朵粬绫诲瀷杩囨护锛堟枃妗ｃ€佸浘鐗囩瓑锛夛紝闈炴枃浠跺す鍙備笌
+            // 其他类型过滤（文档、图片等），非文件夹参与
             if (vm.Item.IsFolder) return false;
             if (vm.Item.ClassificationSource != CurrentChipFilter) return false;
         }
@@ -229,9 +357,39 @@ public partial class MainViewModel : ObservableObject
 
         return PathMatcher.MatchesSearch(vm.Item, SearchText);
     }
+
+    private bool FilterClipboardItem(object obj)
+    {
+        if (obj is not ClipboardItemViewModel vm) return false;
+
+        if (ClipboardSubFilter != "All")
+        {
+            var expected = ClipboardSubFilter == "Images" ? "Image" : ClipboardSubFilter;
+            if (!string.Equals(vm.Item.Type.ToString(), expected, StringComparison.OrdinalIgnoreCase))
+                return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(SearchText))
+            return true;
+
+        var query = SearchText.Trim();
+        if (vm.PreviewText.Contains(query, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (!string.IsNullOrWhiteSpace(vm.Item.PlainText) &&
+            vm.Item.PlainText.Contains(query, StringComparison.OrdinalIgnoreCase))
+            return true;
+        return vm.Item.FilePaths.Any(f =>
+            f.Path.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+            System.IO.Path.GetFileName(f.Path).Contains(query, StringComparison.OrdinalIgnoreCase));
+    }
     public void UpdateHotkey(string hotkey)
     {
         _hotkeyService.UpdateHotkey(hotkey);
+    }
+
+    public void UpdatePopPasteHotkey(string hotkey)
+    {
+        _hotkeyService.UpdatePopPasteHotkey(hotkey);
     }
 
     private bool ShouldHideBySystemAndHiddenRule(RecentItem item, AppSettings settings)

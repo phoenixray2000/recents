@@ -2,6 +2,7 @@ using System.Windows;
 using Microsoft.Web.WebView2.Core;
 using Recents.App.Models;
 using Recents.App.Services;
+using Recents.App.Services.Clipboard;
 using Recents.App.Services.Sources;
 using Recents.App.ViewModels;
 using Serilog;
@@ -15,6 +16,11 @@ public partial class App : WpfApp
     private SingleInstanceService _singleInstance = null!;
     private SettingsService _settings = null!;
     private RecentIndexService _index = null!;
+    private ClipboardStoreService _clipboardStore = null!;
+    private ClipboardActionService _clipboardActions = null!;
+    private ClipboardDragDropService _clipboardDragDrop = null!;
+    private ClipboardCaptureService _clipboardCapture = null!;
+    private ClipboardPasteService _clipboardPaste = null!;
     private HotkeyService _hotkey = null!;
     private TrayService _tray = null!;
     private StatusHintService _statusHint = null!;
@@ -60,12 +66,21 @@ public partial class App : WpfApp
 
             _index = new RecentIndexService(_settings);
             _index.OpenDatabase();
+            _clipboardStore = new ClipboardStoreService(_settings);
+            _clipboardActions = new ClipboardActionService(_clipboardStore, _settings);
+            _clipboardDragDrop = new ClipboardDragDropService(_clipboardActions);
+            ClipboardPasteTarget.StartTracking();
+            _clipboardStore.AttachActions(_clipboardActions);
+            _clipboardStore.OpenDatabase();
+            _ = _clipboardStore.LoadFromDatabaseAsync();
+            _ = _clipboardStore.CompactOrphanBlobsAsync();
+            _clipboardStore.StartMaintenanceTimer();
             
             _hotkey = new HotkeyService();
             _statusHint = new StatusHintService();
             _statusHint.SetStatus(StatusHintService.AppStatus.Initializing);
 
-            var mainVm = new MainViewModel(_index, _hotkey, _statusHint, _settings);
+            var mainVm = new MainViewModel(_index, _clipboardStore, _hotkey, _statusHint, _settings);
 
             _ = _index.LoadFromDatabaseAsync(_settings.Current.MaxRecentItems);
 
@@ -75,14 +90,28 @@ public partial class App : WpfApp
                 mainVm,
                 _settings,
                 _index,
+                _clipboardStore,
+                _clipboardActions,
+                _clipboardDragDrop,
                 () => RestartSourcesAsync(rebuildIndex: true),
                 () => RestartSourcesAsync(rebuildIndex: false));
 
             // 强制创建窗口句柄（即使窗口不显示），以确保全局热键能成功注册
             new System.Windows.Interop.WindowInteropHelper(mainWindow).EnsureHandle();
             _hotkey.Initialize(mainWindow);
+            _clipboardCapture = new ClipboardCaptureService(_settings, _clipboardStore, _statusHint);
+            _clipboardActions.AttachCapture(_clipboardCapture);
+            _clipboardCapture.Initialize(mainWindow);
+            _clipboardPaste = new ClipboardPasteService(_settings, _clipboardStore, _clipboardActions, WindowGroupFocusService, _statusHint);
+            _hotkey.UpdatePopPasteHotkey(_settings.Current.PopPasteHotkey);
             
-            _hotkey.HotkeyPressed += mainWindow.ToggleVisibility;
+            _hotkey.HotkeyPressed += action =>
+            {
+                if (action == HotkeyService.HotkeyAction.Toggle)
+                    mainWindow.ToggleVisibility();
+                else if (action == HotkeyService.HotkeyAction.PopPaste)
+                    _clipboardPaste.ShowPopup();
+            };
             _hotkey.RegistrationFailed += msg => _tray?.ShowBalloon(Localization.Loc.T("Error_HotkeyConflict"), msg, System.Windows.Forms.ToolTipIcon.Error);
             _singleInstance.ShowWindowRequested += () => Dispatcher.Invoke(mainWindow.ShowAndFocus);
 
@@ -223,10 +252,14 @@ public partial class App : WpfApp
     protected override void OnExit(ExitEventArgs e)
     {
         _tray?.Dispose();
+        _clipboardPaste?.Dispose();
+        ClipboardPasteTarget.StopTracking();
+        _clipboardCapture?.Dispose();
         _hotkey?.Dispose();
         foreach (var subscription in _sourceSubscriptions) subscription.Dispose();
         foreach (var source in _sources) (source as IDisposable)?.Dispose();
         _index?.Dispose();
+        _clipboardStore?.Dispose();
         _singleInstance?.Dispose();
         _sourceRestartLock.Dispose();
         Log.CloseAndFlush();

@@ -19,6 +19,8 @@ public partial class RecentItemViewModel : ObservableObject
     public string DisplayPathShort => MiddleEllipsize(Item.NormalizedPath);
     public string Extension            => Item.Extension;
     public string ClassificationSource => Item.ClassificationSource;
+    public string ClassificationSourceLabel => Item.ClassificationSource == "Documents" ? "Docs" : Item.ClassificationSource;
+    public int FavoriteOrder => Item.FavoriteOrder;
     // PRD §6.7：类型徽章仅当分类非 Other 且非文件夹时显示
     public System.Windows.Visibility BadgeVisibility =>
         (!Item.IsFolder && Item.ClassificationSource != "Other" && !string.IsNullOrEmpty(Item.ClassificationSource))

@@ -12,6 +12,12 @@ namespace Recents.App.Services;
 // 全部失败时记 Error 日志，触发 RegistrationFailed 事件（供 TrayService 显示气泡）。
 public sealed partial class HotkeyService : ObservableObject, IDisposable
 {
+    public enum HotkeyAction
+    {
+        Toggle = 0x5265,
+        PopPaste = 0x5266
+    }
+
     #region Win32 P/Invoke
 
     [DllImport("user32.dll", SetLastError = true)]
@@ -33,7 +39,8 @@ public sealed partial class HotkeyService : ObservableObject, IDisposable
     private const uint VK_SPACE     = 0x20;
 
     private const int WM_HOTKEY = 0x0312;
-    private const int HotkeyId  = 0x5265;   // 'Re' 前两字节
+    private const int ToggleHotkeyId  = (int)HotkeyAction.Toggle;
+    private const int PopPasteHotkeyId = (int)HotkeyAction.PopPaste;
 
     #endregion
 
@@ -47,32 +54,23 @@ public sealed partial class HotkeyService : ObservableObject, IDisposable
 
     private HwndSource?         _hwndSource;
     private IntPtr              _hwnd;
-    private bool                _registered;
     private (uint Mod, uint Vk, string Label) _active;
+    private readonly Dictionary<int, string> _registeredLabels = new();
 
     public void UpdateHotkey(string hotkeyString)
     {
-        if (_hwnd == IntPtr.Zero) return;
+        Unregister(ToggleHotkeyId);
+        if (TryRegisterExact(ToggleHotkeyId, hotkeyString, "main"))
+            ActiveLabel = hotkeyString;
+        else
+            TryRegisterCandidates();
+    }
 
-        if (_registered)
-        {
-            UnregisterHotKey(_hwnd, HotkeyId);
-            _registered = false;
-        }
-
-        if (TryParseHotkey(hotkeyString, out var mod, out var vk))
-        {
-            if (RegisterHotKey(_hwnd, HotkeyId, mod | MOD_NOREPEAT, vk))
-            {
-                _registered = true;
-                ActiveLabel = hotkeyString;
-                Log.Information("HotkeyService: 热键更新成功 → {Label}", hotkeyString);
-                return;
-            }
-        }
-
-        Log.Warning("HotkeyService: 自定义热键 {Label} 注册失败，尝试候选链", hotkeyString);
-        TryRegisterCandidates();
+    public void UpdatePopPasteHotkey(string hotkeyString)
+    {
+        Unregister(PopPasteHotkeyId);
+        if (!TryRegisterExact(PopPasteHotkeyId, hotkeyString, "Pop Paste"))
+            RegistrationFailed?.Invoke($"Pop Paste hotkey {hotkeyString} could not be registered. Please choose another hotkey.");
     }
 
     private static bool TryParseHotkey(string hotkey, out uint mod, out uint vk)
@@ -115,7 +113,7 @@ public sealed partial class HotkeyService : ObservableObject, IDisposable
     private string _activeLabel = "(Not registered)";
 
     // 热键触发时通知（UI 层订阅）
-    public event Action? HotkeyPressed;
+    public event Action<HotkeyAction>? HotkeyPressed;
 
     // 注册失败（全部候选耗尽）时通知，传入提示文本
     public event Action<string>? RegistrationFailed;
@@ -135,10 +133,10 @@ public sealed partial class HotkeyService : ObservableObject, IDisposable
     {
         foreach (var candidate in Candidates)
         {
-            if (RegisterHotKey(_hwnd, HotkeyId, candidate.Mod, candidate.Vk))
+            if (RegisterHotKey(_hwnd, ToggleHotkeyId, candidate.Mod, candidate.Vk))
             {
                 _active     = candidate;
-                _registered = true;
+                _registeredLabels[ToggleHotkeyId] = candidate.Label;
                 ActiveLabel = candidate.Label;
                 OnPropertyChanged(nameof(ActiveLabel)); // Bug-7 Fix
                 Log.Information("HotkeyService: 热键注册成功 → {Label}", candidate.Label);
@@ -155,11 +153,42 @@ public sealed partial class HotkeyService : ObservableObject, IDisposable
         RegistrationFailed?.Invoke(msg);
     }
 
+    private bool TryRegisterExact(int id, string hotkeyString, string scope)
+    {
+        if (_hwnd == IntPtr.Zero || string.IsNullOrWhiteSpace(hotkeyString))
+            return false;
+
+        if (!TryParseHotkey(hotkeyString, out var mod, out var vk))
+        {
+            Log.Warning("HotkeyService: {Scope} hotkey parse failed → {Label}", scope, hotkeyString);
+            return false;
+        }
+
+        if (RegisterHotKey(_hwnd, id, mod | MOD_NOREPEAT, vk))
+        {
+            _registeredLabels[id] = hotkeyString;
+            Log.Information("HotkeyService: {Scope} hotkey registered → {Label}", scope, hotkeyString);
+            return true;
+        }
+
+        Log.Warning("HotkeyService: {Scope} hotkey {Label} failed Win32={Err}",
+            scope, hotkeyString, Marshal.GetLastWin32Error());
+        return false;
+    }
+
+    private void Unregister(int id)
+    {
+        if (_hwnd == IntPtr.Zero) return;
+        if (!_registeredLabels.ContainsKey(id)) return;
+        UnregisterHotKey(_hwnd, id);
+        _registeredLabels.Remove(id);
+    }
+
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == WM_HOTKEY && wParam.ToInt32() == HotkeyId)
+        if (msg == WM_HOTKEY && _registeredLabels.ContainsKey(wParam.ToInt32()))
         {
-            HotkeyPressed?.Invoke();
+            HotkeyPressed?.Invoke((HotkeyAction)wParam.ToInt32());
             handled = true;
         }
         return IntPtr.Zero;
@@ -167,10 +196,11 @@ public sealed partial class HotkeyService : ObservableObject, IDisposable
 
     public void Dispose()
     {
-        if (_registered && _hwnd != IntPtr.Zero)
+        if (_hwnd != IntPtr.Zero)
         {
-            UnregisterHotKey(_hwnd, HotkeyId);
-            _registered = false;
+            foreach (var id in _registeredLabels.Keys.ToArray())
+                UnregisterHotKey(_hwnd, id);
+            _registeredLabels.Clear();
         }
         _hwndSource?.RemoveHook(WndProc);
     }

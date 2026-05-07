@@ -537,6 +537,112 @@
 
 
 
+                <TabItem Header="{loc:T Key=Settings_Tab_Clipboard}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{DynamicResource BgMain}">
+                        <StackPanel Margin="32,24" MaxWidth="680" HorizontalAlignment="Left">
+                            <TextBlock Text="{loc:T Key=Settings_Section_Clipboard}" Style="{StaticResource SectionTitle}"/>
+
+                            <TextBlock Text="{loc:T Key=Settings_Clipboard_Field_History}" Style="{StaticResource FieldLabel}"/>
+                            <Border Style="{StaticResource SettingsCard}">
+                                <CheckBox Content="{loc:T Key=Settings_Clipboard_EnableHistory}"
+                                          IsChecked="{Binding EnableClipboardHistory}"/>
+                            </Border>
+
+                            <TextBlock Text="{loc:T Key=Settings_Clipboard_Field_Capture}" Style="{StaticResource FieldLabel}"/>
+                            <Border Style="{StaticResource SettingsCard}">
+                                <WrapPanel>
+                                    <CheckBox Content="{loc:T Key=Settings_Clipboard_CaptureText}" IsChecked="{Binding CaptureTextClipboard}" Margin="0,7,18,7"/>
+                                    <CheckBox Content="{loc:T Key=Settings_Clipboard_CaptureFiles}" IsChecked="{Binding CaptureFileClipboard}" Margin="0,7,18,7"/>
+                                    <CheckBox Content="{loc:T Key=Settings_Clipboard_CaptureImages}" IsChecked="{Binding CaptureImageClipboard}" Margin="0,7,18,7"/>
+                                    <CheckBox Content="{loc:T Key=Settings_Clipboard_CaptureHtml}" IsChecked="{Binding CaptureHtmlClipboard}" Margin="0,7,18,7"/>
+                                    <CheckBox Content="{loc:T Key=Settings_Clipboard_CaptureRichText}" IsChecked="{Binding CaptureRichTextClipboard}" Margin="0,7,18,7"/>
+                                </WrapPanel>
+                            </Border>
+
+                            <TextBlock Text="{loc:T Key=Settings_Clipboard_Field_Limits}" Style="{StaticResource FieldLabel}"/>
+                            <Border Style="{StaticResource SettingsCard}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="140"/>
+                                        <ColumnDefinition Width="24"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="140"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="12"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{loc:T Key=Settings_Clipboard_MaxItems}" VerticalAlignment="Center"/>
+                                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding MaxClipboardItems, UpdateSourceTrigger=LostFocus}"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="3" Text="{loc:T Key=Settings_Clipboard_RetentionDays}" VerticalAlignment="Center"/>
+                                    <TextBox Grid.Row="0" Grid.Column="4" Text="{Binding ClipboardRetentionDays, UpdateSourceTrigger=LostFocus}"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{loc:T Key=Settings_Clipboard_MaxTextChars}" VerticalAlignment="Center"/>
+                                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding MaxClipboardTextChars, UpdateSourceTrigger=LostFocus}"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="3" Text="{loc:T Key=Settings_Clipboard_MaxImageMb}" VerticalAlignment="Center"/>
+                                    <TextBox Grid.Row="2" Grid.Column="4" Text="{Binding MaxClipboardImageSizeMb, UpdateSourceTrigger=LostFocus}"/>
+                                </Grid>
+                            </Border>
+
+                            <TextBlock Text="{loc:T Key=Settings_Clipboard_Field_Privacy}" Style="{StaticResource FieldLabel}"/>
+                            <Border Style="{StaticResource SettingsCard}">
+                                <StackPanel>
+                                    <CheckBox Content="{loc:T Key=Settings_Clipboard_IgnoreSensitive}" IsChecked="{Binding IgnoreSensitiveText}"/>
+                                    <CheckBox Content="{loc:T Key=Settings_Clipboard_IgnoreSystemHidden}" IsChecked="{Binding IgnoreSystemAndHiddenFilesInClipboard}"/>
+                                    <TextBlock Text="{loc:T Key=Settings_Clipboard_SensitivePatterns}" Foreground="{DynamicResource TextSecondary}" FontSize="12" Margin="0,12,0,6"/>
+                                    <TextBox Text="{Binding ClipboardSensitivePatternsText, UpdateSourceTrigger=LostFocus}"
+                                             AcceptsReturn="True" Height="86" VerticalScrollBarVisibility="Auto"/>
+                                    <TextBlock Text="{loc:T Key=Settings_Clipboard_ExcludedApps}" Foreground="{DynamicResource TextSecondary}" FontSize="12" Margin="0,12,0,6"/>
+                                    <TextBox Text="{Binding ClipboardExcludedSourceAppsText, UpdateSourceTrigger=LostFocus}"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                                        <Button Content="{loc:T Key=Settings_Clipboard_Pause10}" Command="{Binding PauseClipboard10MinutesCommand}" Style="{StaticResource SettingsButton}"/>
+                                        <Button Content="{loc:T Key=Settings_Clipboard_PauseHour}" Command="{Binding PauseClipboard1HourCommand}" Style="{StaticResource SettingsButton}"/>
+                                        <Button Content="{loc:T Key=Settings_Clipboard_Resume}" Command="{Binding ResumeClipboardCommand}" Style="{StaticResource SettingsButton}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <TextBlock Text="{loc:T Key=Settings_Clipboard_Field_PopPaste}" Style="{StaticResource FieldLabel}"/>
+                            <Border Style="{StaticResource SettingsCard}">
+                                <StackPanel>
+                                    <TextBlock Text="{loc:T Key=Settings_Clipboard_PopPasteHotkey}" Foreground="{DynamicResource TextSecondary}" FontSize="12" Margin="0,0,0,6"/>
+                                    <TextBox Text="{Binding PopPasteHotkey, UpdateSourceTrigger=PropertyChanged}"
+                                             Tag="PopPasteHotkey"
+                                             Style="{StaticResource HotkeyTextBoxStyle}"
+                                             PreviewKeyDown="HotkeyTextBox_PreviewKeyDown"
+                                             IsReadOnly="True"
+                                             Margin="0,0,0,12"/>
+                                    <CheckBox Content="{loc:T Key=Settings_Clipboard_RestoreAfterPaste}" IsChecked="{Binding RestoreClipboardAfterPaste}"/>
+                                    <TextBlock Text="{loc:T Key=Settings_Clipboard_EnterBehavior}" Foreground="{DynamicResource TextSecondary}" FontSize="12" Margin="0,12,0,6"/>
+                                    <ComboBox ItemsSource="{Binding PopPasteEnterBehaviorOptions}"
+                                              SelectedValue="{Binding PopPasteEnterBehavior}"
+                                              SelectedValuePath="Value"
+                                              DisplayMemberPath="DisplayName"
+                                              Style="{StaticResource PremiumComboBox}"
+                                              Width="220" HorizontalAlignment="Left"/>
+                                    <TextBlock Text="{loc:T Key=Settings_Clipboard_PlainTextPasteHint}"
+                                               Foreground="{DynamicResource TextSecondary}"
+                                               FontSize="12"
+                                               TextWrapping="Wrap"
+                                               Margin="0,12,0,0"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                        <Button Content="{loc:T Key=Settings_Clipboard_ResetPopPasteHotkey}" Command="{Binding ResetPopPasteHotkeyCommand}"
+                                                Style="{StaticResource SettingsButton}" HorizontalAlignment="Left"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <TextBlock Text="{loc:T Key=Settings_Clipboard_Field_Maintenance}" Style="{StaticResource FieldLabel}"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,24">
+                                <Button Content="{loc:T Key=Settings_Clipboard_ClearHistory}" Command="{Binding ClearClipboardHistoryCommand}" Style="{StaticResource SettingsButton}"/>
+                                <Button Content="{loc:T Key=Settings_Clipboard_OpenDataFolder}" Command="{Binding OpenClipboardDataFolderCommand}" Style="{StaticResource SettingsButton}"/>
+                                <Button Content="{loc:T Key=Settings_Clipboard_CompactBlobs}" Command="{Binding CompactClipboardBlobsCommand}" Style="{StaticResource SettingsButton}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
                 <TabItem Header="{loc:T Key=Settings_Tab_Filters}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{DynamicResource BgMain}">
                         <Grid Margin="32,24" MaxWidth="680" HorizontalAlignment="Left">
