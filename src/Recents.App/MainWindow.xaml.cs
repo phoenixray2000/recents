@@ -34,6 +34,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
     private readonly ClipboardDragDropService _clipboardDragDrop;
     private readonly Func<Task> _rebuildIndexAsync;
     private readonly Func<Task> _restartSourcesAsync;
+    private readonly Action _cancelSourceRestart;
     private TrayService? _tray;
     private SettingsWindow? _settingsWindow;
     // §6.25 预览窗口（单一持久实例）
@@ -56,7 +57,8 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         ClipboardActionService clipboardActions,
         ClipboardDragDropService clipboardDragDrop,
         Func<Task> rebuildIndexAsync,
-        Func<Task> restartSourcesAsync)
+        Func<Task> restartSourcesAsync,
+        Action cancelSourceRestart)
     {
         InitializeComponent();
         _viewModel = viewModel;
@@ -67,6 +69,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         _clipboardDragDrop = clipboardDragDrop;
         _rebuildIndexAsync = rebuildIndexAsync;
         _restartSourcesAsync = restartSourcesAsync;
+        _cancelSourceRestart = cancelSourceRestart;
         DataContext = _viewModel;
         _viewModel.CurrentDensity = _settings.Current.CurrentDensity;
         Topmost = _settings.Current.AlwaysOnTop;
@@ -372,7 +375,10 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         if (e.OriginalSource is DependencyObject source)
         {
             var listBoxItem = FindParent<ListBoxItem>(source);
-            OpenContextMenuForItem(listBoxItem?.DataContext, listBoxItem);
+            if (listBoxItem?.DataContext is RecentItemViewModel recent)
+                OpenFavoriteRecentContextMenu(recent, listBoxItem);
+            else
+                OpenContextMenuForItem(listBoxItem?.DataContext, listBoxItem);
         }
         e.Handled = true;
     }
@@ -1019,7 +1025,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
             return;
         }
 
-        var viewModel = new SettingsViewModel(_settings, _indexService, _clipboardStore, _restartSourcesAsync, _rebuildIndexAsync);
+        var viewModel = new SettingsViewModel(_settings, _indexService, _clipboardStore, _restartSourcesAsync, _rebuildIndexAsync, _cancelSourceRestart);
         viewModel.SettingsChanged += ApplySettings;
         _settingsWindow = new SettingsWindow(viewModel)
         {
@@ -1033,6 +1039,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         {
             _windowGroupFocusService.UnregisterWindow(_settingsWindow);
             viewModel.SettingsChanged -= ApplySettings;
+            viewModel.Dispose();
             _settingsWindow = null;
         };
         _settingsWindow.Show();
@@ -1114,6 +1121,26 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
     private void OpenDynamicContextMenu(RecentItemViewModel vm, UIElement placementTarget)
     {
         var menu = ContextMenuBuilder.Build(vm);
+        menu.PlacementTarget = placementTarget;
+
+        _contextMenuOpen = true;
+        menu.Closed += (_, _) =>
+        {
+            _contextMenuOpen = false;
+            if (_pendingActionHide)
+            {
+                _pendingActionHide = false;
+                _actionHideCts?.Cancel();
+                HideWindowGroup();
+            }
+        };
+
+        menu.IsOpen = true;
+    }
+
+    private void OpenFavoriteRecentContextMenu(RecentItemViewModel vm, UIElement placementTarget)
+    {
+        var menu = ContextMenuBuilder.BuildFavorite(vm);
         menu.PlacementTarget = placementTarget;
 
         _contextMenuOpen = true;

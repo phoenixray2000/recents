@@ -32,6 +32,34 @@ public sealed class ClipboardFavoritesTests
         Assert.True(File.Exists(favorite.BlobPath));
     }
 
+    [Fact]
+    public async Task LoadFromDatabase_RestoresMissingImageFavoriteSnapshotFromSourceItem()
+    {
+        using var fixture = ClipboardStoreFixture.Create();
+        var store = fixture.Store;
+        var sourceImage = Path.Combine(store.ImageDirectory, "source.png");
+        var sourceThumb = Path.Combine(store.ThumbnailDirectory, "source.jpg");
+        File.WriteAllBytes(sourceImage, new byte[] { 1, 2, 3 });
+        File.WriteAllBytes(sourceThumb, new byte[] { 4, 5, 6 });
+        var item = NewImageItem("image-source", "hash-image", sourceImage, sourceThumb);
+
+        await store.IngestAsync(item);
+        await store.AddToFavoritesAsync(item.Id);
+
+        var brokenFavorite = Assert.Single(store.Favorites).Item;
+        File.Delete(brokenFavorite.ImagePath!);
+        File.Delete(brokenFavorite.ThumbnailPath!);
+
+        Assert.False(fixture.Actions.HasUsableContent(brokenFavorite.ToClipboardItem()));
+
+        store.LoadFromDatabase();
+
+        var restoredFavorite = Assert.Single(store.Favorites).Item;
+        Assert.True(File.Exists(restoredFavorite.ImagePath));
+        Assert.True(File.Exists(restoredFavorite.ThumbnailPath));
+        Assert.True(fixture.Actions.HasUsableContent(restoredFavorite.ToClipboardItem()));
+    }
+
     private static ClipboardItem NewTextItem(string id, string hash, string blobPath) => new()
     {
         Id = id,
@@ -42,6 +70,21 @@ public sealed class ClipboardFavoritesTests
         PreviewText = id,
         PlainText = "snapshot text",
         BlobPath = blobPath,
+    };
+
+    private static ClipboardItem NewImageItem(string id, string hash, string imagePath, string thumbnailPath) => new()
+    {
+        Id = id,
+        Type = ClipboardPayloadType.Image,
+        CreatedUtc = DateTime.UtcNow,
+        LastUsedUtc = DateTime.UtcNow,
+        Hash = hash,
+        PreviewText = "image",
+        ImagePath = imagePath,
+        ThumbnailPath = thumbnailPath,
+        ImageWidth = 10,
+        ImageHeight = 10,
+        SizeBytes = 3,
     };
 
     private sealed class ClipboardStoreFixture : IDisposable

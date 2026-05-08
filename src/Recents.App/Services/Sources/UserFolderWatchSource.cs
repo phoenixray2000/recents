@@ -12,6 +12,7 @@ public sealed class UserFolderWatchSource : IRecentSource, IDisposable
     private readonly SourceConfig _config;
     private readonly AppSettings  _settings;
     private readonly SimpleSubject<RecentChange> _subject = new();
+    private readonly CancellationTokenSource _disposeCts = new();
     private FileSystemWatcher? _watcher;
     private Debouncer?         _debouncer;
 
@@ -38,11 +39,14 @@ public sealed class UserFolderWatchSource : IRecentSource, IDisposable
 
         SetupWatcher(path);
 
+        using var scanCts = CancellationTokenSource.CreateLinkedTokenSource(ct, _disposeCts.Token);
+        var scanToken = scanCts.Token;
+
         await Task.Run(() =>
         {
             var cutoff = DateTime.Now.AddDays(-_config.RecentLookbackDays);
-            ScanDirectory(path, cutoff, ct);
-        }, ct).ConfigureAwait(false);
+            ScanDirectory(path, cutoff, scanToken);
+        }, scanToken).ConfigureAwait(false);
     }
 
     public IObservable<RecentChange> Watch() => _subject;
@@ -113,8 +117,8 @@ public sealed class UserFolderWatchSource : IRecentSource, IDisposable
         Task.Run(() =>
         {
             var cutoff = DateTime.Now.AddDays(-_config.RecentLookbackDays);
-            ScanDirectory(path, cutoff, CancellationToken.None);
-        });
+            ScanDirectory(path, cutoff, _disposeCts.Token);
+        }, _disposeCts.Token);
     }
 
     private RecentItem? CreateItem(string fullPath)
@@ -158,9 +162,11 @@ public sealed class UserFolderWatchSource : IRecentSource, IDisposable
 
     public void Dispose()
     {
+        _disposeCts.Cancel();
         _watcher?.Dispose();
         _debouncer?.Dispose();
         _subject.OnCompleted();
         _subject.Dispose();
+        _disposeCts.Dispose();
     }
 }

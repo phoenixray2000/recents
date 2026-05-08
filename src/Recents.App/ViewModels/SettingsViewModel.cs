@@ -14,14 +14,18 @@ using ThemeMode = Recents.App.Models.AppSettings.ThemeMode;
 
 namespace Recents.App.ViewModels;
 
-public partial class SettingsViewModel : ObservableObject
+public partial class SettingsViewModel : ObservableObject, IDisposable
 {
+    private static readonly TimeSpan SourceRestartDebounce = TimeSpan.FromSeconds(1);
+
     private readonly SettingsService _settings;
     private readonly RecentIndexService _indexService;
     private readonly ClipboardStoreService _clipboardStore;
     private readonly Func<Task> _restartSourcesAsync;
     private readonly Func<Task> _rebuildIndexAsync;
-    private readonly SemaphoreSlim _sourceSaveLock = new(1, 1);
+    private readonly Action _cancelSourceRestart;
+    private readonly object _sourceRestartDebounceLock = new();
+    private CancellationTokenSource? _sourceRestartDebounceCts;
 
     public event Action? SettingsChanged;
 
@@ -84,13 +88,15 @@ public partial class SettingsViewModel : ObservableObject
         RecentIndexService indexService,
         ClipboardStoreService clipboardStore,
         Func<Task> restartSourcesAsync,
-        Func<Task> rebuildIndexAsync)
+        Func<Task> rebuildIndexAsync,
+        Action cancelSourceRestart)
     {
         _settings = settings;
         _indexService = indexService;
         _clipboardStore = clipboardStore;
         _restartSourcesAsync = restartSourcesAsync;
         _rebuildIndexAsync = rebuildIndexAsync;
+        _cancelSourceRestart = cancelSourceRestart;
         SystemSources = new ObservableCollection<SystemSourceInfo>
         {
             MakeSystemSource(SourceKinds.RecentLnk, Loc.T("Source_RecentLnk_Name"), @"%APPDATA%\Microsoft\Windows\Recent"),
@@ -307,7 +313,7 @@ public partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private void SaveSources()
     {
-        _ = SaveSourcesAndRescanAsync();
+        SaveSourcesAndScheduleRescan();
     }
 
     [RelayCommand]
@@ -327,7 +333,7 @@ public partial class SettingsViewModel : ObservableObject
         };
         _settings.Current.Sources.Add(source);
         CustomSources.Add(source);
-        _ = SaveSourcesAndRescanAsync();
+        SaveSourcesAndScheduleRescan();
     }
 
     [RelayCommand]
@@ -361,7 +367,7 @@ public partial class SettingsViewModel : ObservableObject
         };
         _settings.Current.Sources.Add(source);
         CustomSources.Add(source);
-        _ = SaveSourcesAndRescanAsync();
+        SaveSourcesAndScheduleRescan();
     }
 
     private static bool? ProbeDirectory(string path, TimeSpan timeout)
@@ -383,7 +389,7 @@ public partial class SettingsViewModel : ObservableObject
         if (source is null) return;
         _settings.Current.Sources.Remove(source);
         CustomSources.Remove(source);
-        _ = SaveSourcesAndRescanAsync();
+        SaveSourcesAndScheduleRescan();
     }
 
 
@@ -443,7 +449,7 @@ public partial class SettingsViewModel : ObservableObject
         }
 
         config.Enabled = enabled;
-        _ = SaveSourcesAndRescanAsync();
+        SaveSourcesAndScheduleRescan();
     }
 
     [RelayCommand]
@@ -455,21 +461,66 @@ public partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private async Task RebuildIndex()
     {
+        CancelPendingSourceRestartDebounce();
         await _rebuildIndexAsync();
     }
 
-    private async Task SaveSourcesAndRescanAsync()
+    private void SaveSourcesAndScheduleRescan()
     {
-        await _sourceSaveLock.WaitAsync();
+        SaveAndNotify();
+        _cancelSourceRestart();
+
+        var cts = new CancellationTokenSource();
+        CancellationTokenSource? previous;
+
+        lock (_sourceRestartDebounceLock)
+        {
+            previous = _sourceRestartDebounceCts;
+            _sourceRestartDebounceCts = cts;
+        }
+
+        previous?.Cancel();
+        _ = RunDebouncedSourceRestartAsync(cts);
+    }
+
+    private async Task RunDebouncedSourceRestartAsync(CancellationTokenSource cts)
+    {
         try
         {
-            SaveAndNotify();
-            await _restartSourcesAsync();
+            await Task.Delay(SourceRestartDebounce, cts.Token);
+            await _rebuildIndexAsync();
+        }
+        catch (OperationCanceledException)
+        {
         }
         finally
         {
-            _sourceSaveLock.Release();
+            lock (_sourceRestartDebounceLock)
+            {
+                if (ReferenceEquals(_sourceRestartDebounceCts, cts))
+                    _sourceRestartDebounceCts = null;
+            }
+
+            cts.Dispose();
         }
+    }
+
+    private void CancelPendingSourceRestartDebounce()
+    {
+        CancellationTokenSource? pending;
+
+        lock (_sourceRestartDebounceLock)
+        {
+            pending = _sourceRestartDebounceCts;
+            _sourceRestartDebounceCts = null;
+        }
+
+        pending?.Cancel();
+    }
+
+    public void Dispose()
+    {
+        CancelPendingSourceRestartDebounce();
     }
 
     private static string Join(IEnumerable<string> values) => string.Join(Environment.NewLine, values);

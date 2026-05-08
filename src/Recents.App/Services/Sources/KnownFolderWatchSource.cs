@@ -13,6 +13,7 @@ public sealed class KnownFolderWatchSource : IRecentSource, IDisposable
     private readonly SourceConfig _config;
     private readonly AppSettings _settings;
     private readonly SimpleSubject<RecentChange> _subject = new();
+    private readonly CancellationTokenSource _disposeCts = new();
     private readonly List<FileSystemWatcher> _watchers = new();
     private Debouncer? _debouncer;
     private string? _resolvedPath;
@@ -42,11 +43,14 @@ public sealed class KnownFolderWatchSource : IRecentSource, IDisposable
         SetupWatcher(_resolvedPath);
 
         // 2. 初始扫描
+        using var scanCts = CancellationTokenSource.CreateLinkedTokenSource(ct, _disposeCts.Token);
+        var scanToken = scanCts.Token;
+
         await Task.Run(() =>
         {
             var cutoff = DateTime.Now.AddDays(-_config.RecentLookbackDays);
-            ScanDirectory(_resolvedPath, cutoff, ct);
-        }, ct).ConfigureAwait(false);
+            ScanDirectory(_resolvedPath, cutoff, scanToken);
+        }, scanToken).ConfigureAwait(false);
     }
 
     public IObservable<RecentChange> Watch() => _subject;
@@ -128,8 +132,8 @@ public sealed class KnownFolderWatchSource : IRecentSource, IDisposable
             Task.Run(() =>
             {
                 var cutoff = DateTime.Now.AddDays(-_config.RecentLookbackDays);
-                ScanDirectory(_resolvedPath, cutoff, CancellationToken.None);
-            });
+                ScanDirectory(_resolvedPath, cutoff, _disposeCts.Token);
+            }, _disposeCts.Token);
         }
     }
 
@@ -202,10 +206,12 @@ public sealed class KnownFolderWatchSource : IRecentSource, IDisposable
 
     public void Dispose()
     {
+        _disposeCts.Cancel();
         foreach (var w in _watchers) w.Dispose();
         _watchers.Clear();
         _debouncer?.Dispose();
         _subject.OnCompleted();
         _subject.Dispose();
+        _disposeCts.Dispose();
     }
 }

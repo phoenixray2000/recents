@@ -173,6 +173,7 @@ public partial class MainViewModel : ObservableObject
             if (IsInitializing && _clipboardStore.Items.Count > 0)
                 IsInitializing = false;
 
+            RefreshClipboardItemsView();
             if (!_updateTimer.IsEnabled) _updateTimer.Start();
         };
 
@@ -250,6 +251,12 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void ClearSearch()
+    {
+        SearchText = string.Empty;
+    }
+
+    [RelayCommand]
     private async Task RebuildIndex()
     {
         await _indexService.RebuildAsync();
@@ -263,6 +270,24 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(ActiveItemsView));
         UpdateHasItems();
         RefreshVisibleCount();
+    }
+
+    private void RefreshClipboardItemsView()
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is not null && !dispatcher.CheckAccess())
+        {
+            dispatcher.BeginInvoke(new Action(RefreshClipboardItemsView));
+            return;
+        }
+
+        ClipboardItemsView.Refresh();
+        if (IsClipboardMode)
+        {
+            OnPropertyChanged(nameof(ActiveItemsView));
+            UpdateHasItems();
+            RefreshVisibleCount();
+        }
     }
 
     private void RefreshVisibleCount()
@@ -579,12 +604,8 @@ public partial class MainViewModel : ObservableObject
     {
         if (obj is not ClipboardItemViewModel vm) return false;
 
-        if (ClipboardSubFilter != "All")
-        {
-            var expected = ClipboardSubFilter == "Images" ? "Image" : ClipboardSubFilter;
-            if (!string.Equals(vm.Item.Type.ToString(), expected, StringComparison.OrdinalIgnoreCase))
-                return false;
-        }
+        if (!ClipboardTypeMatchesFilter(vm.Item.Type, ClipboardSubFilter))
+            return false;
 
         if (string.IsNullOrWhiteSpace(SearchText))
             return true;
@@ -598,6 +619,21 @@ public partial class MainViewModel : ObservableObject
         return vm.Item.FilePaths.Any(f =>
             f.Path.Contains(query, StringComparison.OrdinalIgnoreCase) ||
             System.IO.Path.GetFileName(f.Path).Contains(query, StringComparison.OrdinalIgnoreCase));
+    }
+
+    internal static bool ClipboardTypeMatchesFilter(ClipboardPayloadType type, string? subFilter)
+    {
+        if (string.IsNullOrWhiteSpace(subFilter) ||
+            string.Equals(subFilter, "All", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var expected = string.Equals(subFilter, "Images", StringComparison.OrdinalIgnoreCase)
+            ? ClipboardPayloadType.Image
+            : Enum.TryParse<ClipboardPayloadType>(subFilter, ignoreCase: true, out var parsed)
+                ? parsed
+                : ClipboardPayloadType.Unknown;
+
+        return type == expected;
     }
     public void UpdateHotkey(string hotkey)
     {

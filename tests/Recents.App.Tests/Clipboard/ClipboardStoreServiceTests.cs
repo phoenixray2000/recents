@@ -1,6 +1,7 @@
 using Recents.App.Models;
 using Recents.App.Services;
 using Recents.App.Services.Clipboard;
+using Recents.App.ViewModels;
 using Xunit;
 
 namespace Recents.App.Tests.Clipboard;
@@ -38,6 +39,44 @@ public sealed class ClipboardStoreServiceTests
         Assert.Contains(fixture.Store.Items, vm => vm.Item.Id == "favorite");
         Assert.Contains(fixture.Store.Items, vm => vm.Item.Id == "newest");
         Assert.DoesNotContain(fixture.Store.Items, vm => vm.Item.Id == "old");
+    }
+
+    [Fact]
+    public async Task AddToFavoritesAsync_DoesNotDuplicateFavoriteWithSameClipboardHash()
+    {
+        using var fixture = ClipboardStoreFixture.Create();
+        var first = NewTextItem("first", "same-hash", DateTime.UtcNow.AddMinutes(-5));
+        var replacement = NewTextItem("replacement", "same-hash", DateTime.UtcNow);
+
+        await fixture.Store.IngestAsync(first);
+        await fixture.Store.AddToFavoritesAsync(first.Id);
+        await fixture.Store.DeleteAsync(first.Id);
+        await fixture.Store.IngestAsync(replacement);
+        await fixture.Store.AddToFavoritesAsync(replacement.Id);
+
+        Assert.Single(fixture.Store.Favorites);
+        var replacementVm = Assert.Single(fixture.Store.Items);
+        Assert.Equal("replacement", replacementVm.Item.Id);
+        Assert.True(replacementVm.Item.IsFavorite);
+
+        await fixture.Store.ToggleFavoriteAsync(replacement.Id);
+
+        Assert.Empty(fixture.Store.Favorites);
+        Assert.False(replacementVm.Item.IsFavorite);
+    }
+
+    [Theory]
+    [InlineData(ClipboardPayloadType.Image, "Images", true)]
+    [InlineData(ClipboardPayloadType.Text, "Text", true)]
+    [InlineData(ClipboardPayloadType.Text, "Images", false)]
+    [InlineData(ClipboardPayloadType.Image, "Text", false)]
+    [InlineData(ClipboardPayloadType.Html, "All", true)]
+    public void ClipboardTypeMatchesFilter_MapsSubFilterTagsToPayloadTypes(
+        ClipboardPayloadType type,
+        string subFilter,
+        bool expected)
+    {
+        Assert.Equal(expected, MainViewModel.ClipboardTypeMatchesFilter(type, subFilter));
     }
 
     private static ClipboardItem NewTextItem(string id, string hash, DateTime createdUtc) => new()

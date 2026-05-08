@@ -344,30 +344,70 @@
                                 <StackPanel>
                                     <CheckBox Content="{loc:T Key=Settings_Cb_LaunchAtStartup}" IsChecked="{Binding LaunchAtStartup}"/>
                                     <CheckBox Content="{loc:T Key=Settings_Cb_StartMinimized}" IsChecked="{Binding StartMinimized}"/>
-                                    <CheckBox Content="{loc:T Key=Settings_Cb_HideOnFocusLost}" IsChecked="{Binding HideOnFocusLost}"/>
-                                    <CheckBox Content="{loc:T Key=Settings_Cb_AlwaysOnTop}" IsChecked="{Binding AlwaysOnTop}"/>
                                     <CheckBox Content="{loc:T Key=Settings_Cb_CloseToTray}" IsChecked="{Binding CloseToTray}"/>
                                 </StackPanel>
                             </Border>
 
-                            <TextBlock Text="{loc:T Key=Settings_Field_Theme}" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Text="{loc:T Key=Settings_Field_WindowBehavior}" Style="{StaticResource FieldLabel}"/>
                             <Border Style="{StaticResource SettingsCard}">
-                                <ComboBox ItemsSource="{Binding ThemeOptions}"
-                                          SelectedValue="{Binding SelectedTheme}"
-                                          SelectedValuePath="Mode"
-                                          DisplayMemberPath="DisplayName"
-                                          Style="{StaticResource PremiumComboBox}"
-                                          Width="240" HorizontalAlignment="Left"/>
+                                <StackPanel>
+                                    <CheckBox Content="{loc:T Key=Settings_Cb_HideOnFocusLost}" IsChecked="{Binding HideOnFocusLost}"/>
+                                    <CheckBox Content="{loc:T Key=Settings_Cb_AlwaysOnTop}" IsChecked="{Binding AlwaysOnTop}"/>
+                                </StackPanel>
                             </Border>
 
-                            <TextBlock Text="{loc:T Key=Settings_Field_Language}" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Text="{loc:T Key=Settings_Field_Appearance}" Style="{StaticResource FieldLabel}"/>
                             <Border Style="{StaticResource SettingsCard}">
-                                <ComboBox ItemsSource="{Binding LanguageOptions}"
-                                          SelectedValue="{Binding SelectedLanguage}"
-                                          SelectedValuePath="Code"
-                                          DisplayMemberPath="DisplayName"
-                                          Style="{StaticResource PremiumComboBox}"
-                                          Width="240" HorizontalAlignment="Left"/>
+                                <StackPanel>
+                                    <TextBlock Text="{loc:T Key=Settings_Field_Theme}" Foreground="{DynamicResource TextSecondary}" FontSize="12" Margin="0,0,0,6"/>
+                                    <ComboBox ItemsSource="{Binding ThemeOptions}"
+                                              SelectedValue="{Binding SelectedTheme}"
+                                              SelectedValuePath="Mode"
+                                              DisplayMemberPath="DisplayName"
+                                              Style="{StaticResource PremiumComboBox}"
+                                              Width="240" HorizontalAlignment="Left"/>
+                                    <TextBlock Text="{loc:T Key=Settings_Field_Language}" Foreground="{DynamicResource TextSecondary}" FontSize="12" Margin="0,14,0,6"/>
+                                    <ComboBox ItemsSource="{Binding LanguageOptions}"
+                                              SelectedValue="{Binding SelectedLanguage}"
+                                              SelectedValuePath="Code"
+                                              DisplayMemberPath="DisplayName"
+                                              Style="{StaticResource PremiumComboBox}"
+                                              Width="240" HorizontalAlignment="Left"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <TabItem Header="{loc:T Key=Settings_Tab_Actions}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{DynamicResource BgMain}">
+                        <StackPanel Margin="32,24" MaxWidth="560" HorizontalAlignment="Left">
+                            <TextBlock Text="{loc:T Key=Settings_Section_Actions}" Style="{StaticResource SectionTitle}"/>
+
+                            <TextBlock Text="{loc:T Key=Settings_Field_Shortcuts}" Style="{StaticResource FieldLabel}"/>
+                            <Border Style="{StaticResource SettingsCard}">
+                                <StackPanel>
+                                    <TextBlock Text="{loc:T Key=Settings_Field_GlobalHotkey}" Foreground="{DynamicResource TextSecondary}" FontSize="12" Margin="0,0,0,6"/>
+                                    <TextBlock Text="{loc:T Key=Settings_Lbl_HotkeyDesc}" Foreground="{DynamicResource TextSecondary}" FontSize="12" Margin="0,0,0,8"/>
+                                    <TextBox Text="{Binding Hotkey, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource HotkeyTextBoxStyle}"
+                                             PreviewKeyDown="HotkeyTextBox_PreviewKeyDown"
+                                             IsReadOnly="True"
+                                             Margin="0,0,0,10"
+                                             ToolTip="{loc:T Key=Settings_Lbl_HotkeyToolTip}"/>
+                                    <Button Content="{loc:T Key=Settings_Btn_ResetDefault}" Command="{Binding ResetHotkeyCommand}"
+                                            Style="{StaticResource SettingsButton}" HorizontalAlignment="Left"/>
+
+                                    <TextBlock Text="{loc:T Key=Settings_Clipboard_PopPasteHotkey}" Foreground="{DynamicResource TextSecondary}" FontSize="12" Margin="0,18,0,8"/>
+                                    <TextBox Text="{Binding PopPasteHotkey, UpdateSourceTrigger=PropertyChanged}"
+                                             Tag="PopPasteHotkey"
+                                             Style="{StaticResource HotkeyTextBoxStyle}"
+                                             PreviewKeyDown="HotkeyTextBox_PreviewKeyDown"
+                                             IsReadOnly="True"
+                                             Margin="0,0,0,10"/>
+                                    <Button Content="{loc:T Key=Settings_Clipboard_ResetPopPasteHotkey}" Command="{Binding ResetPopPasteHotkeyCommand}"
+                                            Style="{StaticResource SettingsButton}" HorizontalAlignment="Left"/>
+                                </StackPanel>
                             </Border>
 
                             <TextBlock Text="{loc:T Key=Settings_Field_QuickPreview}" Style="{StaticResource FieldLabel}"/>
@@ -407,28 +447,6 @@
                                               Style="{StaticResource PremiumComboBox}"
                                               Width="120" HorizontalAlignment="Right"/>
                                 </Grid>
-                            </Border>
-                        </StackPanel>
-                    </ScrollViewer>
-                </TabItem>
-
-                <TabItem Header="{loc:T Key=Settings_Tab_Hotkey}">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{DynamicResource BgMain}">
-                        <StackPanel Margin="32,24" MaxWidth="560" HorizontalAlignment="Left">
-                            <TextBlock Text="{loc:T Key=Settings_Section_Hotkey}" Style="{StaticResource SectionTitle}"/>
-                            <TextBlock Text="{loc:T Key=Settings_Field_GlobalHotkey}" Style="{StaticResource FieldLabel}"/>
-                            <Border Style="{StaticResource SettingsCard}">
-                                <StackPanel>
-                                    <TextBlock Text="{loc:T Key=Settings_Lbl_HotkeyDesc}" Foreground="{DynamicResource TextSecondary}" FontSize="12" Margin="0,0,0,12"/>
-                                    <TextBox Text="{Binding Hotkey, UpdateSourceTrigger=PropertyChanged}"
-                                             Style="{StaticResource HotkeyTextBoxStyle}"
-                                             PreviewKeyDown="HotkeyTextBox_PreviewKeyDown"
-                                             IsReadOnly="True"
-                                             Margin="0,0,0,12"
-                                             ToolTip="{loc:T Key=Settings_Lbl_HotkeyToolTip}"/>
-                                    <Button Content="{loc:T Key=Settings_Btn_ResetDefault}" Command="{Binding ResetHotkeyCommand}"
-                                            Style="{StaticResource SettingsButton}" HorizontalAlignment="Left"/>
-                                </StackPanel>
                             </Border>
                         </StackPanel>
                     </ScrollViewer>
@@ -525,12 +543,59 @@
                                 <Button Content="{loc:T Key=Settings_Btn_AddNetworkPath}" Command="{Binding AddNetworkPathCommand}" Style="{StaticResource SettingsButton}"/>
                             </StackPanel>
 
+                            <TextBlock Text="{loc:T Key=Settings_Field_Filters}" Style="{StaticResource FieldLabel}"/>
+                            <Border Style="{StaticResource SettingsCard}" Margin="0,0,0,20">
+                                <StackPanel>
+                                    <TextBlock Text="{loc:T Key=Settings_Field_ExcludedExtensions}" Foreground="{DynamicResource TextSecondary}" FontSize="12" Margin="0,0,0,6"/>
+                                    <TextBox Text="{Binding ExcludedExtensionsText, UpdateSourceTrigger=LostFocus}"
+                                             AcceptsReturn="True" Height="86" VerticalScrollBarVisibility="Auto"/>
+                                    <TextBlock Text="{loc:T Key=Settings_Field_ExcludedPaths}" Foreground="{DynamicResource TextSecondary}" FontSize="12" Margin="0,12,0,6"/>
+                                    <TextBox Text="{Binding ExcludedPathsText, UpdateSourceTrigger=LostFocus}"
+                                             AcceptsReturn="True" Height="100" VerticalScrollBarVisibility="Auto"/>
+                                    <TextBlock Text="{loc:T Key=Settings_Field_ExcludedKeywords}" Foreground="{DynamicResource TextSecondary}" FontSize="12" Margin="0,12,0,6"/>
+                                    <TextBox Text="{Binding ExcludedKeywordsText, UpdateSourceTrigger=LostFocus}"
+                                             AcceptsReturn="True" Height="76" VerticalScrollBarVisibility="Auto"/>
+                                </StackPanel>
+                            </Border>
+
                             <TextBlock Text="{loc:T Key=Settings_Field_CacheIndex}" Style="{StaticResource FieldLabel}"/>
-                            <StackPanel Orientation="Horizontal">
-                                <Button Content="{loc:T Key=Settings_Btn_RebuildIndex}" Command="{Binding RebuildIndexCommand}" Style="{StaticResource PrimarySettingsButton}"/>
-                                <Button Content="{loc:T Key=Settings_Btn_ClearHidden}" Command="{Binding ClearHiddenItemsCommand}" Style="{StaticResource SettingsButton}"/>
-                                <Button Content="{loc:T Key=Settings_Btn_ClearIconCache}" Command="{Binding ClearIconCacheCommand}" Style="{StaticResource SettingsButton}"/>
-                            </StackPanel>
+                            <Border Style="{StaticResource SettingsCard}">
+                                <StackPanel>
+                                    <Grid Margin="0,0,0,14">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Button Content="{loc:T Key=Settings_Btn_RebuildIndex}" Command="{Binding RebuildIndexCommand}"
+                                                Style="{StaticResource PrimarySettingsButton}" MinWidth="150" HorizontalAlignment="Left"/>
+                                        <TextBlock Grid.Column="1" Text="{loc:T Key=Settings_Btn_RebuildIndexDesc}"
+                                                   Foreground="{DynamicResource TextSecondary}" FontSize="12"
+                                                   TextWrapping="Wrap" Margin="14,2,0,0"/>
+                                    </Grid>
+                                    <Grid Margin="0,0,0,14">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Button Content="{loc:T Key=Settings_Btn_ClearHidden}" Command="{Binding ClearHiddenItemsCommand}"
+                                                Style="{StaticResource SettingsButton}" MinWidth="150" HorizontalAlignment="Left"/>
+                                        <TextBlock Grid.Column="1" Text="{loc:T Key=Settings_Btn_ClearHiddenDesc}"
+                                                   Foreground="{DynamicResource TextSecondary}" FontSize="12"
+                                                   TextWrapping="Wrap" Margin="14,2,0,0"/>
+                                    </Grid>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Button Content="{loc:T Key=Settings_Btn_ClearIconCache}" Command="{Binding ClearIconCacheCommand}"
+                                                Style="{StaticResource SettingsButton}" MinWidth="150" HorizontalAlignment="Left"/>
+                                        <TextBlock Grid.Column="1" Text="{loc:T Key=Settings_Btn_ClearIconCacheDesc}"
+                                                   Foreground="{DynamicResource TextSecondary}" FontSize="12"
+                                                   TextWrapping="Wrap" Margin="14,2,0,0"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </ScrollViewer>
                 </TabItem>
@@ -561,28 +626,32 @@
 
                             <TextBlock Text="{loc:T Key=Settings_Clipboard_Field_Limits}" Style="{StaticResource FieldLabel}"/>
                             <Border Style="{StaticResource SettingsCard}">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="140"/>
-                                        <ColumnDefinition Width="24"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="140"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="12"/>
-                                        <RowDefinition Height="Auto"/>
-                                    </Grid.RowDefinitions>
-                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{loc:T Key=Settings_Clipboard_MaxItems}" VerticalAlignment="Center"/>
-                                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding MaxClipboardItems, UpdateSourceTrigger=LostFocus}"/>
-                                    <TextBlock Grid.Row="0" Grid.Column="3" Text="{loc:T Key=Settings_Clipboard_RetentionDays}" VerticalAlignment="Center"/>
-                                    <TextBox Grid.Row="0" Grid.Column="4" Text="{Binding ClipboardRetentionDays, UpdateSourceTrigger=LostFocus}"/>
-                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{loc:T Key=Settings_Clipboard_MaxTextChars}" VerticalAlignment="Center"/>
-                                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding MaxClipboardTextChars, UpdateSourceTrigger=LostFocus}"/>
-                                    <TextBlock Grid.Row="2" Grid.Column="3" Text="{loc:T Key=Settings_Clipboard_MaxImageMb}" VerticalAlignment="Center"/>
-                                    <TextBox Grid.Row="2" Grid.Column="4" Text="{Binding MaxClipboardImageSizeMb, UpdateSourceTrigger=LostFocus}"/>
-                                </Grid>
+                                <UniformGrid Columns="2" Rows="2">
+                                    <StackPanel Margin="0,0,12,14">
+                                        <TextBlock Text="{loc:T Key=Settings_Clipboard_MaxItems}"
+                                                   Foreground="{DynamicResource TextSecondary}" FontSize="12"
+                                                   TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                        <TextBox Text="{Binding MaxClipboardItems, UpdateSourceTrigger=LostFocus}"/>
+                                    </StackPanel>
+                                    <StackPanel Margin="12,0,0,14">
+                                        <TextBlock Text="{loc:T Key=Settings_Clipboard_RetentionDays}"
+                                                   Foreground="{DynamicResource TextSecondary}" FontSize="12"
+                                                   TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                        <TextBox Text="{Binding ClipboardRetentionDays, UpdateSourceTrigger=LostFocus}"/>
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,12,0">
+                                        <TextBlock Text="{loc:T Key=Settings_Clipboard_MaxTextChars}"
+                                                   Foreground="{DynamicResource TextSecondary}" FontSize="12"
+                                                   TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                        <TextBox Text="{Binding MaxClipboardTextChars, UpdateSourceTrigger=LostFocus}"/>
+                                    </StackPanel>
+                                    <StackPanel Margin="12,0,0,0">
+                                        <TextBlock Text="{loc:T Key=Settings_Clipboard_MaxImageMb}"
+                                                   Foreground="{DynamicResource TextSecondary}" FontSize="12"
+                                                   TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                        <TextBox Text="{Binding MaxClipboardImageSizeMb, UpdateSourceTrigger=LostFocus}"/>
+                                    </StackPanel>
+                                </UniformGrid>
                             </Border>
 
                             <TextBlock Text="{loc:T Key=Settings_Clipboard_Field_Privacy}" Style="{StaticResource FieldLabel}"/>
@@ -595,26 +664,14 @@
                                              AcceptsReturn="True" Height="86" VerticalScrollBarVisibility="Auto"/>
                                     <TextBlock Text="{loc:T Key=Settings_Clipboard_ExcludedApps}" Foreground="{DynamicResource TextSecondary}" FontSize="12" Margin="0,12,0,6"/>
                                     <TextBox Text="{Binding ClipboardExcludedSourceAppsText, UpdateSourceTrigger=LostFocus}"/>
-                                    <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
-                                        <Button Content="{loc:T Key=Settings_Clipboard_Pause10}" Command="{Binding PauseClipboard10MinutesCommand}" Style="{StaticResource SettingsButton}"/>
-                                        <Button Content="{loc:T Key=Settings_Clipboard_PauseHour}" Command="{Binding PauseClipboard1HourCommand}" Style="{StaticResource SettingsButton}"/>
-                                        <Button Content="{loc:T Key=Settings_Clipboard_Resume}" Command="{Binding ResumeClipboardCommand}" Style="{StaticResource SettingsButton}"/>
-                                    </StackPanel>
                                 </StackPanel>
                             </Border>
 
-                            <TextBlock Text="{loc:T Key=Settings_Clipboard_Field_PopPaste}" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Text="{loc:T Key=Settings_Clipboard_Field_PopPasteBehavior}" Style="{StaticResource FieldLabel}"/>
                             <Border Style="{StaticResource SettingsCard}">
                                 <StackPanel>
-                                    <TextBlock Text="{loc:T Key=Settings_Clipboard_PopPasteHotkey}" Foreground="{DynamicResource TextSecondary}" FontSize="12" Margin="0,0,0,6"/>
-                                    <TextBox Text="{Binding PopPasteHotkey, UpdateSourceTrigger=PropertyChanged}"
-                                             Tag="PopPasteHotkey"
-                                             Style="{StaticResource HotkeyTextBoxStyle}"
-                                             PreviewKeyDown="HotkeyTextBox_PreviewKeyDown"
-                                             IsReadOnly="True"
-                                             Margin="0,0,0,12"/>
                                     <CheckBox Content="{loc:T Key=Settings_Clipboard_RestoreAfterPaste}" IsChecked="{Binding RestoreClipboardAfterPaste}"/>
-                                    <TextBlock Text="{loc:T Key=Settings_Clipboard_EnterBehavior}" Foreground="{DynamicResource TextSecondary}" FontSize="12" Margin="0,12,0,6"/>
+                                    <TextBlock Text="{loc:T Key=Settings_Clipboard_EnterBehavior}" Foreground="{DynamicResource TextSecondary}" FontSize="12" Margin="0,10,0,6"/>
                                     <ComboBox ItemsSource="{Binding PopPasteEnterBehaviorOptions}"
                                               SelectedValue="{Binding PopPasteEnterBehavior}"
                                               SelectedValuePath="Value"
@@ -626,12 +683,15 @@
                                                FontSize="12"
                                                TextWrapping="Wrap"
                                                Margin="0,12,0,0"/>
-                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                        <Button Content="{loc:T Key=Settings_Clipboard_ResetPopPasteHotkey}" Command="{Binding ResetPopPasteHotkeyCommand}"
-                                                Style="{StaticResource SettingsButton}" HorizontalAlignment="Left"/>
-                                    </StackPanel>
                                 </StackPanel>
                             </Border>
+
+                            <TextBlock Text="{loc:T Key=Settings_Clipboard_Field_Runtime}" Style="{StaticResource FieldLabel}"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,24">
+                                <Button Content="{loc:T Key=Settings_Clipboard_Pause10}" Command="{Binding PauseClipboard10MinutesCommand}" Style="{StaticResource SettingsButton}"/>
+                                <Button Content="{loc:T Key=Settings_Clipboard_PauseHour}" Command="{Binding PauseClipboard1HourCommand}" Style="{StaticResource SettingsButton}"/>
+                                <Button Content="{loc:T Key=Settings_Clipboard_Resume}" Command="{Binding ResumeClipboardCommand}" Style="{StaticResource SettingsButton}"/>
+                            </StackPanel>
 
                             <TextBlock Text="{loc:T Key=Settings_Clipboard_Field_Maintenance}" Style="{StaticResource FieldLabel}"/>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,24">
@@ -640,32 +700,6 @@
                                 <Button Content="{loc:T Key=Settings_Clipboard_CompactBlobs}" Command="{Binding CompactClipboardBlobsCommand}" Style="{StaticResource SettingsButton}"/>
                             </StackPanel>
                         </StackPanel>
-                    </ScrollViewer>
-                </TabItem>
-
-                <TabItem Header="{loc:T Key=Settings_Tab_Filters}">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{DynamicResource BgMain}">
-                        <Grid Margin="32,24" MaxWidth="680" HorizontalAlignment="Left">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="100"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="120"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="90"/>
-                            </Grid.RowDefinitions>
-                            <TextBlock Text="{loc:T Key=Settings_Section_Filters}" Style="{StaticResource SectionTitle}"/>
-                            <TextBlock Grid.Row="1" Text="{loc:T Key=Settings_Field_ExcludedExtensions}" Style="{StaticResource FieldLabel}"/>
-                            <TextBox Grid.Row="2" Text="{Binding ExcludedExtensionsText, UpdateSourceTrigger=LostFocus}"
-                                     AcceptsReturn="True" VerticalScrollBarVisibility="Auto"/>
-                            <TextBlock Grid.Row="3" Text="{loc:T Key=Settings_Field_ExcludedPaths}" Style="{StaticResource FieldLabel}" Margin="0,14,0,6"/>
-                            <TextBox Grid.Row="4" Text="{Binding ExcludedPathsText, UpdateSourceTrigger=LostFocus}"
-                                     AcceptsReturn="True" VerticalScrollBarVisibility="Auto"/>
-                            <TextBlock Grid.Row="5" Text="{loc:T Key=Settings_Field_ExcludedKeywords}" Style="{StaticResource FieldLabel}" Margin="0,14,0,6"/>
-                            <TextBox Grid.Row="6" Text="{Binding ExcludedKeywordsText, UpdateSourceTrigger=LostFocus}"
-                                     AcceptsReturn="True" VerticalScrollBarVisibility="Auto"/>
-                        </Grid>
                     </ScrollViewer>
                 </TabItem>
 

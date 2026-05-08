@@ -55,11 +55,23 @@ public sealed class UncFolderWatchSource : IRecentSource, IDisposable
             _retryDelay = TimeSpan.FromSeconds(1);
         }
 
+        var scanCts = CancellationTokenSource.CreateLinkedTokenSource(ct, _cts.Token);
+        var scanToken = scanCts.Token;
         _ = Task.Run(() =>
         {
-            var cutoff = DateTime.Now.AddDays(-_config.RecentLookbackDays);
-            ScanDirectory(path, cutoff, ct);
-        }, ct);
+            try
+            {
+                if (scanToken.IsCancellationRequested)
+                    return;
+
+                var cutoff = DateTime.Now.AddDays(-_config.RecentLookbackDays);
+                ScanDirectory(path, cutoff, scanToken);
+            }
+            finally
+            {
+                scanCts.Dispose();
+            }
+        });
     }
 
     private void SetupWatcher(string path)

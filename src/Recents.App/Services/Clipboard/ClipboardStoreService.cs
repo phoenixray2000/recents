@@ -16,6 +16,7 @@ public sealed class ClipboardStoreService : IDisposable
     private readonly Dictionary<string, ClipboardItemViewModel> _byHash = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, ClipboardFavoriteViewModel> _favoritesById = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, ClipboardFavoriteViewModel> _favoritesByOriginalId = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, ClipboardFavoriteViewModel> _favoritesByHash = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _sync = new();
     private readonly ClipboardBlobDeletionQueue _deletionQueue = new();
     private readonly System.Windows.Threading.DispatcherTimer _maintenanceTimer;
@@ -132,9 +133,11 @@ public sealed class ClipboardStoreService : IDisposable
             }
 
             var seenFavoriteOrigins = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var seenFavoriteHashes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var favorite in _repo.LoadFavorites())
             {
-                if (!actions.HasUsableContent(favorite.ToClipboardItem()))
+                if (!actions.HasUsableContent(favorite.ToClipboardItem()) &&
+                    !TryRepairFavoriteSnapshotLocked(favorite, actions))
                 {
                     DeleteFavoriteSnapshotLocked(favorite);
                     continue;
@@ -142,6 +145,13 @@ public sealed class ClipboardStoreService : IDisposable
 
                 if (!string.IsNullOrWhiteSpace(favorite.OriginalItemId) &&
                     !seenFavoriteOrigins.Add(favorite.OriginalItemId))
+                {
+                    DeleteFavoriteSnapshotLocked(favorite);
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(favorite.Hash) &&
+                    !seenFavoriteHashes.Add(favorite.Hash))
                 {
                     DeleteFavoriteSnapshotLocked(favorite);
                     continue;
@@ -164,6 +174,7 @@ public sealed class ClipboardStoreService : IDisposable
             _byHash.Clear();
             _favoritesById.Clear();
             _favoritesByOriginalId.Clear();
+            _favoritesByHash.Clear();
 
             foreach (var item in snapshot.Items)
             {
@@ -176,14 +187,14 @@ public sealed class ClipboardStoreService : IDisposable
             foreach (var favorite in snapshot.Favorites)
             {
                 var vm = new ClipboardFavoriteViewModel(favorite, this, _actions!);
-                _favoritesById[favorite.Id] = vm;
-                if (!string.IsNullOrWhiteSpace(favorite.OriginalItemId))
-                {
-                    _favoritesByOriginalId[favorite.OriginalItemId] = vm;
-                    if (_byId.TryGetValue(favorite.OriginalItemId, out var source))
-                        source.Item.IsFavorite = true;
-                }
+                IndexFavoriteLocked(vm);
                 Favorites.Add(vm);
+            }
+
+            foreach (var source in _byId.Values)
+            {
+                if (TryGetFavoriteForSourceLocked(source.Item, out var favorite))
+                    LinkSourceToFavoriteLocked(source, favorite);
             }
         }
     }
@@ -218,6 +229,12 @@ public sealed class ClipboardStoreService : IDisposable
                 var vm = new ClipboardItemViewModel(item, this, _actions);
                 _byId[item.Id] = vm;
                 _byHash[item.Hash] = vm;
+                if (TryGetFavoriteForSourceLocked(item, out var favorite))
+                {
+                    LinkSourceToFavoriteLocked(vm, favorite);
+                    _repo.MarkFavorite(item.Id, true);
+                }
+
                 var prunedIds = _repo.SoftDeleteOverflowAndExpired(
                     _settings.Current.MaxClipboardItems,
                     DateTime.UtcNow.AddDays(-_settings.Current.ClipboardRetentionDays),
@@ -265,8 +282,23 @@ public sealed class ClipboardStoreService : IDisposable
 
     public async Task ToggleFavoriteAsync(string id)
     {
-        if (_favoritesByOriginalId.ContainsKey(id))
-            await RemoveFavoriteByOriginalItemIdAsync(id);
+        var favoriteId = await Task.Run(() =>
+        {
+            lock (_sync)
+            {
+                if (_byId.TryGetValue(id, out var source))
+                    return TryGetFavoriteForSourceLocked(source.Item, out var favorite)
+                        ? favorite.Item.Id
+                        : null;
+
+                return _favoritesByOriginalId.TryGetValue(id, out var favoriteByOriginalId)
+                    ? favoriteByOriginalId.Item.Id
+                    : null;
+            }
+        });
+
+        if (favoriteId is not null)
+            await RemoveFavoriteAsync(favoriteId);
         else
             await AddToFavoritesAsync(id);
     }
@@ -281,7 +313,13 @@ public sealed class ClipboardStoreService : IDisposable
             lock (_sync)
             {
                 if (!_byId.TryGetValue(id, out var vm)) return;
-                if (_favoritesByOriginalId.ContainsKey(id)) return;
+                if (TryGetFavoriteForSourceLocked(vm.Item, out var existingFavorite))
+                {
+                    LinkSourceToFavoriteLocked(vm, existingFavorite);
+                    _repo.MarkFavorite(id, true);
+                    Dispatch(vm.Refresh);
+                    return;
+                }
 
                 var favorite = CreateFavoriteSnapshot(vm.Item);
                 _repo.UpsertFavorite(favorite);
@@ -289,8 +327,8 @@ public sealed class ClipboardStoreService : IDisposable
                 vm.Item.IsFavorite = true;
 
                 var favVm = new ClipboardFavoriteViewModel(favorite, this, _actions);
-                _favoritesById[favorite.Id] = favVm;
-                _favoritesByOriginalId[id] = favVm;
+                IndexFavoriteLocked(favVm);
+                LinkSourceToFavoriteLocked(vm, favVm);
 
                 Dispatch(() =>
                 {
@@ -299,6 +337,83 @@ public sealed class ClipboardStoreService : IDisposable
                 });
             }
         });
+    }
+
+    private bool TryGetFavoriteForSourceLocked(ClipboardItem item, out ClipboardFavoriteViewModel favorite)
+    {
+        if (!string.IsNullOrWhiteSpace(item.Id) &&
+            _favoritesByOriginalId.TryGetValue(item.Id, out var byOriginalId))
+        {
+            favorite = byOriginalId;
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(item.Hash) &&
+            _favoritesByHash.TryGetValue(item.Hash, out var byHash))
+        {
+            favorite = byHash;
+            return true;
+        }
+
+        favorite = null!;
+        return false;
+    }
+
+    private void IndexFavoriteLocked(ClipboardFavoriteViewModel favorite)
+    {
+        _favoritesById[favorite.Item.Id] = favorite;
+        if (!string.IsNullOrWhiteSpace(favorite.Item.OriginalItemId))
+            _favoritesByOriginalId[favorite.Item.OriginalItemId] = favorite;
+        if (!string.IsNullOrWhiteSpace(favorite.Item.Hash))
+            _favoritesByHash[favorite.Item.Hash] = favorite;
+    }
+
+    private void LinkSourceToFavoriteLocked(ClipboardItemViewModel source, ClipboardFavoriteViewModel favorite)
+    {
+        source.Item.IsFavorite = true;
+        if (!string.IsNullOrWhiteSpace(source.Item.Id))
+            _favoritesByOriginalId[source.Item.Id] = favorite;
+        if (!string.IsNullOrWhiteSpace(source.Item.Hash))
+            _favoritesByHash[source.Item.Hash] = favorite;
+    }
+
+    private List<ClipboardItemViewModel> UnlinkFavoriteSourcesLocked(ClipboardFavoriteViewModel favorite)
+    {
+        var affected = new List<ClipboardItemViewModel>();
+        var sourceIds = _favoritesByOriginalId
+            .Where(kvp => ReferenceEquals(kvp.Value, favorite))
+            .Select(kvp => kvp.Key)
+            .ToList();
+
+        foreach (var sourceId in sourceIds)
+        {
+            _favoritesByOriginalId.Remove(sourceId);
+            _repo.MarkFavorite(sourceId, false);
+            if (_byId.TryGetValue(sourceId, out var source) && !affected.Contains(source))
+                affected.Add(source);
+        }
+
+        if (!string.IsNullOrWhiteSpace(favorite.Item.Hash) &&
+            _favoritesByHash.TryGetValue(favorite.Item.Hash, out var indexed) &&
+            ReferenceEquals(indexed, favorite))
+        {
+            _favoritesByHash.Remove(favorite.Item.Hash);
+        }
+
+        foreach (var source in _byId.Values.Where(v =>
+                     string.Equals(v.Item.Hash, favorite.Item.Hash, StringComparison.OrdinalIgnoreCase)))
+        {
+            if (!affected.Contains(source))
+                affected.Add(source);
+        }
+
+        foreach (var source in affected)
+        {
+            source.Item.IsFavorite = false;
+            _repo.MarkFavorite(source.Item.Id, false);
+        }
+
+        return affected;
     }
 
     public async Task RemoveFavoriteAsync(string favoriteId)
@@ -310,30 +425,17 @@ public sealed class ClipboardStoreService : IDisposable
                 if (!_favoritesById.TryGetValue(favoriteId, out var favVm)) return;
                 _repo.DeleteFavorite(favoriteId);
                 _favoritesById.Remove(favoriteId);
-                if (!string.IsNullOrWhiteSpace(favVm.Item.OriginalItemId))
-                {
-                    _favoritesByOriginalId.Remove(favVm.Item.OriginalItemId);
-                    _repo.MarkFavorite(favVm.Item.OriginalItemId, false);
-                    if (_byId.TryGetValue(favVm.Item.OriginalItemId, out var source))
-                        source.Item.IsFavorite = false;
-                }
+                var affectedSources = UnlinkFavoriteSourcesLocked(favVm);
 
                 DeleteFavoriteFiles(favVm.Item);
                 Dispatch(() =>
                 {
                     Favorites.Remove(favVm);
-                    if (favVm.Item.OriginalItemId is not null && _byId.TryGetValue(favVm.Item.OriginalItemId, out var source))
+                    foreach (var source in affectedSources)
                         source.Refresh();
                 });
             }
         });
-    }
-
-    private async Task RemoveFavoriteByOriginalItemIdAsync(string itemId)
-    {
-        if (!_favoritesByOriginalId.TryGetValue(itemId, out var favVm))
-            return;
-        await RemoveFavoriteAsync(favVm.Item.Id);
     }
 
     public async Task SetFavoriteOrderAsync(string favoriteId, int order)
@@ -395,9 +497,10 @@ public sealed class ClipboardStoreService : IDisposable
                 DeleteUnreferencedFiles(BlobDirectory, retainedNormalPaths);
                 DeleteUnreferencedFiles(ImageDirectory, retainedNormalPaths);
                 DeleteUnreferencedFiles(ThumbnailDirectory, retainedNormalPaths);
-                DeleteUnreferencedFiles(FavoriteBlobDirectory, _favoritesById.Values.SelectMany(v => new[] { v.Item.BlobPath, v.Item.HtmlBlobPath, v.Item.RtfBlobPath }));
-                DeleteUnreferencedFiles(FavoriteImageDirectory, _favoritesById.Values.Select(v => v.Item.ImagePath));
-                DeleteUnreferencedFiles(FavoriteThumbnailDirectory, _favoritesById.Values.Select(v => v.Item.ThumbnailPath));
+                var favoritePaths = _repo.LoadFavorites();
+                DeleteUnreferencedFiles(FavoriteBlobDirectory, favoritePaths.SelectMany(v => new[] { v.BlobPath, v.HtmlBlobPath, v.RtfBlobPath }));
+                DeleteUnreferencedFiles(FavoriteImageDirectory, favoritePaths.Select(v => v.ImagePath));
+                DeleteUnreferencedFiles(FavoriteThumbnailDirectory, favoritePaths.Select(v => v.ThumbnailPath));
 
                 if (removedItems.Count > 0 || removedFavorites.Count > 0)
                 {
@@ -447,6 +550,41 @@ public sealed class ClipboardStoreService : IDisposable
         };
     }
 
+    private bool TryRepairFavoriteSnapshotLocked(ClipboardFavoriteItem favorite, ClipboardActionService actions)
+    {
+        if (string.IsNullOrWhiteSpace(favorite.Hash))
+            return false;
+
+        var source = _repo.FindByHash(favorite.Hash);
+        if (source is null || !actions.HasUsableContent(source))
+            return false;
+
+        var changed = false;
+        favorite.BlobPath = RestoreSnapshotFile(favorite.BlobPath, source.BlobPath, FavoriteBlobDirectory, ref changed);
+        favorite.HtmlBlobPath = RestoreSnapshotFile(favorite.HtmlBlobPath, source.HtmlBlobPath, FavoriteBlobDirectory, ref changed);
+        favorite.RtfBlobPath = RestoreSnapshotFile(favorite.RtfBlobPath, source.RtfBlobPath, FavoriteBlobDirectory, ref changed);
+        favorite.ImagePath = RestoreSnapshotFile(favorite.ImagePath, source.ImagePath, FavoriteImageDirectory, ref changed);
+        favorite.ThumbnailPath = RestoreSnapshotFile(favorite.ThumbnailPath, source.ThumbnailPath, FavoriteThumbnailDirectory, ref changed);
+
+        if (changed)
+            _repo.UpsertFavorite(favorite);
+
+        return actions.HasUsableContent(favorite.ToClipboardItem());
+    }
+
+    private static string? RestoreSnapshotFile(string? currentPath, string? sourcePath, string targetDirectory, ref bool changed)
+    {
+        if (!string.IsNullOrWhiteSpace(currentPath) && File.Exists(currentPath))
+            return currentPath;
+
+        var restored = CopySnapshotFile(sourcePath, targetDirectory);
+        if (restored is null)
+            return currentPath;
+
+        changed = true;
+        return restored;
+    }
+
     private static string? CopySnapshotFile(string? sourcePath, string targetDirectory)
     {
         if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath))
@@ -481,6 +619,12 @@ public sealed class ClipboardStoreService : IDisposable
     private void DeleteFavoriteSnapshotLocked(ClipboardFavoriteItem favorite)
     {
         _repo.DeleteFavorite(favorite.Id);
+        if (!string.IsNullOrWhiteSpace(favorite.Hash) &&
+            _favoritesByHash.TryGetValue(favorite.Hash, out var favoriteByHash) &&
+            string.Equals(favoriteByHash.Item.Id, favorite.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            _favoritesByHash.Remove(favorite.Hash);
+        }
         if (!string.IsNullOrWhiteSpace(favorite.OriginalItemId))
         {
             _favoritesByOriginalId.Remove(favorite.OriginalItemId);

@@ -551,7 +551,23 @@
                                 </Style>
                             </TextBlock.Style>
                         </TextBlock>
-                        <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="10,0">
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="8,0,10,0">
+                            <Button Content="&#xE711;"
+                                    Command="{Binding ClearSearchCommand}"
+                                    FontFamily="Segoe Fluent Icons"
+                                    Width="28" Height="28"
+                                    ToolTip="{loc:T Key=Main_Search_Clear}">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Text.IsEmpty, ElementName=SearchBox}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
                             <TextBlock Text="{Binding HotkeyDisplay}" Foreground="{DynamicResource TextTertiary}" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
                         </StackPanel>
                     </Grid>
@@ -781,7 +797,7 @@
                          ItemTemplateSelector="{StaticResource FavoritesItemTemplateSelector}"
                          MouseDoubleClick="FavoritesList_MouseDoubleClick"
                          PreviewMouseLeftButtonDown="FavoritesList_PreviewMouseLeftButtonDown"
-                         ContextMenuOpening="ItemsList_ContextMenuOpening"
+                         ContextMenuOpening="FavoritesList_ContextMenuOpening"
                          AllowDrop="True"
                          MouseMove="FavoritesList_MouseMove"
                          DragOver="FavoritesList_DragOver"

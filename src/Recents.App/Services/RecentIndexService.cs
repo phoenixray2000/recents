@@ -22,9 +22,11 @@ public class RecentIndexService : IDisposable
     private readonly ExistsProbeService _probeService;
     private readonly string _internalClipboardDataPath;
     private readonly object _mergeLock = new();
-    private readonly System.Threading.Channels.Channel<RecentItem> _mergeQueue;
+    private readonly System.Threading.Channels.Channel<QueuedRecentItem> _mergeQueue;
     private bool _isProcessingQueue = false;
     public event Action? IndexChanged;
+
+    private readonly record struct QueuedRecentItem(RecentItem Item, CancellationToken CancellationToken);
 
     // UI 绑定集合（在 Dispatcher 线程维护，按 RecentTime 倒序）
     public ObservableCollection<RecentItemViewModel> Items { get; } = new();
@@ -49,7 +51,7 @@ public class RecentIndexService : IDisposable
         _repo = new RecentRepository(Path.Combine(dir, "index.db"));
 
         // Initialize merge queue (PRD optimization)
-        _mergeQueue = System.Threading.Channels.Channel.CreateUnbounded<RecentItem>(new System.Threading.Channels.UnboundedChannelOptions
+        _mergeQueue = System.Threading.Channels.Channel.CreateUnbounded<QueuedRecentItem>(new System.Threading.Channels.UnboundedChannelOptions
         {
             SingleReader = true,
             AllowSynchronousContinuations = false
@@ -158,13 +160,16 @@ public class RecentIndexService : IDisposable
     }
 
     // 核心融合方法：线程安全，异步非阻塞
-    public Task MergeAsync(RecentItem incoming)
+    public Task MergeAsync(RecentItem incoming, CancellationToken cancellationToken = default)
     {
         if (incoming == null || string.IsNullOrEmpty(incoming.NormalizedPath)) 
             return Task.CompletedTask;
 
+        if (cancellationToken.IsCancellationRequested)
+            return Task.CompletedTask;
+
         // 快速入队，立即返回，不等待处理
-        _mergeQueue.Writer.TryWrite(incoming);
+        _mergeQueue.Writer.TryWrite(new QueuedRecentItem(incoming, cancellationToken));
         return Task.CompletedTask;
     }
 
@@ -178,23 +183,29 @@ public class RecentIndexService : IDisposable
             var reader = _mergeQueue.Reader;
             while (await reader.WaitToReadAsync())
             {
-                while (reader.TryRead(out var incoming))
+                while (reader.TryRead(out var queued))
                 {
+                    if (queued.CancellationToken.IsCancellationRequested)
+                        continue;
+
                     try
                     {
-                        await ProcessMergeItemAsync(incoming);
+                        await ProcessMergeItemAsync(queued.Item, queued.CancellationToken);
                     }
                     catch (Exception ex)
                     {
-                        Log.Error(ex, "MergeQueueProcessor: 处理项失败 {Path}", LogPrivacy.Format(incoming.NormalizedPath));
+                        Log.Error(ex, "MergeQueueProcessor: 处理项失败 {Path}", LogPrivacy.Format(queued.Item.NormalizedPath));
                     }
                 }
             }
         });
     }
 
-    private async Task ProcessMergeItemAsync(RecentItem incoming)
+    private async Task ProcessMergeItemAsync(RecentItem incoming, CancellationToken cancellationToken)
     {
+        if (cancellationToken.IsCancellationRequested)
+            return;
+
         // A6. 不展示 Recent 文件夹中的 .lnk 本体
         var recentDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -228,6 +239,9 @@ public class RecentIndexService : IDisposable
 
         lock (_mergeLock)
         {
+            if (cancellationToken.IsCancellationRequested)
+                return;
+
             _index.TryGetValue(incoming.NormalizedPath, out var existing);
 
             if (existing is null)
@@ -422,6 +436,9 @@ public class RecentIndexService : IDisposable
                     InsertSorted(newVm);
                     vm = newVm;
                 }
+
+                if (vm.Item.IsFavorite)
+                    return;
 
                 UpdateFavoriteInternal(vm, true);
             }

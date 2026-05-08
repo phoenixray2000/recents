@@ -27,6 +27,9 @@ public partial class App : WpfApp
     private readonly List<IRecentSource> _sources = new();
     private readonly List<IDisposable> _sourceSubscriptions = new();
     private readonly SemaphoreSlim _sourceRestartLock = new(1, 1);
+    private readonly object _sourceRestartStateLock = new();
+    private CancellationTokenSource? _sourceRestartCts;
+    private int _sourceRestartGeneration;
     
     public static IWindowGroupFocusService WindowGroupFocusService { get; } = new WindowGroupFocusService();
 
@@ -72,15 +75,13 @@ public partial class App : WpfApp
             ClipboardPasteTarget.StartTracking();
             _clipboardStore.AttachActions(_clipboardActions);
             _clipboardStore.OpenDatabase();
-            _ = _clipboardStore.LoadFromDatabaseAsync();
-            _ = _clipboardStore.CompactOrphanBlobsAsync();
-            _clipboardStore.StartMaintenanceTimer();
             
             _hotkey = new HotkeyService();
             _statusHint = new StatusHintService();
             _statusHint.SetStatus(StatusHintService.AppStatus.Initializing);
 
             var mainVm = new MainViewModel(_index, _clipboardStore, _hotkey, _statusHint, _settings);
+            _ = InitializeClipboardStoreAsync();
 
             _ = _index.LoadFromDatabaseAsync(_settings.Current.MaxRecentItems);
 
@@ -94,7 +95,8 @@ public partial class App : WpfApp
                 _clipboardActions,
                 _clipboardDragDrop,
                 () => RestartSourcesAsync(rebuildIndex: true),
-                () => RestartSourcesAsync(rebuildIndex: false));
+                () => RestartSourcesAsync(rebuildIndex: false),
+                CancelSourceRestart);
 
             // 强制创建窗口句柄（即使窗口不显示），以确保全局热键能成功注册
             new System.Windows.Interop.WindowInteropHelper(mainWindow).EnsureHandle();
@@ -148,11 +150,31 @@ public partial class App : WpfApp
         }
     }
 
+    private async Task InitializeClipboardStoreAsync()
+    {
+        try
+        {
+            await _clipboardStore.LoadFromDatabaseAsync();
+            await _clipboardStore.CompactOrphanBlobsAsync();
+            _clipboardStore.StartMaintenanceTimer();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Clipboard store initialization failed");
+        }
+    }
+
     private async Task RestartSourcesAsync(bool rebuildIndex)
     {
+        var (restartCts, generation) = CreateSourceRestartToken();
+        var token = restartCts.Token;
+
         await _sourceRestartLock.WaitAsync();
         try
         {
+            if (token.IsCancellationRequested || !IsCurrentSourceRestart(generation))
+                return;
+
             foreach (var subscription in _sourceSubscriptions)
                 subscription.Dispose();
             _sourceSubscriptions.Clear();
@@ -164,28 +186,86 @@ public partial class App : WpfApp
             if (rebuildIndex)
                 await _index.RebuildAsync();
 
+            if (token.IsCancellationRequested || !IsCurrentSourceRestart(generation))
+                return;
+
             RegisterSources();
 
-            var tasks = _sources.Select(async source =>
+            var tasks = new List<Task>();
+            foreach (var source in _sources)
             {
-                _sourceSubscriptions.Add(source.Watch().Subscribe(new RecentChangeObserver(_index)));
-
-                try
-                {
-                    await source.InitialScanAsync(CancellationToken.None);
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "Source {Kind} initialization failed", source.Kind);
-                }
-            });
+                _sourceSubscriptions.Add(source.Watch().Subscribe(
+                    new RecentChangeObserver(_index, generation, IsCurrentSourceRestart, token)));
+                tasks.Add(InitialScanSourceAsync(source, generation, token));
+            }
 
             await Task.WhenAll(tasks);
         }
         finally
         {
             _sourceRestartLock.Release();
+            DisposeStaleSourceRestartToken(restartCts);
         }
+    }
+
+    private async Task InitialScanSourceAsync(IRecentSource source, int generation, CancellationToken token)
+    {
+        try
+        {
+            if (token.IsCancellationRequested || !IsCurrentSourceRestart(generation))
+                return;
+
+            await source.InitialScanAsync(token);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            Log.Debug("Source {Kind} initialization cancelled", source.Kind);
+        }
+        catch (Exception ex)
+        {
+            if (IsCurrentSourceRestart(generation) && !token.IsCancellationRequested)
+                Log.Error(ex, "Source {Kind} initialization failed", source.Kind);
+        }
+    }
+
+    private (CancellationTokenSource Cts, int Generation) CreateSourceRestartToken()
+    {
+        CancellationTokenSource? previous;
+        var next = new CancellationTokenSource();
+        int generation;
+
+        lock (_sourceRestartStateLock)
+        {
+            previous = _sourceRestartCts;
+            _sourceRestartCts = next;
+            generation = ++_sourceRestartGeneration;
+        }
+
+        previous?.Cancel();
+        return (next, generation);
+    }
+
+    private void CancelSourceRestart()
+    {
+        lock (_sourceRestartStateLock)
+        {
+            _sourceRestartGeneration++;
+            _sourceRestartCts?.Cancel();
+        }
+    }
+
+    private bool IsCurrentSourceRestart(int generation) =>
+        Volatile.Read(ref _sourceRestartGeneration) == generation;
+
+    private void DisposeStaleSourceRestartToken(CancellationTokenSource restartCts)
+    {
+        lock (_sourceRestartStateLock)
+        {
+            if (ReferenceEquals(_sourceRestartCts, restartCts))
+                return;
+        }
+
+        restartCts.Dispose();
     }
 
     private void RegisterSources()
@@ -232,16 +312,32 @@ public partial class App : WpfApp
     private class RecentChangeObserver : IObserver<RecentChange>
     {
         private readonly RecentIndexService _index;
+        private readonly int _generation;
+        private readonly Func<int, bool> _isCurrentGeneration;
+        private readonly CancellationToken _token;
 
-        public RecentChangeObserver(RecentIndexService index) => _index = index;
+        public RecentChangeObserver(
+            RecentIndexService index,
+            int generation,
+            Func<int, bool> isCurrentGeneration,
+            CancellationToken token)
+        {
+            _index = index;
+            _generation = generation;
+            _isCurrentGeneration = isCurrentGeneration;
+            _token = token;
+        }
 
         public void OnCompleted() { }
         public void OnError(Exception error) { }
 
         public async void OnNext(RecentChange change)
         {
+            if (_token.IsCancellationRequested || !_isCurrentGeneration(_generation))
+                return;
+
             if (change.Kind == RecentChangeKind.Added)
-                await _index.MergeAsync(change.Item);
+                await _index.MergeAsync(change.Item, _token);
             else if (change.Kind == RecentChangeKind.Removed)
                 await _index.RemoveAsync(change.Item.NormalizedPath);
             else if (change.Kind == RecentChangeKind.SourceUnavailable)
@@ -256,8 +352,10 @@ public partial class App : WpfApp
         ClipboardPasteTarget.StopTracking();
         _clipboardCapture?.Dispose();
         _hotkey?.Dispose();
+        CancelSourceRestart();
         foreach (var subscription in _sourceSubscriptions) subscription.Dispose();
         foreach (var source in _sources) (source as IDisposable)?.Dispose();
+        _sourceRestartCts?.Dispose();
         _index?.Dispose();
         _clipboardStore?.Dispose();
         _singleInstance?.Dispose();

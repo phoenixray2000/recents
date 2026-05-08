@@ -42,6 +42,23 @@ public static class ContextMenuBuilder
         return menu;
     }
 
+    public static ContextMenu BuildFavorite(RecentItemViewModel vm)
+    {
+        var menu = new ContextMenu();
+
+        menu.Items.Add(CreateItem("\uED25", Loc.T("Action_Open"), vm.OpenCommand));
+        menu.Items.Add(CreateOpenWithMenu(vm));
+        menu.Items.Add(CreateItem("\uE81D", Loc.T("Action_Reveal"), vm.RevealCommand));
+        menu.Items.Add(new Separator());
+        menu.Items.Add(CreateItem("\uE8C8", Loc.T("Action_CopyPath"), vm.CopyPathCommand));
+        menu.Items.Add(CreateItem("\uE8C8", Loc.T("Action_CopyFileName"), vm.CopyFileNameCommand));
+        menu.Items.Add(new Separator());
+        menu.Items.Add(CreateItem("\uE70F", Loc.T("Main_Favorites_Rename"), vm.RenameFavoriteCommand));
+        menu.Items.Add(CreateItem("\uE735", Loc.T("Main_Favorites_Unpin"), vm.TogglePinCommand, isDanger: true));
+
+        return menu;
+    }
+
     private static MenuItem CreateOpenWithMenu(RecentItemViewModel vm)
     {
         var menu = new MenuItem
