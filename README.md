@@ -23,7 +23,9 @@ Use a global hotkey to bring up the files you just saved, downloaded, opened, co
 
 ## Why Recents?
 
-Windows keeps useful activity trails in many places: Recent Items, Office MRU, Open/Save dialogs, Downloads, Desktop, Documents, network shares, and the clipboard. Recents brings those trails into one fast, keyboard-friendly surface.
+Windows keeps useful activity trails in many places: Recent Items, Office MRU, Open/Save dialogs, Downloads, Desktop, Documents, network shares, and the clipboard. At the same time, the built-in clipboard is too temporary for real work: copied text, images, files, HTML snippets, and rich text often disappear right when you need to reuse them.
+
+Recents brings recent files and clipboard history into one fast, keyboard-friendly surface. It treats "the thing I just worked with" as a single workflow, whether that thing is a file on disk or a clipboard item waiting to be pasted.
 
 It is designed for people who constantly hand files and snippets between tools: chat apps, browsers, forms, Office, IDEs, image editors, CAD tools, file servers, and internal systems.
 
@@ -182,7 +184,9 @@ Licensed under the [Apache License 2.0](LICENSE).
 
 ## 为什么做 Recents？
 
-Windows 会在很多地方留下最近活动记录：Recent Items、Office MRU、打开/保存对话框、下载目录、桌面、文档、网络共享盘和剪贴板。Recents 把这些分散线索收进一个快速、键盘友好的界面。
+Windows 会在很多地方留下最近活动记录：Recent Items、Office MRU、打开/保存对话框、下载目录、桌面、文档、网络共享盘和剪贴板。同时，系统自带剪贴板对真实工作流来说太临时：复制过的文本、图片、文件、HTML 片段和富文本，常常在需要复用时已经被下一次复制覆盖。
+
+Recents 把最近文件和剪贴板历史收进同一个快速、键盘友好的界面。它把「刚才处理过的东西」视为同一种工作流，无论那是磁盘上的文件，还是等待粘贴回当前应用的剪贴板条目。
 
 它面向每天在多个工具之间搬运文件和片段的人：聊天软件、浏览器、网页表单、Office、IDE、图像编辑器、CAD、文件服务器和内部系统。
 
