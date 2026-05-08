@@ -246,6 +246,10 @@ public sealed class ClipboardPasteService : IDisposable
             case VK_DELETE:
                 System.Windows.Application.Current.Dispatcher.BeginInvoke(() => _window.ClearSearchText());
                 return true;
+            case VK_SPACE:
+                if (Keyboard.Modifiers == ModifierKeys.None)
+                    System.Windows.Application.Current.Dispatcher.BeginInvoke(() => _window.HandleSpaceKey());
+                return true;
             case VK_LEFT:
             case VK_RIGHT:
             case VK_TAB:

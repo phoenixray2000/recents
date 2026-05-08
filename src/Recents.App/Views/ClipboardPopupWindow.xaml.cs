@@ -134,7 +134,7 @@ public partial class ClipboardPopupWindow : Window, IRecentDockWindow, IPreviewC
 
         if (e.Key == Key.Space && Keyboard.Modifiers == ModifierKeys.None)
         {
-            TogglePreview();
+            HandleSpaceKey();
             e.Handled = true;
             return;
         }
@@ -187,6 +187,17 @@ public partial class ClipboardPopupWindow : Window, IRecentDockWindow, IPreviewC
     {
         if (!_accepting && IsKeyboardFocusWithin)
             Close();
+    }
+
+    public void HandleSpaceKey()
+    {
+        if (!string.IsNullOrEmpty(_viewModel.SearchText))
+        {
+            AppendSearchText(" ");
+            return;
+        }
+
+        TogglePreview();
     }
 
     private void TogglePreview()
