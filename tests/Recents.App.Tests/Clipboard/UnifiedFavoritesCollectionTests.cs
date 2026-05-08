@@ -80,4 +80,124 @@ public sealed class UnifiedFavoritesCollectionTests
         Assert.Equal("Release notes", clipboard.DisplayName);
         Assert.Equal("actual clipboard text", clipboard.OriginalDisplayName);
     }
+
+    [Fact]
+    public void BuildFavoritesDisplayList_AddsAssignedItemsUnderGroupHeader()
+    {
+        var recent = CreateRecentFavorite(@"C:\work\contract.docx", "contract.docx", 1);
+        var clipboard = CreateClipboardFavorite("clip", "release notes", 2);
+        var group = new FavoriteGroup
+        {
+            Id = "work",
+            Name = "Work",
+            Order = 1
+        };
+
+        var rows = MainViewModel.BuildFavoritesDisplayList(
+            [recent, clipboard],
+            [group],
+            new Dictionary<string, string>
+            {
+                [MainViewModel.GetFavoriteAssignmentKey(clipboard)!] = group.Id
+            });
+
+        Assert.Same(recent, rows[0]);
+        var header = Assert.IsType<FavoriteGroupViewModel>(rows[1]);
+        Assert.Equal("Work", header.Name);
+        Assert.Same(clipboard, rows[2]);
+    }
+
+    [Fact]
+    public void BuildFavoritesDisplayList_HidesCollapsedGroupItems()
+    {
+        var recent = CreateRecentFavorite(@"C:\work\contract.docx", "contract.docx", 1);
+        var group = new FavoriteGroup
+        {
+            Id = "work",
+            Name = "Work",
+            Order = 1,
+            IsCollapsed = true
+        };
+
+        var rows = MainViewModel.BuildFavoritesDisplayList(
+            [recent],
+            [group],
+            new Dictionary<string, string>
+            {
+                [MainViewModel.GetFavoriteAssignmentKey(recent)!] = group.Id
+            });
+
+        var header = Assert.Single(rows);
+        Assert.IsType<FavoriteGroupViewModel>(header);
+    }
+
+    [Fact]
+    public void BuildFavoritesDisplayList_PutsUngroupedItemsInDefaultGroup()
+    {
+        var recent = CreateRecentFavorite(@"C:\work\contract.docx", "contract.docx", 1);
+        var defaultGroup = new FavoriteGroup
+        {
+            Id = FavoriteGroup.DefaultGroupId,
+            Order = 1
+        };
+
+        var rows = MainViewModel.BuildFavoritesDisplayList(
+            [recent],
+            [defaultGroup],
+            new Dictionary<string, string>());
+
+        var header = Assert.IsType<FavoriteGroupViewModel>(rows[0]);
+        Assert.True(FavoriteGroup.IsDefaultGroupId(header.Id));
+        Assert.Same(recent, rows[1]);
+    }
+
+    [Fact]
+    public void BuildFavoritesDisplayList_OrdersGroupsByGroupOrder()
+    {
+        var defaultGroup = new FavoriteGroup
+        {
+            Id = FavoriteGroup.DefaultGroupId,
+            Order = 2
+        };
+        var workGroup = new FavoriteGroup
+        {
+            Id = "work",
+            Name = "Work",
+            Order = 1
+        };
+
+        var rows = MainViewModel.BuildFavoritesDisplayList(
+            Array.Empty<object>(),
+            [defaultGroup, workGroup],
+            new Dictionary<string, string>());
+
+        Assert.Equal("work", Assert.IsType<FavoriteGroupViewModel>(rows[0]).Id);
+        Assert.Equal(FavoriteGroup.DefaultGroupId, Assert.IsType<FavoriteGroupViewModel>(rows[1]).Id);
+    }
+
+    private static RecentItemViewModel CreateRecentFavorite(string path, string displayName, int order) =>
+        new(
+            new RecentItem
+            {
+                NormalizedPath = path,
+                DisplayName = displayName,
+                FavoriteOrder = order,
+                FavoriteTime = DateTime.UtcNow.AddMinutes(-order),
+                IsFavorite = true
+            },
+            null!,
+            null!);
+
+    private static ClipboardFavoriteViewModel CreateClipboardFavorite(string id, string previewText, int order) =>
+        new(
+            new ClipboardFavoriteItem
+            {
+                Id = id,
+                Type = ClipboardPayloadType.Text,
+                PreviewText = previewText,
+                FavoriteOrder = order,
+                CreatedUtc = DateTime.UtcNow.AddMinutes(-order)
+            },
+            null!,
+            null!);
 }

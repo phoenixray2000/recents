@@ -89,6 +89,15 @@
   <data name="Main_Favorites_Rename_Title" xml:space="preserve"><value>Rename favorite</value></data>
   <data name="Main_Favorites_Rename_Label" xml:space="preserve"><value>Alias shown in the favorites drawer</value></data>
   <data name="Main_Favorites_Rename_Clear" xml:space="preserve"><value>Clear alias</value></data>
+  <data name="Main_Favorites_AddGroup" xml:space="preserve"><value>New group</value></data>
+  <data name="Main_Favorites_Group_Title" xml:space="preserve"><value>Favorite group</value></data>
+  <data name="Main_Favorites_Group_Label" xml:space="preserve"><value>Group name</value></data>
+  <data name="Main_Favorites_Group_DefaultName" xml:space="preserve"><value>New group</value></data>
+  <data name="Main_Favorites_Group_DefaultGroupName" xml:space="preserve"><value>Default group</value></data>
+  <data name="Main_Favorites_Group_Rename" xml:space="preserve"><value>Rename group</value></data>
+  <data name="Main_Favorites_Group_Delete" xml:space="preserve"><value>Delete group</value></data>
+  <data name="Main_Favorites_Group_Toggle" xml:space="preserve"><value>Collapse or expand group</value></data>
+  <data name="Main_Favorites_Group_Count" xml:space="preserve"><value>{0} items</value></data>
 
   <data name="Settings_Title" xml:space="preserve"><value>Settings</value></data>
   <data name="Settings_Close" xml:space="preserve"><value>Close settings</value></data>

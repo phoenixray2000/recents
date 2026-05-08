@@ -350,12 +350,103 @@
             </Grid>
         </DataTemplate>
 
+        <DataTemplate x:Key="FavoriteGroupTemplate" DataType="{x:Type vm:FavoriteGroupViewModel}">
+            <Grid Margin="0,6,0,2" MinHeight="28">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Width="24" Height="28" Cursor="SizeNS"
+                        Background="Transparent"
+                        PreviewMouseLeftButtonDown="FavoritesDragHandle_PreviewMouseLeftButtonDown">
+                    <TextBlock Text="&#xE784;" FontFamily="Segoe Fluent Icons" FontSize="14"
+                               Foreground="{DynamicResource TextTertiary}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               IsHitTestVisible="False"/>
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DataContext.IsFavoritesEditMode,
+                                             RelativeSource={RelativeSource AncestorType=Window}}"
+                                             Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                </Border>
+
+                <Button Grid.Column="1" Content="{Binding CollapseIcon}"
+                        Command="{Binding ToggleCollapsedCommand}"
+                        FontFamily="Segoe Fluent Icons" FontSize="10"
+                        Style="{StaticResource ActionButtonStyle}"
+                        Width="24" Height="24"
+                        ToolTip="{loc:T Key=Main_Favorites_Group_Toggle}"/>
+
+                <TextBlock Grid.Column="2" Text="{Binding Name}"
+                           FontSize="11" FontWeight="Bold"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource TextSecondary}"
+                           VerticalAlignment="Center"
+                           Margin="2,0,6,0"/>
+
+                <Grid Grid.Column="3" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding ItemCountText}" FontSize="10"
+                               Foreground="{DynamicResource TextTertiary}"
+                               VerticalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Visible"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding DataContext.IsFavoritesEditMode,
+                                                 RelativeSource={RelativeSource AncestorType=Window}}"
+                                                 Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <StackPanel Orientation="Horizontal">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding DataContext.IsFavoritesEditMode,
+                                                 RelativeSource={RelativeSource AncestorType=Window}}"
+                                                 Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <Button Content="&#xE70F;" Command="{Binding RenameCommand}"
+                                FontFamily="Segoe Fluent Icons" FontSize="11"
+                                Style="{StaticResource ActionButtonStyle}"
+                                Width="24" Height="24"
+                                ToolTip="{loc:T Key=Main_Favorites_Group_Rename}"/>
+                        <Button Content="&#xE74D;" Command="{Binding DeleteCommand}"
+                                FontFamily="Segoe Fluent Icons" FontSize="11"
+                                Style="{StaticResource ActionButtonStyle}"
+                                Width="24" Height="24"
+                                ToolTip="{loc:T Key=Main_Favorites_Group_Delete}"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </DataTemplate>
+
         <helpers:MainItemTemplateSelector x:Key="MainItemTemplateSelector"
                                           RecentTemplate="{StaticResource SharedRecentItemTemplate}"
                                           ClipboardTemplate="{StaticResource ClipboardItemTemplate}"/>
         <helpers:FavoritesItemTemplateSelector x:Key="FavoritesItemTemplateSelector"
                                                RecentTemplate="{StaticResource FavoritesItemTemplate}"
-                                               ClipboardTemplate="{StaticResource ClipboardFavoriteItemTemplate}"/>
+                                               ClipboardTemplate="{StaticResource ClipboardFavoriteItemTemplate}"
+                                               GroupTemplate="{StaticResource FavoriteGroupTemplate}"/>
     </Window.Resources>
 
     <Border BorderBrush="{DynamicResource WindowBorderBrush}" BorderThickness="1" 
@@ -647,25 +738,42 @@
                                FontWeight="Bold" FontSize="11"
                                Foreground="{DynamicResource TextSecondary}"
                                VerticalAlignment="Center" Margin="8,0,0,0"/>
-                    <Button HorizontalAlignment="Right" VerticalAlignment="Center"
-                            Command="{Binding ToggleFavoritesEditModeCommand}"
-                            Style="{StaticResource ActionButtonStyle}"
-                            Width="Auto" Padding="8,4">
-                        <Button.Content>
-                            <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondary}">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="Text" Value="{loc:T Key=Main_Favorites_Edit}"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsFavoritesEditMode}" Value="True">
-                                                <Setter Property="Text" Value="{loc:T Key=Main_Favorites_Done}"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                        </Button.Content>
-                    </Button>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <Button Content="&#xE710;"
+                                Command="{Binding AddFavoriteGroupCommand}"
+                                FontFamily="Segoe Fluent Icons" FontSize="12"
+                                Width="28" Height="28"
+                                ToolTip="{loc:T Key=Main_Favorites_AddGroup}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsFavoritesEditMode}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                        <Button Command="{Binding ToggleFavoritesEditModeCommand}"
+                                Style="{StaticResource ActionButtonStyle}"
+                                Width="Auto" Padding="8,4">
+                            <Button.Content>
+                                <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondary}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="{loc:T Key=Main_Favorites_Edit}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsFavoritesEditMode}" Value="True">
+                                                    <Setter Property="Text" Value="{loc:T Key=Main_Favorites_Done}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Button.Content>
+                        </Button>
+                    </StackPanel>
                 </Grid>
 
                 <ListBox x:Name="FavoritesList" Grid.Row="1" Background="Transparent" BorderThickness="0" ItemsSource="{Binding FavoritesView}" Padding="4"

@@ -44,6 +44,7 @@ public class SettingsService
             EnsureOpenWithSettings(Current);
             EnsureClassificationGroups(Current);
             EnsureClipboardSettings(Current);
+            EnsureFavoriteGroups(Current);
             Save();
             return;
         }
@@ -57,6 +58,7 @@ public class SettingsService
             EnsureOpenWithSettings(Current);
             EnsureClassificationGroups(Current);
             EnsureClipboardSettings(Current);
+            EnsureFavoriteGroups(Current);
             Log.Information("SettingsService: 配置加载成功，Sources={Count}", Current.Sources.Count);
         }
         catch (Exception ex)
@@ -68,6 +70,7 @@ public class SettingsService
             EnsureOpenWithSettings(Current);
             EnsureClassificationGroups(Current);
             EnsureClipboardSettings(Current);
+            EnsureFavoriteGroups(Current);
             Save();
         }
     }
@@ -213,6 +216,57 @@ public class SettingsService
         settings.PopPasteEnterBehavior = string.IsNullOrWhiteSpace(settings.PopPasteEnterBehavior)
             ? "PasteToActiveApp"
             : settings.PopPasteEnterBehavior;
+    }
+
+    private static void EnsureFavoriteGroups(AppSettings settings)
+    {
+        settings.FavoriteGroups ??= new List<FavoriteGroup>();
+        if (settings.FavoriteGroups.All(g => !FavoriteGroup.IsDefaultGroupId(g.Id)))
+        {
+            settings.FavoriteGroups.Insert(0, new FavoriteGroup
+            {
+                Id = FavoriteGroup.DefaultGroupId,
+                Order = 1
+            });
+        }
+
+        var usedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var nextOrder = 1;
+        foreach (var group in settings.FavoriteGroups.ToList())
+        {
+            if (string.IsNullOrWhiteSpace(group.Id) || !usedIds.Add(group.Id))
+                group.Id = Guid.NewGuid().ToString("N");
+
+            usedIds.Add(group.Id);
+            group.Name = FavoriteGroup.IsDefaultGroupId(group.Id)
+                ? FavoriteGroupPromptService.Normalize(group.Name) ?? string.Empty
+                : FavoriteGroupPromptService.Normalize(group.Name) ?? "Group";
+            if (group.Order <= 0)
+                group.Order = nextOrder;
+            nextOrder = Math.Max(nextOrder, group.Order + 1);
+        }
+
+        settings.FavoriteGroups = settings.FavoriteGroups
+            .OrderBy(g => g.Order)
+            .ThenBy(g => g.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        var validGroupIds = settings.FavoriteGroups
+            .Select(g => g.Id)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        settings.FavoriteGroupAssignments = settings.FavoriteGroupAssignments is null
+            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, string>(settings.FavoriteGroupAssignments, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var key in settings.FavoriteGroupAssignments.Keys.ToList())
+        {
+            if (string.IsNullOrWhiteSpace(key) ||
+                string.IsNullOrWhiteSpace(settings.FavoriteGroupAssignments[key]) ||
+                !validGroupIds.Contains(settings.FavoriteGroupAssignments[key]))
+            {
+                settings.FavoriteGroupAssignments.Remove(key);
+            }
+        }
     }
 
     private static SourceConfig MakeKnownFolderSource(string folderGuid, string displayName) =>

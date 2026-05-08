@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Recents.App.Localization;
 using Recents.App.Models;
 using Recents.App.Services;
 using Recents.App.Services.Clipboard;
@@ -75,6 +76,22 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ToggleFavoritesEditMode() => IsFavoritesEditMode = !IsFavoritesEditMode;
 
+    [RelayCommand]
+    private void AddFavoriteGroup()
+    {
+        if (!FavoriteGroupPromptService.TryShow(null, out var name))
+            return;
+
+        var groups = _settingsService.Current.FavoriteGroups;
+        groups.Add(new FavoriteGroup
+        {
+            Name = name ?? Loc.T("Main_Favorites_Group_DefaultName"),
+            Order = groups.Count == 0 ? 1 : groups.Max(g => g.Order) + 1
+        });
+
+        SaveFavoriteGroupsAndRefresh();
+    }
+
     // UI 绑定的过滤后视图
     public ICollectionView ItemsView { get; }
     public ICollectionView ClipboardItemsView { get; }
@@ -106,7 +123,6 @@ public partial class MainViewModel : ObservableObject
         ClipboardItemsView.Filter = FilterClipboardItem;
 
         FavoritesView = CollectionViewSource.GetDefaultView(_unifiedFavorites);
-        FavoritesView.SortDescriptions.Add(new SortDescription("FavoriteOrder", ListSortDirection.Ascending));
         RebuildUnifiedFavorites();
 
         // 初始同步计数
@@ -165,6 +181,12 @@ public partial class MainViewModel : ObservableObject
             RebuildUnifiedFavorites();
             if (!_updateTimer.IsEnabled) _updateTimer.Start();
         };
+    }
+
+    partial void OnIsFavoritesEditModeChanged(bool value)
+    {
+        RebuildUnifiedFavorites();
+        FavoritesView.Refresh();
     }
 
 
@@ -271,6 +293,14 @@ public partial class MainViewModel : ObservableObject
 
     public async Task ApplyUnifiedFavoriteOrderAsync(IReadOnlyList<object> orderedItems)
     {
+        await ApplyUnifiedFavoriteLayoutAsync(orderedItems, null, null);
+    }
+
+    public async Task ApplyUnifiedFavoriteLayoutAsync(IReadOnlyList<object> orderedItems, object? movedItem, string? targetGroupId)
+    {
+        if (movedItem is not null)
+            SetFavoriteGroupAssignment(movedItem, targetGroupId);
+
         for (var i = 0; i < orderedItems.Count; i++)
         {
             var order = i + 1;
@@ -289,10 +319,127 @@ public partial class MainViewModel : ObservableObject
             }
         }
 
+        _settingsService.Save();
         RebuildUnifiedFavorites();
         FavoritesView.Refresh();
         UpdateHasFavorites();
     }
+
+    public string? GetFavoriteGroupId(object item)
+    {
+        var key = GetFavoriteAssignmentKey(item);
+        if (key is null)
+            return null;
+
+        return _settingsService.Current.FavoriteGroupAssignments.TryGetValue(key, out var groupId) &&
+               IsKnownFavoriteGroup(groupId)
+            ? groupId
+            : null;
+    }
+
+    public void ToggleFavoriteGroupCollapsed(FavoriteGroupViewModel group)
+    {
+        group.Group.IsCollapsed = !group.Group.IsCollapsed;
+        SaveFavoriteGroupsAndRefresh();
+    }
+
+    public void RenameFavoriteGroup(FavoriteGroupViewModel group)
+    {
+        if (!FavoriteGroupPromptService.TryShow(group.Name, out var name))
+            return;
+
+        group.Group.Name = name ?? group.Group.Name;
+        SaveFavoriteGroupsAndRefresh();
+    }
+
+    public void DeleteFavoriteGroup(FavoriteGroupViewModel group)
+    {
+        if (FavoriteGroup.IsDefaultGroupId(group.Group.Id))
+            return;
+
+        _settingsService.Current.FavoriteGroups.RemoveAll(g =>
+            string.Equals(g.Id, group.Group.Id, StringComparison.OrdinalIgnoreCase));
+
+        foreach (var key in _settingsService.Current.FavoriteGroupAssignments.Keys.ToList())
+        {
+            if (string.Equals(_settingsService.Current.FavoriteGroupAssignments[key], group.Group.Id, StringComparison.OrdinalIgnoreCase))
+                _settingsService.Current.FavoriteGroupAssignments.Remove(key);
+        }
+
+        SaveFavoriteGroupsAndRefresh();
+    }
+
+    public void ApplyFavoriteGroupOrder(IReadOnlyList<FavoriteGroupViewModel> orderedGroups)
+    {
+        var orderedIds = orderedGroups
+            .Select(g => g.Id)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var groups = orderedGroups
+            .Select(g => g.Group)
+            .ToList();
+
+        groups.AddRange(_settingsService.Current.FavoriteGroups
+            .Where(g => !orderedIds.Contains(g.Id))
+            .OrderBy(g => g.Order)
+            .ThenBy(g => g.Name, StringComparer.CurrentCultureIgnoreCase));
+
+        for (var i = 0; i < groups.Count; i++)
+            groups[i].Order = i + 1;
+
+        _settingsService.Current.FavoriteGroups = groups;
+        SaveFavoriteGroupsAndRefresh();
+    }
+
+    private void SaveFavoriteGroupsAndRefresh()
+    {
+        NormalizeFavoriteGroupOrder();
+        _settingsService.Save();
+        RebuildUnifiedFavorites();
+        FavoritesView.Refresh();
+        UpdateHasFavorites();
+    }
+
+    private void NormalizeFavoriteGroupOrder()
+    {
+        var ordered = _settingsService.Current.FavoriteGroups
+            .OrderBy(g => g.Order)
+            .ThenBy(g => g.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        if (ordered.All(g => !FavoriteGroup.IsDefaultGroupId(g.Id)))
+        {
+            ordered.Insert(0, new FavoriteGroup
+            {
+                Id = FavoriteGroup.DefaultGroupId,
+                Order = 1
+            });
+        }
+
+        for (var i = 0; i < ordered.Count; i++)
+            ordered[i].Order = i + 1;
+
+        _settingsService.Current.FavoriteGroups = ordered;
+    }
+
+    private void SetFavoriteGroupAssignment(object item, string? groupId)
+    {
+        var key = GetFavoriteAssignmentKey(item);
+        if (key is null)
+            return;
+
+        if (string.IsNullOrWhiteSpace(groupId) || !IsKnownFavoriteGroup(groupId))
+        {
+            _settingsService.Current.FavoriteGroupAssignments.Remove(key);
+            return;
+        }
+
+        _settingsService.Current.FavoriteGroupAssignments[key] = groupId;
+    }
+
+    private bool IsKnownFavoriteGroup(string? groupId) =>
+        !string.IsNullOrWhiteSpace(groupId) &&
+        _settingsService.Current.FavoriteGroups.Any(g =>
+            string.Equals(g.Id, groupId, StringComparison.OrdinalIgnoreCase));
 
     private void RebuildUnifiedFavorites()
     {
@@ -303,8 +450,12 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        var merged = OrderFavoritesForDisplay(
-            _indexService.Favorites.Cast<object>().Concat(_clipboardStore.Favorites.Cast<object>()));
+        var merged = BuildFavoritesDisplayList(
+            _indexService.Favorites.Cast<object>().Concat(_clipboardStore.Favorites.Cast<object>()),
+            _settingsService.Current.FavoriteGroups,
+            _settingsService.Current.FavoriteGroupAssignments,
+            includeEmptyGroups: _settingsService.Current.FavoriteGroups.Count > 0,
+            createGroupHeader: (group, count) => new FavoriteGroupViewModel(group, count, this));
 
         _unifiedFavorites.Clear();
         foreach (var item in merged)
@@ -316,6 +467,72 @@ public partial class MainViewModel : ObservableObject
             .OrderBy(GetFavoriteOrder)
             .ThenBy(GetFavoriteTieBreaker)
             .ToList();
+
+    internal static List<object> BuildFavoritesDisplayList(
+        IEnumerable<object> favorites,
+        IReadOnlyList<FavoriteGroup> groups,
+        IReadOnlyDictionary<string, string> assignments,
+        bool includeEmptyGroups = true,
+        Func<FavoriteGroup, int, FavoriteGroupViewModel>? createGroupHeader = null)
+    {
+        var orderedFavorites = OrderFavoritesForDisplay(favorites);
+        var orderedGroups = groups
+            .Where(g => !string.IsNullOrWhiteSpace(g.Id))
+            .OrderBy(g => g.Order)
+            .ThenBy(g => g.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        var groupedItems = orderedGroups.ToDictionary(
+            g => g.Id,
+            _ => new List<object>(),
+            StringComparer.OrdinalIgnoreCase);
+        var ungroupedItems = new List<object>();
+
+        foreach (var item in orderedFavorites)
+        {
+            var key = GetFavoriteAssignmentKey(item);
+            if (key is not null &&
+                assignments.TryGetValue(key, out var groupId) &&
+                groupedItems.TryGetValue(groupId, out var groupItems))
+            {
+                groupItems.Add(item);
+            }
+            else if (groupedItems.TryGetValue(FavoriteGroup.DefaultGroupId, out var defaultGroupItems))
+            {
+                defaultGroupItems.Add(item);
+            }
+            else
+            {
+                ungroupedItems.Add(item);
+            }
+        }
+
+        var rows = new List<object>(orderedFavorites.Count + orderedGroups.Count);
+        rows.AddRange(ungroupedItems);
+
+        foreach (var group in orderedGroups)
+        {
+            var items = groupedItems[group.Id];
+            if (!includeEmptyGroups && items.Count == 0)
+                continue;
+
+            rows.Add(createGroupHeader?.Invoke(group, items.Count) ?? new FavoriteGroupViewModel(group, items.Count));
+            if (!group.IsCollapsed)
+                rows.AddRange(items);
+        }
+
+        return rows;
+    }
+
+    internal static bool IsFavoriteItem(object item) =>
+        item is RecentItemViewModel or ClipboardFavoriteViewModel;
+
+    internal static string? GetFavoriteAssignmentKey(object item) => item switch
+    {
+        RecentItemViewModel recent => $"recent:{recent.Item.NormalizedPath}",
+        ClipboardFavoriteViewModel clip => $"clipboard:{clip.Item.Id}",
+        _ => null
+    };
 
     private static int GetFavoriteOrder(object item) => item switch
     {

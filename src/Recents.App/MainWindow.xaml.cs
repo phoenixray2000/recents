@@ -23,6 +23,7 @@ namespace Recents.App;
 public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
 {
     private const string InternalReorderFormat = "InternalReorder";
+    private const string InternalGroupReorderFormat = "InternalGroupReorder";
     private const string ClipboardItemIdFormat = "Recents.ClipboardItemId";
 
     private readonly MainViewModel _viewModel;
@@ -526,7 +527,8 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
 
     private void FavoritesDragHandle_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (sender is FrameworkElement fe && fe.DataContext is RecentItemViewModel or ClipboardFavoriteViewModel)
+        if (sender is FrameworkElement fe &&
+            fe.DataContext is RecentItemViewModel or ClipboardFavoriteViewModel or FavoriteGroupViewModel)
         {
             _favoritesDragItem = fe.DataContext;
             _dragStartPoint = e.GetPosition(null);
@@ -572,7 +574,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
 
     private void FavoritesList_MouseMove(object sender, WpfMouseEventArgs e)
     {
-        if (e.LeftButton != MouseButtonState.Pressed || !_dragStartPoint.HasValue || FavoritesList.SelectedItem == null)
+        if (e.LeftButton != MouseButtonState.Pressed || !_dragStartPoint.HasValue)
             return;
 
         var currentPos = e.GetPosition(null);
@@ -594,7 +596,9 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
             _favAdornerLayer?.Add(_dragAdorner);
 
             var dataObj = new System.Windows.DataObject();
-            dataObj.SetData(InternalReorderFormat, vm);
+            dataObj.SetData(
+                vm is FavoriteGroupViewModel ? InternalGroupReorderFormat : InternalReorderFormat,
+                vm);
             System.Windows.DragDrop.DoDragDrop(FavoritesList, dataObj, System.Windows.DragDropEffects.Move);
 
             if (_dragAdorner != null) { _favAdornerLayer?.Remove(_dragAdorner); _dragAdorner = null; }
@@ -605,6 +609,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
             // Normal mode: external file drag only, no reorder
             if (source != null && FindParent<System.Windows.Controls.Button>(source) != null) return;
             var selected = FavoritesList.SelectedItem;
+            if (selected is null) return;
             if (selected is RecentItemViewModel recent && recent.IsMissing) return;
             _dragStartPoint = null;
             var dataObj = selected switch
@@ -623,17 +628,47 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
 
     private async void FavoritesList_Drop(object sender, System.Windows.DragEventArgs e)
     {
+        if (e.Data.GetDataPresent(InternalGroupReorderFormat))
+        {
+            if (e.Data.GetData(InternalGroupReorderFormat) is not FavoriteGroupViewModel draggedGroup)
+                return;
+
+            var rows = _viewModel.FavoritesView.Cast<object>().ToList();
+            var targetRowIndex = GetFavoriteDropIndex(e.GetPosition(FavoritesList));
+            var orderedGroups = rows.OfType<FavoriteGroupViewModel>().ToList();
+            var targetGroupIndex = CountFavoriteGroupsBefore(rows, targetRowIndex);
+            var originalGroupIndex = orderedGroups.IndexOf(draggedGroup);
+            orderedGroups.Remove(draggedGroup);
+            if (originalGroupIndex >= 0 && originalGroupIndex < targetGroupIndex)
+                targetGroupIndex--;
+
+            targetGroupIndex = Math.Clamp(targetGroupIndex, 0, orderedGroups.Count);
+            orderedGroups.Insert(targetGroupIndex, draggedGroup);
+            _viewModel.ApplyFavoriteGroupOrder(orderedGroups);
+            FavoritesDragLine.Visibility = Visibility.Collapsed;
+            e.Handled = true;
+            return;
+        }
+
         if (e.Data.GetDataPresent(InternalReorderFormat))
         {
             var draggedVm = e.Data.GetData(InternalReorderFormat);
             if (draggedVm == null) return;
 
-            var ordered = _viewModel.FavoritesView.Cast<object>().ToList();
-            var targetIndex = GetFavoriteDropIndex(e.GetPosition(FavoritesList));
+            var rows = _viewModel.FavoritesView.Cast<object>().ToList();
+            var dropPosition = e.GetPosition(FavoritesList);
+            var targetRowIndex = GetFavoriteDropIndex(dropPosition);
+            var targetGroupId = GetFavoriteDropGroupId(dropPosition, rows, targetRowIndex);
+            var ordered = rows.Where(MainViewModel.IsFavoriteItem).ToList();
+            var targetItemIndex = CountFavoriteItemsBefore(rows, targetRowIndex);
+            var originalItemIndex = ordered.IndexOf(draggedVm);
             ordered.Remove(draggedVm);
-            targetIndex = Math.Clamp(targetIndex, 0, ordered.Count);
-            ordered.Insert(targetIndex, draggedVm);
-            await _viewModel.ApplyUnifiedFavoriteOrderAsync(ordered);
+            if (originalItemIndex >= 0 && originalItemIndex < targetItemIndex)
+                targetItemIndex--;
+
+            targetItemIndex = Math.Clamp(targetItemIndex, 0, ordered.Count);
+            ordered.Insert(targetItemIndex, draggedVm);
+            await _viewModel.ApplyUnifiedFavoriteLayoutAsync(ordered, draggedVm, targetGroupId);
             FavoritesDragLine.Visibility = Visibility.Collapsed;
             e.Handled = true;
             return;
@@ -668,7 +703,8 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
             e.Handled = true;
             return;
         }
-        if (!e.Data.GetDataPresent(InternalReorderFormat)) return;
+        if (!e.Data.GetDataPresent(InternalReorderFormat) &&
+            !e.Data.GetDataPresent(InternalGroupReorderFormat)) return;
         e.Effects = System.Windows.DragDropEffects.Move;
         e.Handled = true;
 
@@ -722,6 +758,70 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         }
         Canvas.SetTop(FavoritesDragLine, insertY - 1);
         FavoritesDragLine.Visibility = Visibility.Visible;
+    }
+
+    private string? GetFavoriteDropGroupId(System.Windows.Point posInList, IReadOnlyList<object> rows, int targetRowIndex)
+    {
+        if (GetFavoriteGroupUnderPointer(posInList) is { } directGroup)
+            return directGroup.Id;
+
+        if (targetRowIndex > 0 && targetRowIndex - 1 < rows.Count)
+        {
+            var previous = rows[targetRowIndex - 1];
+            if (previous is FavoriteGroupViewModel previousGroup)
+                return previousGroup.Id;
+            if (MainViewModel.IsFavoriteItem(previous))
+                return _viewModel.GetFavoriteGroupId(previous);
+        }
+
+        if (targetRowIndex >= 0 && targetRowIndex < rows.Count && MainViewModel.IsFavoriteItem(rows[targetRowIndex]))
+            return _viewModel.GetFavoriteGroupId(rows[targetRowIndex]);
+
+        return null;
+    }
+
+    private FavoriteGroupViewModel? GetFavoriteGroupUnderPointer(System.Windows.Point posInList)
+    {
+        foreach (var item in FavoritesList.Items)
+        {
+            if (item is not FavoriteGroupViewModel group)
+                continue;
+
+            if (FavoritesList.ItemContainerGenerator.ContainerFromItem(item) is not FrameworkElement container)
+                continue;
+
+            var itemPos = container.TranslatePoint(new System.Windows.Point(0, 0), FavoritesList);
+            if (posInList.Y >= itemPos.Y && posInList.Y <= itemPos.Y + container.ActualHeight)
+                return group;
+        }
+
+        return null;
+    }
+
+    private static int CountFavoriteItemsBefore(IReadOnlyList<object> rows, int targetRowIndex)
+    {
+        var count = 0;
+        var safeTarget = Math.Clamp(targetRowIndex, 0, rows.Count);
+        for (var i = 0; i < safeTarget; i++)
+        {
+            if (MainViewModel.IsFavoriteItem(rows[i]))
+                count++;
+        }
+
+        return count;
+    }
+
+    private static int CountFavoriteGroupsBefore(IReadOnlyList<object> rows, int targetRowIndex)
+    {
+        var count = 0;
+        var safeTarget = Math.Clamp(targetRowIndex, 0, rows.Count);
+        for (var i = 0; i < safeTarget; i++)
+        {
+            if (rows[i] is FavoriteGroupViewModel)
+                count++;
+        }
+
+        return count;
     }
 
     private IEnumerable<RecentItemViewModel> GetSelectedItems() =>
@@ -1091,6 +1191,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
     {
         RecentItemViewModel recent => recent.FavoriteDisplayName,
         ClipboardFavoriteViewModel clip => clip.DisplayName,
+        FavoriteGroupViewModel group => group.Name,
         _ => string.Empty
     };
 
