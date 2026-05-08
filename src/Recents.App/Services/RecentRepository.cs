@@ -85,6 +85,13 @@ internal sealed class RecentRepository : IDisposable
             try { cmd.ExecuteNonQuery(); } catch { /* table may not exist yet, will be created below */ }
         }
 
+        cmd.CommandText = "SELECT count(*) FROM pragma_table_info('favorites') WHERE name='favorite_alias';";
+        if (Convert.ToInt32(cmd.ExecuteScalar()) == 0)
+        {
+            cmd.CommandText = "ALTER TABLE favorites ADD COLUMN favorite_alias TEXT;";
+            try { cmd.ExecuteNonQuery(); } catch { /* table may not exist yet, will be created below */ }
+        }
+
         cmd.CommandText = """
             CREATE TABLE IF NOT EXISTS schema_version (
                 version INTEGER PRIMARY KEY,
@@ -129,7 +136,8 @@ internal sealed class RecentRepository : IDisposable
                 source_kinds         INTEGER NOT NULL,
                 icon_cache_key       TEXT,
                 last_seen_time       INTEGER NOT NULL,
-                icon_png             BLOB
+                icon_png             BLOB,
+                favorite_alias       TEXT
             );
 
             -- 迁移逻辑：如果 favorites 表为空，则从 recent_items 导入旧的收藏项（显式列名，兼容列数差异）
@@ -198,7 +206,7 @@ internal sealed class RecentRepository : IDisposable
             SELECT normalized_path, display_name, extension, category_source,
                    recent_time, target_modified_time, size_bytes,
                    exists_state, is_folder, is_favorite, favorite_time, favorite_order, is_hidden,
-                   source_kinds, icon_cache_key, last_seen_time, icon_png
+                   source_kinds, icon_cache_key, last_seen_time, icon_png, favorite_alias
             FROM favorites
             ORDER BY favorite_order ASC, favorite_time DESC
             """;
@@ -207,7 +215,7 @@ internal sealed class RecentRepository : IDisposable
             yield return ReadItem(reader);
     }
 
-    public void Upsert(RecentItem item) => UpsertToTable(item, "recent_items");
+    public void Upsert(RecentItem item) => UpsertToTable(item, "recent_items", includeFavoriteAlias: false);
 
     public void Delete(string normalizedPath)
     {
@@ -220,26 +228,29 @@ internal sealed class RecentRepository : IDisposable
 
     public void UpsertFavorite(RecentItem item)
     {
-        UpsertToTable(item, "favorites");
+        UpsertToTable(item, "favorites", includeFavoriteAlias: true);
     }
 
-    private void UpsertToTable(RecentItem item, string tableName)
+    private void UpsertToTable(RecentItem item, string tableName, bool includeFavoriteAlias)
     {
         if (_conn is null) return;
         try
         {
+            var aliasColumn = includeFavoriteAlias ? ", favorite_alias" : string.Empty;
+            var aliasValue = includeFavoriteAlias ? ", $alias" : string.Empty;
+            var aliasUpdate = includeFavoriteAlias ? "favorite_alias       = excluded.favorite_alias," : string.Empty;
             using var cmd = _conn.CreateCommand();
             cmd.CommandText = $"""
                 INSERT INTO {tableName}
                     (normalized_path, display_name, extension, category_source,
                      recent_time, target_modified_time, size_bytes,
                      exists_state, is_folder, is_favorite, favorite_time, favorite_order, is_hidden,
-                     source_kinds, icon_cache_key, last_seen_time)
+                     source_kinds, icon_cache_key, last_seen_time{aliasColumn})
                 VALUES
                     ($path, $name, $ext, $ftype,
                      $rt, $mt, $size,
                      $es, $isf, $isfav, $ftm, $ford, $ish,
-                     $sk, $ick, $lst)
+                     $sk, $ick, $lst{aliasValue})
                 ON CONFLICT(normalized_path) DO UPDATE SET
                     display_name         = excluded.display_name,
                     extension            = excluded.extension,
@@ -255,6 +266,7 @@ internal sealed class RecentRepository : IDisposable
                     is_hidden            = excluded.is_hidden,
                     source_kinds         = excluded.source_kinds,
                     icon_cache_key       = excluded.icon_cache_key,
+                    {aliasUpdate}
                     last_seen_time       = excluded.last_seen_time;
                 """;
             cmd.Parameters.AddWithValue("$path",  item.NormalizedPath);
@@ -273,6 +285,8 @@ internal sealed class RecentRepository : IDisposable
             cmd.Parameters.AddWithValue("$sk",    (int)item.Sources);
             cmd.Parameters.AddWithValue("$ick",   item.IconCacheKey ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("$lst",   ToEpochMs(item.LastSeenTime));
+            if (includeFavoriteAlias)
+                cmd.Parameters.AddWithValue("$alias", item.FavoriteAlias ?? (object)DBNull.Value);
             cmd.ExecuteNonQuery();
         }
         catch (Exception ex)
@@ -349,6 +363,16 @@ internal sealed class RecentRepository : IDisposable
         }
     }
 
+    public void UpdateFavoriteAlias(string normalizedPath, string? alias)
+    {
+        if (_conn is null) return;
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "UPDATE favorites SET favorite_alias = $alias WHERE normalized_path = $path;";
+        cmd.Parameters.AddWithValue("$alias", alias ?? (object)DBNull.Value);
+        cmd.Parameters.AddWithValue("$path", normalizedPath);
+        cmd.ExecuteNonQuery();
+    }
+
     public void DeleteFavorite(string normalizedPath)
     {
         if (_conn is null) return;
@@ -408,6 +432,7 @@ internal sealed class RecentRepository : IDisposable
         IconCacheKey         = r.IsDBNull(14) ? null : r.GetString(14),
         LastSeenTime         = FromEpochMs(r.GetInt64(15)),
         IconData             = r.FieldCount > 16 && !r.IsDBNull(16) ? (byte[])r.GetValue(16) : null,
+        FavoriteAlias        = r.FieldCount > 17 && !r.IsDBNull(17) ? r.GetString(17) : null,
     };
 
     private static long     ToEpochMs(DateTime dt) =>

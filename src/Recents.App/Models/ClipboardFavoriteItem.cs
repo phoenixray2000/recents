@@ -26,4 +26,5 @@ public sealed class ClipboardFavoriteItem
     public string? SourceAppName { get; set; }
     public string? SourceAppPath { get; set; }
     public int FavoriteOrder { get; set; }
+    public string? FavoriteAlias { get; set; }
 }

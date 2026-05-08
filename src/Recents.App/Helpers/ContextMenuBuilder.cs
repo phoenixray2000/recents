@@ -32,6 +32,8 @@ public static class ContextMenuBuilder
         menu.Items.Add(CreateItem("\uE8C8", Loc.T("Action_CopyPath"), vm.CopyPathCommand));
         menu.Items.Add(CreateItem("\uE8C8", Loc.T("Action_CopyFileName"), vm.CopyFileNameCommand));
         menu.Items.Add(new Separator());
+        if (vm.Item.IsFavorite)
+            menu.Items.Add(CreateItem("\uE70F", Loc.T("Main_Favorites_Rename"), vm.RenameFavoriteCommand));
         menu.Items.Add(CreateItem("\uE735", Loc.T("Action_TogglePin"), vm.TogglePinCommand));
         menu.Items.Add(CreateItem("\uE894", Loc.T("Action_HideFromList"), vm.HideFromListCommand));
         menu.Items.Add(new Separator());

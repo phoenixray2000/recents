@@ -85,6 +85,10 @@
   <data name="Main_Favorites_Unpin" xml:space="preserve"><value>取消固定</value></data>
   <data name="Main_Favorites_Edit" xml:space="preserve"><value>编辑</value></data>
   <data name="Main_Favorites_Done" xml:space="preserve"><value>完成</value></data>
+  <data name="Main_Favorites_Rename" xml:space="preserve"><value>重命名别名...</value></data>
+  <data name="Main_Favorites_Rename_Title" xml:space="preserve"><value>重命名收藏</value></data>
+  <data name="Main_Favorites_Rename_Label" xml:space="preserve"><value>收藏栏中显示的别名</value></data>
+  <data name="Main_Favorites_Rename_Clear" xml:space="preserve"><value>清除别名</value></data>
 
   <data name="Settings_Title" xml:space="preserve"><value>设置</value></data>
   <data name="Settings_Close" xml:space="preserve"><value>关闭设置</value></data>
@@ -224,6 +228,8 @@
   <data name="Status_Hint_ClipboardDrag" xml:space="preserve"><value>↑↓ 导航 · 回车/双击粘贴 · Ctrl+单击纯文本 · 拖拽分享</value></data>
 
   <data name="Action_Open" xml:space="preserve"><value>打开</value></data>
+  <data name="Action_Save" xml:space="preserve"><value>保存</value></data>
+  <data name="Action_Cancel" xml:space="preserve"><value>取消</value></data>
   <data name="Action_OpenWith" xml:space="preserve"><value>打开方式</value></data>
   <data name="Action_ChooseOtherApp" xml:space="preserve"><value>选择其他应用...</value></data>
   <data name="Action_Reveal" xml:space="preserve"><value>在资源管理器中显示</value></data>

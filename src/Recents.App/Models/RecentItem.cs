@@ -33,6 +33,8 @@ public class RecentItem
     public string?     IconCacheKey        { get; set; }
     // 收藏时缓存的图标 PNG 字节（仅 favorites 表持久化，避免每次启动重新拉取）
     public byte[]?     IconData            { get; set; }
+    // 收藏栏别名；只影响收藏栏展示，不修改真实文件名
+    public string?     FavoriteAlias       { get; set; }
     // 最近一次被任意来源看到的时间（用于 SQLite last_seen_time 字段）
     public DateTime    LastSeenTime        { get; set; }
 }

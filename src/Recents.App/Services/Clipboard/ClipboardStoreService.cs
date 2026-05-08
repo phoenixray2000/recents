@@ -350,6 +350,21 @@ public sealed class ClipboardStoreService : IDisposable
         });
     }
 
+    public async Task SetFavoriteAliasAsync(string favoriteId, string? alias)
+    {
+        alias = FavoriteAliasPromptService.Normalize(alias);
+        await Task.Run(() =>
+        {
+            lock (_sync)
+            {
+                if (!_favoritesById.TryGetValue(favoriteId, out var vm)) return;
+                vm.Item.FavoriteAlias = alias;
+                _repo.UpdateFavoriteAlias(favoriteId, alias);
+                Dispatch(vm.Refresh);
+            }
+        });
+    }
+
     public async Task ClearHistoryAsync()
     {
         await Task.Run(() =>

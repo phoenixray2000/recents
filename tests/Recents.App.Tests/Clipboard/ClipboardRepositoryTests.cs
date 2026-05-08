@@ -141,6 +141,32 @@ public sealed class ClipboardRepositoryTests
         Assert.Single(repo.LoadFavorites());
     }
 
+    [Fact]
+    public void UpsertFavorite_PersistsFavoriteAlias()
+    {
+        using var fixture = RepositoryFixture.Create();
+        var repo = fixture.Repository;
+
+        repo.UpsertFavorite(new ClipboardFavoriteItem
+        {
+            Id = "favorite",
+            Type = ClipboardPayloadType.Text,
+            CreatedUtc = DateTime.UtcNow,
+            SourceCreatedUtc = DateTime.UtcNow,
+            Hash = "hash-favorite",
+            PreviewText = "actual clipboard text",
+            PlainText = "actual clipboard text",
+            FavoriteOrder = 1,
+            FavoriteAlias = "Release notes"
+        });
+
+        Assert.Equal("Release notes", Assert.Single(repo.LoadFavorites()).FavoriteAlias);
+
+        repo.UpdateFavoriteAlias("favorite", null);
+
+        Assert.Null(Assert.Single(repo.LoadFavorites()).FavoriteAlias);
+    }
+
     private static ClipboardItem NewItem(string id, DateTime createdUtc, string hash, string blobName) => new()
     {
         Id = id,

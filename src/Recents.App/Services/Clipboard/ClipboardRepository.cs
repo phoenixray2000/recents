@@ -131,13 +131,29 @@ internal sealed class ClipboardRepository : IDisposable
               size_bytes        INTEGER,
               source_app_name   TEXT,
               source_app_path   TEXT,
-              favorite_order    INTEGER NOT NULL DEFAULT 0
+              favorite_order    INTEGER NOT NULL DEFAULT 0,
+              favorite_alias    TEXT
             );
 
             CREATE INDEX IF NOT EXISTS idx_clipboard_favorites_order
                 ON clipboard_favorites(favorite_order);
             """;
         cmd.ExecuteNonQuery();
+
+        EnsureColumn("clipboard_favorites", "favorite_alias", "TEXT");
+    }
+
+    private void EnsureColumn(string tableName, string columnName, string definition)
+    {
+        using var check = _conn!.CreateCommand();
+        check.CommandText = $"SELECT count(*) FROM pragma_table_info('{tableName}') WHERE name=$name;";
+        check.Parameters.AddWithValue("$name", columnName);
+        if (Convert.ToInt32(check.ExecuteScalar()) > 0)
+            return;
+
+        using var alter = _conn.CreateCommand();
+        alter.CommandText = $"ALTER TABLE {tableName} ADD COLUMN {columnName} {definition};";
+        alter.ExecuteNonQuery();
     }
 
     public IReadOnlyList<ClipboardItem> LoadItems(int maxItems)
@@ -176,7 +192,7 @@ internal sealed class ClipboardRepository : IDisposable
                    preview_text, plain_text, text_length, file_paths_json,
                    blob_path, html_blob_path, rtf_blob_path, image_path, thumbnail_path,
                    image_width, image_height, size_bytes, source_app_name, source_app_path,
-                   favorite_order
+                   favorite_order, favorite_alias
             FROM clipboard_favorites
             ORDER BY favorite_order ASC, created_utc DESC;
             """;
@@ -308,13 +324,13 @@ internal sealed class ClipboardRepository : IDisposable
                  preview_text, plain_text, text_length, file_paths_json,
                  blob_path, html_blob_path, rtf_blob_path, image_path, thumbnail_path,
                  image_width, image_height, size_bytes, source_app_name, source_app_path,
-                 favorite_order)
+                 favorite_order, favorite_alias)
             VALUES
                 ($id, $original, $type, $created, $sourceCreated, $hash,
                  $preview, $plain, $textLength, $files,
                  $blob, $htmlBlob, $rtfBlob, $image, $thumb,
                  $imageWidth, $imageHeight, $size, $sourceApp, $sourcePath,
-                 $order)
+                 $order, $alias)
             ON CONFLICT(id) DO UPDATE SET
                  original_item_id = excluded.original_item_id,
                  type = excluded.type,
@@ -335,7 +351,8 @@ internal sealed class ClipboardRepository : IDisposable
                  size_bytes = excluded.size_bytes,
                  source_app_name = excluded.source_app_name,
                  source_app_path = excluded.source_app_path,
-                 favorite_order = excluded.favorite_order;
+                 favorite_order = excluded.favorite_order,
+                 favorite_alias = excluded.favorite_alias;
             """;
         AddFavoriteParameters(cmd, item);
         cmd.ExecuteNonQuery();
@@ -366,6 +383,16 @@ internal sealed class ClipboardRepository : IDisposable
         cmd.CommandText = "UPDATE clipboard_favorites SET favorite_order = $order WHERE id = $id;";
         cmd.Parameters.AddWithValue("$id", favoriteId);
         cmd.Parameters.AddWithValue("$order", order);
+        cmd.ExecuteNonQuery();
+    }
+
+    public void UpdateFavoriteAlias(string favoriteId, string? alias)
+    {
+        if (_conn is null) return;
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "UPDATE clipboard_favorites SET favorite_alias = $alias WHERE id = $id;";
+        cmd.Parameters.AddWithValue("$id", favoriteId);
+        cmd.Parameters.AddWithValue("$alias", alias ?? (object)DBNull.Value);
         cmd.ExecuteNonQuery();
     }
 
@@ -574,6 +601,7 @@ internal sealed class ClipboardRepository : IDisposable
             SourceAppName = r.IsDBNull(18) ? null : r.GetString(18),
             SourceAppPath = r.IsDBNull(19) ? null : r.GetString(19),
             FavoriteOrder = r.GetInt32(20),
+            FavoriteAlias = r.FieldCount > 21 && !r.IsDBNull(21) ? r.GetString(21) : null,
         };
     }
 
@@ -625,6 +653,7 @@ internal sealed class ClipboardRepository : IDisposable
         cmd.Parameters.AddWithValue("$sourceApp", item.SourceAppName ?? (object)DBNull.Value);
         cmd.Parameters.AddWithValue("$sourcePath", item.SourceAppPath ?? (object)DBNull.Value);
         cmd.Parameters.AddWithValue("$order", item.FavoriteOrder);
+        cmd.Parameters.AddWithValue("$alias", item.FavoriteAlias ?? (object)DBNull.Value);
     }
 
     public void Dispose() => _conn?.Dispose();

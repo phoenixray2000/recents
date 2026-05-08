@@ -561,6 +561,27 @@ public class RecentIndexService : IDisposable
         }).ConfigureAwait(false);
     }
 
+    public async Task SetFavoriteAliasAsync(string normalizedPath, string? alias)
+    {
+        alias = FavoriteAliasPromptService.Normalize(alias);
+        await Task.Run(() =>
+        {
+            lock (_mergeLock)
+            {
+                if (!_index.TryGetValue(normalizedPath, out var vm)) return;
+                if (!vm.Item.IsFavorite) return;
+
+                vm.Item.FavoriteAlias = alias;
+                _repo.UpdateFavoriteAlias(vm.Item.NormalizedPath, alias);
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+                {
+                    vm.Refresh();
+                    IndexChanged?.Invoke();
+                });
+            }
+        }).ConfigureAwait(false);
+    }
+
     private void InsertSorted(RecentItemViewModel vm)
     {
         int pos = 0;

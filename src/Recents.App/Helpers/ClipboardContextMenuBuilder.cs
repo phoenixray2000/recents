@@ -54,6 +54,7 @@ public static class ClipboardContextMenuBuilder
             vm.SaveHtmlAsCommand,
             vm.SaveRtfAsCommand);
         menu.Items.Add(new Separator());
+        menu.Items.Add(CreateItem("\uE70F", Loc.T("Main_Favorites_Rename"), vm.RenameFavoriteCommand));
         menu.Items.Add(CreateItem("\uE735", Loc.T("Main_Favorites_Unpin"), vm.RemoveFavoriteCommand, isDanger: true));
         return menu;
     }

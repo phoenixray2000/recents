@@ -184,9 +184,9 @@
                 <Image Grid.Column="1" Source="{Binding SmallIcon}" Width="24" Height="24"
                        VerticalAlignment="Center" Margin="0,0,8,0"/>
 
-                <TextBlock Grid.Column="2" Text="{Binding DisplayName}" FontWeight="SemiBold"
+                <TextBlock Grid.Column="2" Text="{Binding FavoriteDisplayName}" FontWeight="SemiBold"
                            FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                           ToolTip="{Binding DisplayPath}">
+                           ToolTip="{Binding FavoriteToolTip}">
                     <TextBlock.Style>
                         <Style TargetType="TextBlock">
                             <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
@@ -327,7 +327,7 @@
 
                 <TextBlock Grid.Column="2" Text="{Binding DisplayName}" FontWeight="SemiBold"
                            FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                           ToolTip="{Binding DisplayPath}"
+                           ToolTip="{Binding FavoriteToolTip}"
                            Foreground="{DynamicResource TextPrimary}"/>
 
                 <Button Grid.Column="3" Content="&#xE735;" Command="{Binding RemoveFavoriteCommand}"

@@ -49,4 +49,35 @@ public sealed class UnifiedFavoritesCollectionTests
         Assert.Same(clipboardSecond, ordered[1]);
         Assert.Same(recent, ordered[2]);
     }
+
+    [Fact]
+    public void FavoriteDisplayName_UsesAliasWithoutChangingSourceNames()
+    {
+        var recent = new RecentItemViewModel(
+            new RecentItem
+            {
+                NormalizedPath = @"C:\work\contract.docx",
+                DisplayName = "contract.docx",
+                IsFavorite = true,
+                FavoriteAlias = "Client contract",
+            },
+            null!,
+            null!);
+        var clipboard = new ClipboardFavoriteViewModel(
+            new ClipboardFavoriteItem
+            {
+                Id = "clip",
+                Type = ClipboardPayloadType.Text,
+                PreviewText = "actual clipboard text",
+                PlainText = "actual clipboard text",
+                FavoriteAlias = "Release notes",
+            },
+            null!,
+            new ClipboardActionService(null!));
+
+        Assert.Equal("Client contract", recent.FavoriteDisplayName);
+        Assert.Equal("contract.docx", recent.DisplayName);
+        Assert.Equal("Release notes", clipboard.DisplayName);
+        Assert.Equal("actual clipboard text", clipboard.OriginalDisplayName);
+    }
 }

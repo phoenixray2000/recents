@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Recents.App.Localization;
 using Recents.App.Models;
+using Recents.App.Services;
 using Recents.App.Services.Clipboard;
 
 namespace Recents.App.ViewModels;
@@ -24,10 +25,16 @@ public partial class ClipboardFavoriteViewModel : ObservableObject
     public bool HasRichText => _actions.HasRichText(Item.ToClipboardItem());
     public bool HasImage => _actions.HasImage(Item.ToClipboardItem());
     public bool HasFiles => _actions.HasFiles(Item.ToClipboardItem());
-    public string DisplayName => IsMissing
+    public string OriginalDisplayName => IsMissing
         ? $"[{Loc.T("Clipboard_Missing_Snapshot")}] {(string.IsNullOrWhiteSpace(Item.PreviewText) ? TypeLabel : Item.PreviewText)}"
         : string.IsNullOrWhiteSpace(Item.PreviewText) ? TypeLabel : Item.PreviewText;
+    public string DisplayName => string.IsNullOrWhiteSpace(Item.FavoriteAlias)
+        ? OriginalDisplayName
+        : Item.FavoriteAlias!;
     public string DisplayPath => Item.PlainText ?? Item.ImagePath ?? Item.BlobPath ?? TypeLabel;
+    public string FavoriteToolTip => string.IsNullOrWhiteSpace(Item.FavoriteAlias)
+        ? DisplayPath
+        : $"{OriginalDisplayName}{Environment.NewLine}{DisplayPath}";
     public string TypeLabel => Item.Type switch
     {
         ClipboardPayloadType.Text => "Text",
@@ -138,6 +145,15 @@ public partial class ClipboardFavoriteViewModel : ObservableObject
 
     [RelayCommand]
     private async Task RemoveFavorite() => await _store.RemoveFavoriteAsync(Item.Id);
+
+    [RelayCommand]
+    private async Task RenameFavorite()
+    {
+        if (!FavoriteAliasPromptService.TryShow(Item.FavoriteAlias, OriginalDisplayName, out var alias))
+            return;
+
+        await _store.SetFavoriteAliasAsync(Item.Id, alias);
+    }
 
     public void Refresh()
     {

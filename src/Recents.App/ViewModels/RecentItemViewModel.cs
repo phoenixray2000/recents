@@ -15,7 +15,13 @@ public partial class RecentItemViewModel : ObservableObject
 
     // 显示名称（直接透传，后续支持省略中段长路径）
     public string DisplayName  => Item.DisplayName;
+    public string FavoriteDisplayName => string.IsNullOrWhiteSpace(Item.FavoriteAlias)
+        ? Item.DisplayName
+        : Item.FavoriteAlias!;
     public string DisplayPath  => Item.NormalizedPath;
+    public string FavoriteToolTip => string.IsNullOrWhiteSpace(Item.FavoriteAlias)
+        ? DisplayPath
+        : $"{Item.DisplayName}{Environment.NewLine}{DisplayPath}";
     public string DisplayPathShort => MiddleEllipsize(Item.NormalizedPath);
     public string Extension            => Item.Extension;
     public string ClassificationSource => Item.ClassificationSource;
@@ -220,6 +226,17 @@ public partial class RecentItemViewModel : ObservableObject
     [RelayCommand]
     private void CopyFileName() => FileActionService.CopyFileName(Item.NormalizedPath);
 
+    private bool CanRenameFavorite() => Item.IsFavorite;
+
+    [RelayCommand(CanExecute = nameof(CanRenameFavorite))]
+    private async Task RenameFavorite()
+    {
+        if (!FavoriteAliasPromptService.TryShow(Item.FavoriteAlias, Item.DisplayName, out var alias))
+            return;
+
+        await _indexService.SetFavoriteAliasAsync(Item.NormalizedPath, alias);
+    }
+
     [RelayCommand]
     private async Task RemoveOnce()
     {
@@ -235,6 +252,7 @@ public partial class RecentItemViewModel : ObservableObject
     public void Refresh()
     {
         OnPropertyChanged(string.Empty);  // 通知所有属性
+        RenameFavoriteCommand.NotifyCanExecuteChanged();
     }
 
     private static string FormatBytes(long bytes) => bytes switch

@@ -1089,7 +1089,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
 
     private static string GetFavoriteDisplayName(object? item) => item switch
     {
-        RecentItemViewModel recent => recent.DisplayName,
+        RecentItemViewModel recent => recent.FavoriteDisplayName,
         ClipboardFavoriteViewModel clip => clip.DisplayName,
         _ => string.Empty
     };

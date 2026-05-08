@@ -12,7 +12,14 @@ namespace Recents.App.Services;
 public static class ShellService
 {
     public static event Action? ActionExecuted;
-    public static bool IsExternalDialogOpen { get; private set; }
+    private static int _externalDialogDepth;
+    public static bool IsExternalDialogOpen => System.Threading.Volatile.Read(ref _externalDialogDepth) > 0;
+
+    public static IDisposable HoldExternalDialogOpen(bool notifyActionExecutedOnDispose = false)
+    {
+        System.Threading.Interlocked.Increment(ref _externalDialogDepth);
+        return new ExternalDialogScope(notifyActionExecutedOnDispose);
+    }
 
     #region Open With
 
@@ -55,7 +62,7 @@ public static class ShellService
         // and rundll32 itself often exits before the dialog is even visible —
         // clearing the flag prematurely and letting the main window auto-hide
         // when focus eventually shifts to the dialog.
-        IsExternalDialogOpen = true;
+        var dialogScope = HoldExternalDialogOpen(notifyActionExecutedOnDispose: true);
 
         var thread = new System.Threading.Thread(() =>
         {
@@ -77,8 +84,7 @@ public static class ShellService
             {
                 System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
                 {
-                    IsExternalDialogOpen = false;
-                    ActionExecuted?.Invoke();
+                    dialogScope.Dispose();
                 });
             }
         });
@@ -178,4 +184,25 @@ public static class ShellService
     private static extern bool DeleteObject(IntPtr hObject);
 
     #endregion
+
+    private sealed class ExternalDialogScope : IDisposable
+    {
+        private readonly bool _notifyActionExecutedOnDispose;
+        private int _disposed;
+
+        public ExternalDialogScope(bool notifyActionExecutedOnDispose)
+        {
+            _notifyActionExecutedOnDispose = notifyActionExecutedOnDispose;
+        }
+
+        public void Dispose()
+        {
+            if (System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0)
+                return;
+
+            System.Threading.Interlocked.Decrement(ref _externalDialogDepth);
+            if (_notifyActionExecutedOnDispose)
+                ActionExecuted?.Invoke();
+        }
+    }
 }
