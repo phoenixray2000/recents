@@ -45,9 +45,7 @@ public partial class ClipboardPopupWindow : Window, IRecentDockWindow, IPreviewC
         };
         Closed += (_, _) =>
         {
-            ClosePreview();
-            if (_previewWindow is not null)
-                App.WindowGroupFocusService.UnregisterWindow(_previewWindow);
+            DisposePreviewWindow();
         };
     }
 
@@ -270,6 +268,20 @@ public partial class ClipboardPopupWindow : Window, IRecentDockWindow, IPreviewC
             _previewWindow.Hide();
             _previewWindow.Tag = null;
         }
+    }
+
+    private void DisposePreviewWindow()
+    {
+        _previewNavCts?.Cancel();
+        _previewNavCts?.Dispose();
+        _previewNavCts = null;
+
+        if (_previewWindow is null)
+            return;
+
+        App.WindowGroupFocusService.UnregisterWindow(_previewWindow);
+        _previewWindow.DisposeForShutdown();
+        _previewWindow = null;
     }
 
     public void SelectNextAndRefreshPreview() => MoveSelection(1);

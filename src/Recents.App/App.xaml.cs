@@ -347,6 +347,9 @@ public partial class App : WpfApp
 
     protected override void OnExit(ExitEventArgs e)
     {
+        if (WpfApp.Current.MainWindow is Recents.App.MainWindow mainWindow)
+            mainWindow.DisposePreviewForShutdown();
+
         _tray?.Dispose();
         _clipboardPaste?.Dispose();
         ClipboardPasteTarget.StopTracking();

@@ -969,6 +969,22 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         }
     }
 
+    public void DisposePreviewForShutdown()
+    {
+        _previewNavCts?.Cancel();
+        _previewNavCts?.Dispose();
+        _previewNavCts = null;
+
+        if (_previewWindow is null)
+            return;
+
+        _previewWindow.Activated -= OnRecentDockWindowActivated;
+        _previewWindow.Deactivated -= OnRecentDockWindowDeactivated;
+        _windowGroupFocusService.UnregisterWindow(_previewWindow);
+        _previewWindow.DisposeForShutdown();
+        _previewWindow = null;
+    }
+
     public void SelectNextAndRefreshPreview()
     {
         if (ItemsList.Items.Count == 0) return;

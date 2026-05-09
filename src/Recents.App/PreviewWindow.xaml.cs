@@ -29,6 +29,8 @@ public partial class PreviewWindow : Window, IRecentDockWindow
     private readonly IPreviewCommandHost _commandHost;
     private readonly IWindowGroupFocusService _windowGroupFocusService;
     private CancellationTokenSource? _interactionCts;
+    private bool _isDisposing;
+    private bool _allowClose;
 
     public PreviewWindow(IPreviewCommandHost commandHost, IWindowGroupFocusService windowGroupFocusService)
     {
@@ -58,6 +60,9 @@ public partial class PreviewWindow : Window, IRecentDockWindow
         try
         {
             await WebView.EnsureCoreWebView2Async();
+            if (_isDisposing)
+                return;
+
             _webView2Ready = true;
 
             // VirtualHost：把每次预览文件所在目录映射到 https://preview.local/
@@ -83,13 +88,16 @@ public partial class PreviewWindow : Window, IRecentDockWindow
                 await ShowClipboardItemAsync(item);
             }
         }
-        catch (Exception ex) when (ex.Message.Contains("WebView2 Runtime"))
+        catch (Exception ex) when (!_isDisposing && ex.Message.Contains("WebView2 Runtime"))
         {
             LoadingText.Text = "WebView2 Runtime is not installed.\nDownload from: aka.ms/webview2";
             Log.Warning("WebView2 Runtime missing: {Message}", ex.Message);
         }
         catch (Exception ex)
         {
+            if (_isDisposing)
+                return;
+
             LoadingText.Text = $"Preview unavailable: {ex.Message}";
             Log.Warning(ex, "WebView2 init failed");
         }
@@ -102,6 +110,9 @@ public partial class PreviewWindow : Window, IRecentDockWindow
     /// </summary>
     public async Task ShowFileAsync(string path)
     {
+        if (_isDisposing)
+            return;
+
         if (!_webView2Ready)
         {
             _pendingPath = path;
@@ -144,6 +155,9 @@ public partial class PreviewWindow : Window, IRecentDockWindow
 
     public async Task ShowClipboardItemAsync(ClipboardItem item)
     {
+        if (_isDisposing)
+            return;
+
         if (!_webView2Ready)
         {
             _pendingClipboardItem = item;
@@ -446,9 +460,81 @@ public partial class PreviewWindow : Window, IRecentDockWindow
 
     private void ClosePreview()
     {
+        if (_isDisposing)
+            return;
+
         Hide();
         _currentPath = null;
         _currentClipboardItem = null;
+    }
+
+    public void DisposeForShutdown()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.Invoke(DisposeForShutdown);
+            return;
+        }
+
+        if (_isDisposing)
+            return;
+
+        _isDisposing = true;
+        _allowClose = true;
+        _pendingPath = null;
+        _pendingClipboardItem = null;
+        _currentPath = null;
+        _currentClipboardItem = null;
+
+        _interactionCts?.Cancel();
+        _interactionCts?.Dispose();
+        _interactionCts = null;
+
+        PreviewKeyDown -= OnPreviewWindowKeyDown;
+
+        try
+        {
+            if (_webView2Ready && WebView.CoreWebView2 is not null)
+                WebView.CoreWebView2.WebMessageReceived -= OnWebMessageReceived;
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "PreviewWindow: failed to detach WebView2 message handler");
+        }
+
+        try
+        {
+            WebView.PreviewKeyDown -= OnPreviewWindowKeyDown;
+            WebView.Visibility = Visibility.Collapsed;
+            if (WebView.Parent is System.Windows.Controls.Panel parent)
+                parent.Children.Remove(WebView);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "PreviewWindow: failed to detach WebView2 visual");
+        }
+
+        try
+        {
+            WebView.Dispose();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "PreviewWindow: WebView2 dispose failed");
+        }
+        finally
+        {
+            GC.SuppressFinalize(WebView);
+        }
+
+        try
+        {
+            Close();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Log.Debug(ex, "PreviewWindow: close during shutdown ignored");
+        }
     }
 
     private void OpenCurrentFile() => _commandHost.OpenSelectedItem();
@@ -489,6 +575,12 @@ public partial class PreviewWindow : Window, IRecentDockWindow
     // 关闭时只隐藏，保留 WebView2 实例（下次 Space 不需要重新初始化）
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
+        if (_allowClose)
+        {
+            base.OnClosing(e);
+            return;
+        }
+
         e.Cancel = true;
         ClosePreview();
     }
