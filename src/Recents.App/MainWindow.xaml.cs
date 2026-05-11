@@ -46,6 +46,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
     private bool _contextMenuOpen;
     private bool _pendingActionHide;
     private object? _favoritesDragItem;
+    private IReadOnlyList<RecentItemViewModel>? _pendingItemsDragSelection;
     private FavoriteDragAdorner? _dragAdorner;
     private AdornerLayer? _favAdornerLayer;
 
@@ -462,18 +463,34 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
 
     private void ItemsList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        _pendingItemsDragSelection = null;
+
+        if (TryHandleCtrlClickListItem(e))
+            return;
+
+        _dragStartPoint = e.GetPosition(null);
+        _pendingItemsDragSelection = CaptureItemsDragSelectionSnapshot(e.OriginalSource as DependencyObject);
+    }
+
+    private void FavoritesList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _pendingItemsDragSelection = null;
+
         if (TryHandleCtrlClickListItem(e))
             return;
 
         _dragStartPoint = e.GetPosition(null);
     }
 
-    private void FavoritesList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    private IReadOnlyList<RecentItemViewModel>? CaptureItemsDragSelectionSnapshot(DependencyObject? source)
     {
-        if (TryHandleCtrlClickListItem(e))
-            return;
+        if (source is null || FindParent<System.Windows.Controls.Button>(source) != null)
+            return null;
 
-        _dragStartPoint = e.GetPosition(null);
+        var listBoxItem = FindParent<ListBoxItem>(source);
+        return DragSelectionHelper.CaptureSnapshot(
+            GetSelectedItems(),
+            listBoxItem?.DataContext as RecentItemViewModel);
     }
 
     private bool TryHandleCtrlClickListItem(MouseButtonEventArgs e)
@@ -565,7 +582,11 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
                     return;
                 }
 
-                var selectedVms = GetSelectedItems().Where(v => !v.IsMissing).ToList();
+                var selectedVms = DragSelectionHelper
+                    .ResolveDragItems(GetSelectedItems(), _pendingItemsDragSelection)
+                    .Where(v => !v.IsMissing)
+                    .ToList();
+                _pendingItemsDragSelection = null;
 
                 if (selectedVms.Count == 0) return;
 
