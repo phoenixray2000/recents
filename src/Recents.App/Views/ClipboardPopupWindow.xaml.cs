@@ -223,7 +223,7 @@ public partial class ClipboardPopupWindow : Window, IRecentDockWindow, IPreviewC
         previewWindow.PositionRelativeTo(this);
         if (previewWindow.Owner is null)
             previewWindow.Owner = this;
-        previewWindow.Show();
+        previewWindow.ShowPreviewWindow();
         _ = previewWindow.ShowClipboardItemAsync(item.Item);
     }
 
@@ -265,7 +265,7 @@ public partial class ClipboardPopupWindow : Window, IRecentDockWindow, IPreviewC
     {
         if (_previewWindow?.IsVisible == true)
         {
-            _previewWindow.Hide();
+            _previewWindow.HidePreview();
             _previewWindow.Tag = null;
         }
     }

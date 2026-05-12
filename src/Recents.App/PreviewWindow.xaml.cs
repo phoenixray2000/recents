@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
 using Recents.App.Models;
 using Recents.App.Services.Preview;
@@ -28,7 +29,15 @@ public partial class PreviewWindow : Window, IRecentDockWindow
     private string? _imageDimensions = null;
     private readonly IPreviewCommandHost _commandHost;
     private readonly IWindowGroupFocusService _windowGroupFocusService;
+    private readonly DispatcherTimer _mediaTimer;
+    private readonly TaskCompletionSource<bool> _webView2ReadySignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private CancellationTokenSource? _interactionCts;
+    private ShellPreviewHost? _shellPreviewHost;
+    private bool _mediaIsPlaying;
+    private bool _mediaSliderDragging;
+    private TimeSpan _mediaDuration = TimeSpan.Zero;
+    private bool _hiddenPrewarmActive;
+    private double _hiddenPrewarmSavedOpacity = 1.0;
     private bool _isDisposing;
     private bool _allowClose;
 
@@ -37,6 +46,8 @@ public partial class PreviewWindow : Window, IRecentDockWindow
         InitializeComponent();
         _commandHost = commandHost;
         _windowGroupFocusService = windowGroupFocusService;
+        _mediaTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+        _mediaTimer.Tick += (s, e) => UpdateMediaProgressFromPlayer();
 
         InitWebView2Async();
 
@@ -52,6 +63,34 @@ public partial class PreviewWindow : Window, IRecentDockWindow
         };
         SizeChanged += (s, e) => MarkWindowGroupInteraction();
         LocationChanged += (s, e) => MarkWindowGroupInteraction();
+        StateChanged += (s, e) => UpdateMaximizeButton();
+        ShellPreviewContainer.SizeChanged += (s, e) => UpdateShellPreviewHostSize();
+        MediaPlayer.MediaOpened += (s, e) =>
+        {
+            _mediaDuration = MediaPlayer.NaturalDuration.HasTimeSpan
+                ? MediaPlayer.NaturalDuration.TimeSpan
+                : TimeSpan.Zero;
+            UpdateMediaProgressFromPlayer(force: true);
+        };
+        MediaPlayer.MediaEnded += (s, e) =>
+        {
+            _mediaIsPlaying = false;
+            _mediaTimer.Stop();
+            UpdateMediaPlayPauseButton();
+            UpdateMediaProgressFromPlayer(force: true);
+        };
+        MediaPlayer.MediaFailed += (s, e) =>
+        {
+            _mediaIsPlaying = false;
+            _mediaTimer.Stop();
+            UpdateMediaPlayPauseButton();
+            MediaPreviewContainer.Visibility = Visibility.Collapsed;
+            ClearMediaPreview();
+            ShowUnsupportedFallback(
+                Path.GetFileName(_currentPath ?? string.Empty),
+                Path.GetExtension(_currentPath ?? string.Empty));
+        };
+        UpdateMaximizeButton();
     }
 
     // ── WebView2 初始化（预热）──────────────────────────────────────────
@@ -59,6 +98,7 @@ public partial class PreviewWindow : Window, IRecentDockWindow
     {
         try
         {
+            Log.Debug("PreviewWindow: WebView2 initialization requested");
             await WebView.EnsureCoreWebView2Async();
             if (_isDisposing)
                 return;
@@ -73,6 +113,8 @@ public partial class PreviewWindow : Window, IRecentDockWindow
 
             WebView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
             WebView.PreviewKeyDown += OnPreviewWindowKeyDown;
+            _webView2ReadySignal.TrySetResult(true);
+            Log.Information("PreviewWindow: WebView2 ready");
 
             // 处理预热前积压的请求
             if (_pendingPath != null)
@@ -91,6 +133,7 @@ public partial class PreviewWindow : Window, IRecentDockWindow
         catch (Exception ex) when (!_isDisposing && ex.Message.Contains("WebView2 Runtime"))
         {
             LoadingText.Text = "WebView2 Runtime is not installed.\nDownload from: aka.ms/webview2";
+            _webView2ReadySignal.TrySetResult(false);
             Log.Warning("WebView2 Runtime missing: {Message}", ex.Message);
         }
         catch (Exception ex)
@@ -99,9 +142,107 @@ public partial class PreviewWindow : Window, IRecentDockWindow
                 return;
 
             LoadingText.Text = $"Preview unavailable: {ex.Message}";
+            _webView2ReadySignal.TrySetResult(false);
             Log.Warning(ex, "WebView2 init failed");
         }
     }
+
+    public Task PrewarmAsync()
+    {
+        if (!Dispatcher.CheckAccess())
+            return Dispatcher.InvokeAsync(PrewarmAsync).Task.Unwrap();
+
+        return PrewarmOnDispatcherAsync();
+    }
+
+    private async Task PrewarmOnDispatcherAsync()
+    {
+        if (_isDisposing || _webView2Ready)
+            return;
+
+        var startedHidden = false;
+        if (!IsVisible)
+        {
+            BeginHiddenPrewarm();
+            startedHidden = true;
+        }
+
+        try
+        {
+            await WaitForWebView2ReadyAsync(TimeSpan.FromSeconds(12));
+        }
+        finally
+        {
+            if (CanHideHiddenPrewarm(
+                    startedHidden,
+                    _currentPath,
+                    _pendingPath,
+                    _currentClipboardItem is not null,
+                    _pendingClipboardItem is not null))
+            {
+                EndHiddenPrewarm(hideIfIdle: true);
+            }
+        }
+    }
+
+    private async Task WaitForWebView2ReadyAsync(TimeSpan timeout)
+    {
+        var timeoutTask = Task.Delay(timeout);
+        var completed = await Task.WhenAny(_webView2ReadySignal.Task, timeoutTask);
+        if (completed == timeoutTask)
+        {
+            Log.Warning("PreviewWindow: WebView2 prewarm timed out after {TimeoutMs}ms", timeout.TotalMilliseconds);
+            return;
+        }
+
+        var ready = await _webView2ReadySignal.Task;
+        Log.Debug("PreviewWindow: WebView2 prewarm completed ready={Ready}", ready);
+    }
+
+    private void BeginHiddenPrewarm()
+    {
+        if (_hiddenPrewarmActive)
+            return;
+
+        _hiddenPrewarmActive = true;
+        _hiddenPrewarmSavedOpacity = Opacity;
+        WindowState = WindowState.Normal;
+        Opacity = 0;
+
+        var width = ActualWidth > 0 ? ActualWidth : Width;
+        var height = ActualHeight > 0 ? ActualHeight : Height;
+        Left = SystemParameters.VirtualScreenLeft - width - 128;
+        Top = SystemParameters.VirtualScreenTop - height - 128;
+
+        Log.Debug("PreviewWindow: showing hidden window to prewarm WebView2");
+        Show();
+    }
+
+    private void EndHiddenPrewarm(bool hideIfIdle)
+    {
+        if (!_hiddenPrewarmActive)
+            return;
+
+        _hiddenPrewarmActive = false;
+        Opacity = _hiddenPrewarmSavedOpacity;
+        if (hideIfIdle && IsVisible)
+            Hide();
+    }
+
+    internal static bool CanHideHiddenPrewarm(
+        bool startedHidden,
+        string? currentPath,
+        string? pendingPath,
+        bool hasCurrentClipboardItem,
+        bool hasPendingClipboardItem) =>
+        startedHidden &&
+        string.IsNullOrWhiteSpace(currentPath) &&
+        string.IsNullOrWhiteSpace(pendingPath) &&
+        !hasCurrentClipboardItem &&
+        !hasPendingClipboardItem;
+
+    internal static bool RequiresWebView2BeforeRendering(PreviewKind kind) =>
+        kind is not (PreviewKind.ShellHandler or PreviewKind.Audio or PreviewKind.Video);
 
     // ── 对外主接口 ────────────────────────────────────────────────────────
     /// <summary>
@@ -113,7 +254,8 @@ public partial class PreviewWindow : Window, IRecentDockWindow
         if (_isDisposing)
             return;
 
-        if (!_webView2Ready)
+        var (initialKind, _) = PreviewTypeClassifier.Classify(path);
+        if (!_webView2Ready && RequiresWebView2BeforeRendering(initialKind))
         {
             _pendingPath = path;
             return;
@@ -130,26 +272,67 @@ public partial class PreviewWindow : Window, IRecentDockWindow
         PreviewDocument doc;
         try
         {
-            // 先重新映射虚拟主机到文件所在目录（图片/媒体需要）
-            RemapVirtualHost(path);
-            doc = await Task.Run(() => PreviewService.PrepareAsync(path, VirtualHostBase).GetAwaiter().GetResult());
+            // 先重新映射虚拟主机到文件所在目录（WebView2 渲染的图片/HTML 资源需要）
+            if (_webView2Ready)
+                RemapVirtualHost(path);
+
+            var theme = CurrentHtmlTheme();
+            var virtualBase = _webView2Ready ? VirtualHostBase : null;
+            doc = await Task.Run(() => PreviewService.PrepareAsync(path, virtualBase, theme).GetAwaiter().GetResult());
         }
         catch (Exception ex)
         {
             Log.Warning(ex, "Preview prepare failed for {Path}", LogPrivacy.Format(path));
             doc = new PreviewDocument(PreviewKind.Unsupported,
-                      HtmlTemplateEngine.RenderUnsupported(Path.GetFileName(path), Path.GetExtension(path)),
+                      HtmlTemplateEngine.RenderUnsupported(Path.GetFileName(path), Path.GetExtension(path), CurrentHtmlTheme()),
                       null, Path.GetFileName(path), path);
         }
 
-        // 加载内容（必须回到 UI 线程）
-        if (doc.NavigateUri != null)
+        try
         {
-            WebView.Source = doc.NavigateUri;
+            // 加载内容（必须回到 UI 线程）
+            if (doc.Kind == PreviewKind.ShellHandler)
+            {
+                ShowShellPreview(path);
+            }
+            else if (doc.Kind is PreviewKind.Audio or PreviewKind.Video)
+            {
+                ShowMediaPreview(path, doc.Kind == PreviewKind.Video);
+            }
+            else if (doc.NavigateUri != null)
+            {
+                ClearShellPreview();
+                ClearMediaPreview();
+                ShellPreviewContainer.Visibility = Visibility.Collapsed;
+                WebView.Visibility = Visibility.Visible;
+                WebView.Source = doc.NavigateUri;
+            }
+            else if (doc.Html != null)
+            {
+                ClearShellPreview();
+                ClearMediaPreview();
+                ShellPreviewContainer.Visibility = Visibility.Collapsed;
+                WebView.Visibility = Visibility.Visible;
+                if (_webView2Ready)
+                {
+                    WebView.NavigateToString(doc.Html);
+                }
+                else
+                {
+                    LoadingText.Text = "Preview is waiting for WebView2 initialization...";
+                    LoadingText.Visibility = Visibility.Visible;
+                }
+            }
         }
-        else if (doc.Html != null)
+        catch (Exception ex)
         {
-            WebView.NavigateToString(doc.Html);
+            Log.Warning(ex, "Preview load failed for {Path}", LogPrivacy.Format(path));
+            ClearShellPreview();
+            ClearMediaPreview();
+            ShellPreviewContainer.Visibility = Visibility.Collapsed;
+            ShowUnsupportedFallback(
+                Path.GetFileName(path),
+                Path.GetExtension(path));
         }
     }
 
@@ -170,6 +353,10 @@ public partial class PreviewWindow : Window, IRecentDockWindow
         _currentClipboardItem = item;
         _imageDimensions = null;
         UpdateClipboardHeader(item);
+        ClearShellPreview();
+        ClearMediaPreview();
+        ShellPreviewContainer.Visibility = Visibility.Collapsed;
+        WebView.Visibility = Visibility.Visible;
 
         try
         {
@@ -179,21 +366,24 @@ public partial class PreviewWindow : Window, IRecentDockWindow
                     WebView.NavigateToString(HtmlTemplateEngine.RenderText(
                         item.PlainText ?? ReadFirstExisting(item.BlobPath) ?? string.Empty,
                         "Clipboard text",
-                        isCode: false));
+                        isCode: false,
+                        CurrentHtmlTheme()));
                     break;
 
                 case ClipboardPayloadType.Html:
                     WebView.NavigateToString(HtmlTemplateEngine.RenderClipboardHtml(
                         ReadFirstExisting(item.HtmlBlobPath, item.BlobPath) ??
                         System.Net.WebUtility.HtmlEncode(item.PlainText ?? item.PreviewText),
-                        "Clipboard HTML"));
+                        "Clipboard HTML",
+                        CurrentHtmlTheme()));
                     break;
 
                 case ClipboardPayloadType.RichText:
                     WebView.NavigateToString(HtmlTemplateEngine.RenderText(
                         item.PlainText ?? ReadFirstExisting(item.RtfBlobPath, item.BlobPath) ?? string.Empty,
                         "Clipboard rich text",
-                        isCode: false));
+                        isCode: false,
+                        CurrentHtmlTheme()));
                     break;
 
                 case ClipboardPayloadType.Image:
@@ -202,11 +392,14 @@ public partial class PreviewWindow : Window, IRecentDockWindow
                         RemapVirtualHost(item.ImagePath);
                         WebView.NavigateToString(HtmlTemplateEngine.RenderImage(
                             MakeMediaUri(item.ImagePath),
-                            Path.GetFileName(item.ImagePath)));
+                            Path.GetFileName(item.ImagePath),
+                            CurrentHtmlTheme()));
                     }
                     else
                     {
-                        WebView.NavigateToString(HtmlTemplateEngine.RenderMissing(item.ImagePath ?? item.PreviewText));
+                        WebView.NavigateToString(HtmlTemplateEngine.RenderMissing(
+                            item.ImagePath ?? item.PreviewText,
+                            CurrentHtmlTheme()));
                     }
                     break;
 
@@ -218,7 +411,8 @@ public partial class PreviewWindow : Window, IRecentDockWindow
                     WebView.NavigateToString(HtmlTemplateEngine.RenderText(
                         item.PlainText ?? item.PreviewText,
                         "Clipboard item",
-                        isCode: false));
+                        isCode: false,
+                        CurrentHtmlTheme()));
                     break;
             }
         }
@@ -228,8 +422,249 @@ public partial class PreviewWindow : Window, IRecentDockWindow
             WebView.NavigateToString(HtmlTemplateEngine.RenderText(
                 item.PreviewText,
                 "Clipboard preview unavailable",
-                isCode: false));
+                isCode: false,
+                CurrentHtmlTheme()));
         }
+    }
+
+    private void ShowShellPreview(string path)
+    {
+        ClearShellPreview();
+        ClearMediaPreview();
+
+        var fileName = Path.GetFileName(path);
+        var isVideoFallback = PreviewTypeClassifier.Classify(path).Kind == PreviewKind.Video;
+        var clsid = ShellPreviewHandlerResolver.TryResolve(Path.GetExtension(path));
+        if (!clsid.HasValue)
+        {
+            ShellPreviewContainer.Visibility = Visibility.Collapsed;
+            WebView.Visibility = Visibility.Visible;
+            WebView.NavigateToString(HtmlTemplateEngine.RenderShellHandlerUnavailable(
+                fileName,
+                "No preview handler is registered for this file type.",
+                CurrentHtmlTheme()));
+            return;
+        }
+
+        WebView.Visibility = Visibility.Collapsed;
+        MediaPreviewContainer.Visibility = Visibility.Collapsed;
+        ShellPreviewContainer.Visibility = Visibility.Visible;
+        LoadingText.Text = "Loading Office preview...";
+        LoadingText.Visibility = Visibility.Visible;
+        ShellPreviewContainer.UpdateLayout();
+
+        _shellPreviewHost = new ShellPreviewHost(path, clsid.Value)
+        {
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch,
+            VerticalAlignment = System.Windows.VerticalAlignment.Stretch,
+        };
+        UpdateShellPreviewHostSize();
+        _shellPreviewHost.PreviewFailed += details =>
+        {
+            try
+            {
+                Dispatcher.BeginInvoke(() =>
+                {
+                    try
+                    {
+                        if (_isDisposing)
+                            return;
+
+                        ClearShellPreview();
+                        ShellPreviewContainer.Visibility = Visibility.Collapsed;
+                        LoadingText.Visibility = Visibility.Collapsed;
+                        if (isVideoFallback)
+                        {
+                            ShowMediaPreview(path, isVideo: true);
+                        }
+                        else
+                        {
+                            WebView.Visibility = Visibility.Visible;
+                            WebView.NavigateToString(HtmlTemplateEngine.RenderShellHandlerUnavailable(
+                                fileName,
+                                details,
+                                CurrentHtmlTheme()));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning(ex, "PreviewWindow: shell preview failure fallback failed");
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "PreviewWindow: failed to dispatch shell preview failure");
+            }
+        };
+
+        ShellPreviewContainer.Children.Add(_shellPreviewHost);
+        UpdateShellPreviewHostSize();
+        LoadingText.Visibility = Visibility.Collapsed;
+    }
+
+    private void ShowMediaPreview(string path, bool isVideo)
+    {
+        ClearShellPreview();
+        ClearMediaPreview();
+
+        WebView.Visibility = Visibility.Collapsed;
+        ShellPreviewContainer.Visibility = Visibility.Collapsed;
+        LoadingText.Visibility = Visibility.Collapsed;
+        MediaPreviewContainer.Visibility = Visibility.Visible;
+
+        MediaPlayer.Source = new Uri(path, UriKind.Absolute);
+        MediaPlayer.Visibility = isVideo ? Visibility.Visible : Visibility.Collapsed;
+        MediaAudioPlaceholder.Visibility = isVideo ? Visibility.Collapsed : Visibility.Visible;
+        MediaAudioNameText.Text = Path.GetFileName(path);
+        _mediaDuration = TimeSpan.Zero;
+        MediaPositionSlider.Value = 0;
+        MediaPositionSlider.Maximum = 1;
+        MediaTimeText.Text = "00:00 / 00:00";
+
+        try
+        {
+            MediaPlayer.Play();
+            _mediaIsPlaying = true;
+            _mediaTimer.Start();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Media preview failed for {Path}", LogPrivacy.Format(path));
+            _mediaIsPlaying = false;
+            _mediaTimer.Stop();
+            MediaPreviewContainer.Visibility = Visibility.Collapsed;
+            ShowUnsupportedFallback(
+                Path.GetFileName(path),
+                Path.GetExtension(path));
+        }
+
+        UpdateMediaPlayPauseButton();
+    }
+
+    private void ShowUnsupportedFallback(string fileName, string extension)
+    {
+        ShellPreviewContainer.Visibility = Visibility.Collapsed;
+        MediaPreviewContainer.Visibility = Visibility.Collapsed;
+
+        if (_webView2Ready)
+        {
+            LoadingText.Visibility = Visibility.Collapsed;
+            WebView.Visibility = Visibility.Visible;
+            WebView.NavigateToString(HtmlTemplateEngine.RenderUnsupported(
+                fileName,
+                extension,
+                CurrentHtmlTheme()));
+            return;
+        }
+
+        WebView.Visibility = Visibility.Collapsed;
+        LoadingText.Text = "Preview unavailable.";
+        LoadingText.Visibility = Visibility.Visible;
+    }
+
+    private void ClearShellPreview()
+    {
+        if (_shellPreviewHost is null)
+            return;
+
+        try
+        {
+            ShellPreviewContainer.Children.Remove(_shellPreviewHost);
+            _shellPreviewHost.Dispose();
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Shell preview cleanup failed");
+        }
+        finally
+        {
+            _shellPreviewHost = null;
+        }
+    }
+
+    private void UpdateShellPreviewHostSize()
+    {
+        if (_shellPreviewHost is null)
+            return;
+
+        var width = ShellPreviewContainer.ActualWidth;
+        var height = ShellPreviewContainer.ActualHeight;
+        if (width <= 0 || height <= 0)
+            return;
+
+        _shellPreviewHost.SetViewportSize(width, height);
+    }
+
+    private void ClearMediaPreview()
+    {
+        try
+        {
+            _mediaTimer.Stop();
+            MediaPlayer.Stop();
+            MediaPlayer.Source = null;
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Media preview cleanup failed");
+        }
+
+        _mediaIsPlaying = false;
+        _mediaDuration = TimeSpan.Zero;
+        _mediaSliderDragging = false;
+        MediaPositionSlider.Value = 0;
+        MediaPositionSlider.Maximum = 1;
+        MediaTimeText.Text = "00:00 / 00:00";
+        MediaPlayer.Visibility = Visibility.Collapsed;
+        MediaAudioPlaceholder.Visibility = Visibility.Collapsed;
+        MediaPreviewContainer.Visibility = Visibility.Collapsed;
+        UpdateMediaPlayPauseButton();
+    }
+
+    private void UpdateMediaPlayPauseButton()
+    {
+        if (MediaPlayPauseButton is null)
+            return;
+
+        MediaPlayPauseButton.Content = _mediaIsPlaying ? "\uE769" : "\uE768";
+    }
+
+    private void UpdateMediaProgressFromPlayer(bool force = false)
+    {
+        if (MediaPlayer.Source is null)
+            return;
+
+        var duration = _mediaDuration;
+        if (duration <= TimeSpan.Zero && MediaPlayer.NaturalDuration.HasTimeSpan)
+        {
+            duration = MediaPlayer.NaturalDuration.TimeSpan;
+            _mediaDuration = duration;
+        }
+
+        if (duration > TimeSpan.Zero)
+        {
+            MediaPositionSlider.Maximum = duration.TotalSeconds;
+            if (!_mediaSliderDragging || force)
+                MediaPositionSlider.Value = Math.Min(duration.TotalSeconds, MediaPlayer.Position.TotalSeconds);
+        }
+        else
+        {
+            MediaPositionSlider.Maximum = 1;
+            if (!_mediaSliderDragging || force)
+                MediaPositionSlider.Value = 0;
+        }
+
+        MediaTimeText.Text = $"{FormatMediaTime(MediaPlayer.Position)} / {FormatMediaTime(duration)}";
+    }
+
+    private static string FormatMediaTime(TimeSpan value)
+    {
+        if (value <= TimeSpan.Zero)
+            return "00:00";
+
+        return value.TotalHours >= 1
+            ? value.ToString(@"h\:mm\:ss")
+            : value.ToString(@"mm\:ss");
     }
 
     // ── 定位窗口 ──────────────────────────────────────────────────────────
@@ -259,6 +694,15 @@ public partial class PreviewWindow : Window, IRecentDockWindow
         // 垂直：与主窗口顶部对齐，但不超出屏幕底部
         Top = Math.Min(owner.Top, screen.Bottom - ActualHeight - 8);
         Top = Math.Max(screen.Top, Top);
+    }
+
+    public void PositionCenteredOnWorkArea()
+    {
+        var screen = System.Windows.SystemParameters.WorkArea;
+        var width = ActualWidth > 0 ? ActualWidth : Width;
+        var height = ActualHeight > 0 ? ActualHeight : Height;
+        Left = screen.Left + (screen.Width - width) / 2;
+        Top = screen.Top + (screen.Height - height) / 2;
     }
 
     // ── 私有辅助 ──────────────────────────────────────────────────────────
@@ -300,7 +744,7 @@ public partial class PreviewWindow : Window, IRecentDockWindow
                 Exists: File.Exists(p.Path) || Directory.Exists(p.Path)))
             .ToList();
 
-        WebView.NavigateToString(HtmlTemplateEngine.RenderClipboardFiles(entries, item.PreviewText));
+        WebView.NavigateToString(HtmlTemplateEngine.RenderClipboardFiles(entries, item.PreviewText, CurrentHtmlTheme()));
     }
 
     private static string? ReadFirstExisting(params string?[] paths)
@@ -316,6 +760,9 @@ public partial class PreviewWindow : Window, IRecentDockWindow
 
     private static string MakeMediaUri(string path) =>
         VirtualHostBase.TrimEnd('/') + "/" + Uri.EscapeDataString(Path.GetFileName(path));
+
+    private static HtmlPreviewTheme CurrentHtmlTheme() =>
+        ThemeManager.Instance.IsDark ? HtmlPreviewTheme.Dark : HtmlPreviewTheme.Light;
 
     private void UpdateHeader(string path)
     {
@@ -399,39 +846,47 @@ public partial class PreviewWindow : Window, IRecentDockWindow
 
     private void OnPreviewWindowKeyDown(object sender, WpfKeyEventArgs e)
     {
-        if (e.Key == Key.Space || e.Key == Key.Escape)
+        try
         {
-            _commandHost.ClosePreview();
-            e.Handled = true;
-            return;
-        }
+            if (e.Key == Key.Space || e.Key == Key.Escape)
+            {
+                _commandHost.ClosePreview();
+                e.Handled = true;
+                return;
+            }
 
-        if (e.Key == Key.Down)
-        {
-            _commandHost.SelectNextAndRefreshPreview();
-            e.Handled = true;
-            return;
-        }
+            if (e.Key == Key.Down)
+            {
+                _commandHost.SelectNextAndRefreshPreview();
+                e.Handled = true;
+                return;
+            }
 
-        if (e.Key == Key.Up)
-        {
-            _commandHost.SelectPreviousAndRefreshPreview();
-            e.Handled = true;
-            return;
-        }
+            if (e.Key == Key.Up)
+            {
+                _commandHost.SelectPreviousAndRefreshPreview();
+                e.Handled = true;
+                return;
+            }
 
-        if (e.Key == Key.Enter)
-        {
-            _commandHost.OpenSelectedItem();
-            e.Handled = true;
-            return;
-        }
+            if (e.Key == Key.Enter)
+            {
+                _commandHost.OpenSelectedItem();
+                e.Handled = true;
+                return;
+            }
 
-        if (e.Key == Key.C && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+            if (e.Key == Key.C && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+            {
+                _commandHost.CopySelectedItemPath();
+                e.Handled = true;
+                return;
+            }
+        }
+        catch (Exception ex)
         {
-            _commandHost.CopySelectedItemPath();
+            Log.Warning(ex, "PreviewWindow: key handling failed for {Key}", e.Key);
             e.Handled = true;
-            return;
         }
     }
 
@@ -463,9 +918,25 @@ public partial class PreviewWindow : Window, IRecentDockWindow
         if (_isDisposing)
             return;
 
+        ClosePreviewContent();
         Hide();
+    }
+
+    public void HidePreview()
+    {
+        if (_isDisposing)
+            return;
+
+        ClosePreviewContent();
+        Hide();
+    }
+
+    private void ClosePreviewContent()
+    {
         _currentPath = null;
         _currentClipboardItem = null;
+        ClearShellPreview();
+        ClearMediaPreview();
     }
 
     public void DisposeForShutdown()
@@ -485,6 +956,8 @@ public partial class PreviewWindow : Window, IRecentDockWindow
         _pendingClipboardItem = null;
         _currentPath = null;
         _currentClipboardItem = null;
+        ClearShellPreview();
+        ClearMediaPreview();
 
         _interactionCts?.Cancel();
         _interactionCts?.Dispose();
@@ -567,9 +1040,171 @@ public partial class PreviewWindow : Window, IRecentDockWindow
 
     private void CloseBtn_Click(object sender, RoutedEventArgs e) => ClosePreview();
 
+    private void MaximizeBtn_Click(object sender, RoutedEventArgs e) => ToggleMaximize();
+
+    public void ShowPreviewWindow()
+    {
+        if (_isDisposing)
+            return;
+
+        EndHiddenPrewarm(hideIfIdle: false);
+
+        var restoreMaximized = NeedsNormalStateBeforeInactiveShow(IsVisible, ShowActivated, WindowState);
+        try
+        {
+            if (restoreMaximized)
+                WindowState = WindowState.Normal;
+
+            Show();
+            RaiseAboveOwnerWithoutActivation();
+
+            if (restoreMaximized)
+            {
+                Dispatcher.BeginInvoke(() =>
+                {
+                    try
+                    {
+                        if (!_isDisposing && IsVisible)
+                            WindowState = WindowState.Maximized;
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning(ex, "PreviewWindow: restore maximized state failed");
+                    }
+                }, DispatcherPriority.Loaded);
+            }
+        }
+        catch (InvalidOperationException ex) when (restoreMaximized)
+        {
+            Log.Warning(ex, "PreviewWindow: recovered from inactive maximized show");
+            WindowState = WindowState.Normal;
+            try
+            {
+                Show();
+                RaiseAboveOwnerWithoutActivation();
+            }
+            catch (Exception showEx)
+            {
+                Log.Warning(showEx, "PreviewWindow: recovery show failed");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "PreviewWindow: show failed");
+        }
+    }
+
+    private void RaiseAboveOwnerWithoutActivation()
+    {
+        if (!ShouldPulseTopmostAfterInactiveShow(ShowActivated, Topmost))
+            return;
+
+        try
+        {
+            Topmost = true;
+            Topmost = false;
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "PreviewWindow: topmost pulse ignored");
+        }
+    }
+
+    internal static bool NeedsNormalStateBeforeInactiveShow(
+        bool isVisible,
+        bool showActivated,
+        WindowState windowState) =>
+        !isVisible && !showActivated && windowState == WindowState.Maximized;
+
+    internal static bool ShouldPulseTopmostAfterInactiveShow(
+        bool showActivated,
+        bool topmost) =>
+        !showActivated && !topmost;
+
+    private void ToggleMaximize()
+    {
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+        UpdateMaximizeButton();
+    }
+
+    private void UpdateMaximizeButton()
+    {
+        if (MaximizeBtn is null)
+            return;
+
+        MaximizeBtn.Content = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
+    }
+
+    private void MediaPlayPauseButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (MediaPlayer.Source is null)
+            return;
+
+        if (_mediaIsPlaying)
+        {
+            MediaPlayer.Pause();
+            _mediaIsPlaying = false;
+            _mediaTimer.Stop();
+        }
+        else
+        {
+            MediaPlayer.Play();
+            _mediaIsPlaying = true;
+            _mediaTimer.Start();
+        }
+
+        UpdateMediaPlayPauseButton();
+    }
+
+    private void MediaStopButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (MediaPlayer.Source is null)
+            return;
+
+        MediaPlayer.Stop();
+        _mediaIsPlaying = false;
+        _mediaTimer.Stop();
+        UpdateMediaProgressFromPlayer(force: true);
+        UpdateMediaPlayPauseButton();
+    }
+
+    private void MediaPositionSlider_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _mediaSliderDragging = true;
+    }
+
+    private void MediaPositionSlider_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (MediaPlayer.Source is null)
+        {
+            _mediaSliderDragging = false;
+            return;
+        }
+
+        MediaPlayer.Position = TimeSpan.FromSeconds(Math.Max(0, MediaPositionSlider.Value));
+        _mediaSliderDragging = false;
+        UpdateMediaProgressFromPlayer(force: true);
+    }
+
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ClickCount == 1) DragMove();
+        if (e.ClickCount == 2)
+        {
+            ToggleMaximize();
+            return;
+        }
+
+        if (e.ClickCount == 1)
+        {
+            try
+            {
+                DragMove();
+            }
+            catch (InvalidOperationException ex)
+            {
+                Log.Debug(ex, "PreviewWindow: drag move ignored");
+            }
+        }
     }
 
     // 关闭时只隐藏，保留 WebView2 实例（下次 Space 不需要重新初始化）

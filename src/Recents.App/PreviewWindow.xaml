@@ -1,27 +1,28 @@
 <Window x:Class="Recents.App.PreviewWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="Preview"
         Width="860" Height="640"
         MinWidth="400" MinHeight="300"
         WindowStyle="None"
-        AllowsTransparency="True"
+        AllowsTransparency="False"
         ShowInTaskbar="False"
         ShowActivated="False"
-        Background="Transparent"
+        Background="{DynamicResource BgMain}"
         ResizeMode="CanResizeWithGrip">
 
-    <!-- 外层阴影容器 -->
-    <Border Margin="8"
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="0" GlassFrameThickness="0" CornerRadius="0" ResizeBorderThickness="8" />
+    </shell:WindowChrome.WindowChrome>
+
+    <!-- 非透明窗口不能保留外层透明留白，否则会暴露为系统背景条 -->
+    <Border Margin="0"
             Background="{DynamicResource BgMain}"
             CornerRadius="10"
             BorderBrush="{DynamicResource WindowBorderBrush}"
             BorderThickness="1">
-        <Border.Effect>
-            <DropShadowEffect BlurRadius="20" ShadowDepth="0" Opacity="0.6" Color="{DynamicResource WindowShadowColor}"/>
-        </Border.Effect>
-
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="40"/>   <!-- 标题栏 -->
@@ -38,6 +39,7 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
@@ -61,8 +63,42 @@
                                    TextTrimming="CharacterEllipsis"/>
                     </StackPanel>
 
-                    <!-- 关闭按钮 -->
+                    <!-- 最大化按钮 -->
                     <Button Grid.Column="2"
+                            x:Name="MaximizeBtn"
+                            Content="&#xE922;"
+                            FontFamily="Segoe Fluent Icons"
+                            FontSize="13"
+                            Foreground="{DynamicResource TextSecondary}"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Padding="6,4"
+                            Cursor="Hand"
+                            ToolTip="Maximize / Restore"
+                            Click="MaximizeBtn_Click">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="bd" Background="Transparent" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="bd" Property="Background" Value="{DynamicResource RowHover}"/>
+                                                    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+
+                    <!-- 关闭按钮 -->
+                    <Button Grid.Column="3"
                             x:Name="CloseBtn"
                             Content="&#xE8BB;"
                             FontFamily="Segoe Fluent Icons"
@@ -97,7 +133,7 @@
             </Border>
 
             <!-- ── WebView2 内容区 ────────────────────────────── -->
-            <Grid Grid.Row="1">
+            <Grid x:Name="PreviewContentRoot" Grid.Row="1">
                 <!-- 加载中指示器（WebView2 初始化时可见）-->
                 <TextBlock x:Name="LoadingText"
                            Text="Loading…"
@@ -110,6 +146,93 @@
                 <wv2:WebView2 x:Name="WebView"
                                Visibility="Collapsed"
                                DefaultBackgroundColor="Transparent"/>
+
+                <Grid x:Name="MediaPreviewContainer"
+                      Visibility="Collapsed"
+                      Background="{DynamicResource BgMain}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="52"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0">
+                        <MediaElement x:Name="MediaPlayer"
+                                      LoadedBehavior="Manual"
+                                      UnloadedBehavior="Manual"
+                                      Stretch="Uniform"
+                                      Visibility="Collapsed"/>
+
+                        <StackPanel x:Name="MediaAudioPlaceholder"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Visibility="Collapsed">
+                            <TextBlock Text="&#xE8D6;"
+                                       FontFamily="Segoe Fluent Icons"
+                                       FontSize="54"
+                                       Foreground="{DynamicResource AccentBlue}"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,0,0,12"/>
+                            <TextBlock x:Name="MediaAudioNameText"
+                                       Foreground="{DynamicResource TextSecondary}"
+                                       FontSize="13"
+                                       TextTrimming="CharacterEllipsis"
+                                       MaxWidth="520"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <Border Grid.Row="1"
+                            Background="{DynamicResource BgTitleBar}"
+                            BorderBrush="{DynamicResource WindowBorderBrush}"
+                            BorderThickness="0,1,0,0">
+                        <Grid Margin="12,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="80"/>
+                                <ColumnDefinition Width="260"/>
+                                <ColumnDefinition Width="80"/>
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="MediaPlayPauseButton"
+                                    Grid.Column="0"
+                                    Content="&#xE769;"
+                                    FontFamily="Segoe Fluent Icons"
+                                    FontSize="15"
+                                    Width="34"
+                                    Height="28"
+                                    Margin="0,0,8,0"
+                                    ToolTip="Play / Pause"
+                                    Click="MediaPlayPauseButton_Click"/>
+                            <Button x:Name="MediaStopButton"
+                                    Grid.Column="1"
+                                    Content="&#xE71A;"
+                                    FontFamily="Segoe Fluent Icons"
+                                    FontSize="15"
+                                    Width="34"
+                                    Height="28"
+                                    ToolTip="Stop"
+                                    Click="MediaStopButton_Click"/>
+                            <Slider x:Name="MediaPositionSlider"
+                                    Grid.Column="2"
+                                    Minimum="0"
+                                    Maximum="1"
+                                    Value="0"
+                                    Margin="10,0"
+                                    VerticalAlignment="Center"
+                                    PreviewMouseLeftButtonDown="MediaPositionSlider_PreviewMouseLeftButtonDown"
+                                    PreviewMouseLeftButtonUp="MediaPositionSlider_PreviewMouseLeftButtonUp"/>
+                            <TextBlock x:Name="MediaTimeText"
+                                       Grid.Column="3"
+                                       Text="00:00 / 00:00"
+                                       Foreground="{DynamicResource TextSecondary}"
+                                       FontSize="11"
+                                       VerticalAlignment="Center"
+                                       TextAlignment="Right"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <Grid x:Name="ShellPreviewContainer"
+                      Visibility="Collapsed"
+                      Background="{DynamicResource BgMain}"/>
             </Grid>
 
             <!-- ── 底部状态栏 ──────────────────────────────────── -->

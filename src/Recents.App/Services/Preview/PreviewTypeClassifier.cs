@@ -18,12 +18,14 @@ public enum PreviewKind
     Markdown,
     Audio,
     Video,
+    ShellHandler,
 }
 
 public static class PreviewTypeClassifier
 {
     private const long TextLimit = 5L * 1024 * 1024;
     private const long ImageLimit = 100L * 1024 * 1024;
+    private const long PowerPointLimit = 50L * 1024 * 1024;
 
     private static readonly HashSet<string> ImageExts = new(StringComparer.OrdinalIgnoreCase)
         { ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".ico" };
@@ -41,10 +43,21 @@ public static class PreviewTypeClassifier
     };
 
     private static readonly HashSet<string> AudioExts = new(StringComparer.OrdinalIgnoreCase)
-        { ".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg" };
+        { ".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".wma" };
 
     private static readonly HashSet<string> VideoExts = new(StringComparer.OrdinalIgnoreCase)
-        { ".mp4", ".webm", ".mov" };
+        { ".mp4", ".webm", ".mov", ".wmv", ".avi", ".mkv" };
+
+    private static readonly HashSet<string> ShellHandlerExts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".doc", ".docx", ".docm",
+        ".xls", ".xlsx", ".xlsm",
+        ".ppt", ".pptx", ".pptm",
+        ".rtf",
+    };
+
+    private static readonly HashSet<string> PowerPointExts = new(StringComparer.OrdinalIgnoreCase)
+        { ".ppt", ".pptx", ".pptm" };
 
     public static (PreviewKind Kind, long FileSize) Classify(string path)
     {
@@ -67,6 +80,12 @@ public static class PreviewTypeClassifier
 
         var ext = fi.Extension.ToLowerInvariant();
         var size = fi.Length;
+
+        if (PowerPointExts.Contains(ext) && size > PowerPointLimit)
+            return (PreviewKind.TooLarge, size);
+
+        if (ShellHandlerExts.Contains(ext))
+            return (PreviewKind.ShellHandler, size);
 
         if (ext == ".pdf")
             return (PreviewKind.Pdf, size);

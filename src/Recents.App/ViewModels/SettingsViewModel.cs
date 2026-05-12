@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Recents.App.Localization;
@@ -119,7 +120,10 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _excludedExtensionsText = Join(settings.Current.ExcludedExtensions);
         _excludedPathsText = Join(settings.Current.ExcludedPaths);
         _excludedKeywordsText = Join(settings.Current.ExcludedKeywords);
-        _version = typeof(App).Assembly.GetName().Version?.ToString() ?? "Unknown";
+        var appAssembly = typeof(App).Assembly;
+        _version = GetDisplayVersion(
+            appAssembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
+            appAssembly.GetName().Version);
         _settingsPath = settings.SettingsPath;
         _dataPath = settings.SettingsDirectory;
         _logPath = Path.Combine(
@@ -127,6 +131,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             "Recents",
             "logs");
         _previewEnabled = settings.Current.PreviewEnabled;
+        _externalSpacePreviewEnabled = settings.Current.ExternalSpacePreviewEnabled;
         _showSystemAndHiddenFiles = settings.Current.ShowSystemAndHiddenFiles;
         _selectedLanguage = settings.Current.Language ?? "";
         _selectedTheme = settings.Current.Theme;
@@ -168,6 +173,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _logPath = string.Empty;
     [ObservableProperty] private string _statusMessage = Loc.T("Settings_Status_Ready");
     [ObservableProperty] private bool _previewEnabled;
+    [ObservableProperty] private bool _externalSpacePreviewEnabled;
     [ObservableProperty] private bool _showSystemAndHiddenFiles;
     [ObservableProperty] private string _selectedLanguage = "";
     [ObservableProperty] private ThemeMode _selectedTheme = ThemeMode.FollowSystem;
@@ -224,6 +230,11 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     partial void OnPreviewEnabledChanged(bool value)
     {
         _settings.Current.PreviewEnabled = value;
+        SaveAndNotify();
+    }
+    partial void OnExternalSpacePreviewEnabledChanged(bool value)
+    {
+        _settings.Current.ExternalSpacePreviewEnabled = value;
         SaveAndNotify();
     }
     partial void OnShowSystemAndHiddenFilesChanged(bool value)
@@ -524,6 +535,14 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     }
 
     private static string Join(IEnumerable<string> values) => string.Join(Environment.NewLine, values);
+
+    internal static string GetDisplayVersion(string? informationalVersion, Version? assemblyVersion)
+    {
+        if (!string.IsNullOrWhiteSpace(informationalVersion))
+            return informationalVersion;
+
+        return assemblyVersion?.ToString() ?? "Unknown";
+    }
 
     private static List<string> Split(string value) =>
         value.Split(new[] { '\r', '\n', ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)

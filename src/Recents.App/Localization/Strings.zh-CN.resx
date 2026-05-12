@@ -196,6 +196,8 @@
   <data name="Settings_Cb_CloseToTray" xml:space="preserve"><value>关闭时最小化到托盘</value></data>
   <data name="Settings_Cb_QuickPreviewEnable" xml:space="preserve"><value>启用快速预览（空格键）</value></data>
   <data name="Settings_Cb_QuickPreviewDesc" xml:space="preserve"><value>按空格键使用 WebView2 引擎预览支持的文件</value></data>
+  <data name="Settings_Cb_ExternalSpacePreviewEnable" xml:space="preserve"><value>在资源管理器和文件对话框启用空格预览</value></data>
+  <data name="Settings_Cb_ExternalSpacePreviewDesc" xml:space="preserve"><value>可选的系统键盘 Hook；在资源管理器或现代打开/保存对话框选中文件后按空格预览。</value></data>
   <data name="Settings_Cb_ShowSystemHidden" xml:space="preserve"><value>显示系统和隐藏文件</value></data>
   <data name="Settings_Cb_ShowFolders" xml:space="preserve"><value>在列表中显示文件夹</value></data>
   <data name="Settings_Lbl_HotkeyDesc" xml:space="preserve"><value>在任何位置按下此快捷键以显示或隐藏 Recents</value></data>

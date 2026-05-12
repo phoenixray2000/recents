@@ -182,16 +182,23 @@ public sealed class ClipboardPasteService : IDisposable
 
     private IntPtr KeyboardHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
-        if (nCode < 0 || _window?.IsVisible != true)
-            return CallNextHookEx(_keyboardHook, nCode, wParam, lParam);
+        try
+        {
+            if (nCode < 0 || _window?.IsVisible != true)
+                return CallNextHookEx(_keyboardHook, nCode, wParam, lParam);
 
-        var message = wParam.ToInt32();
-        if (message is not (WM_KEYDOWN or WM_SYSKEYDOWN))
-            return CallNextHookEx(_keyboardHook, nCode, wParam, lParam);
+            var message = wParam.ToInt32();
+            if (message is not (WM_KEYDOWN or WM_SYSKEYDOWN))
+                return CallNextHookEx(_keyboardHook, nCode, wParam, lParam);
 
-        var info = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
-        if (HandlePopupKey((int)info.vkCode, info.scanCode))
-            return new IntPtr(1);
+            var info = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
+            if (HandlePopupKey((int)info.vkCode, info.scanCode))
+                return new IntPtr(1);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "ClipboardPasteService: keyboard hook callback failed");
+        }
 
         return CallNextHookEx(_keyboardHook, nCode, wParam, lParam);
     }
@@ -207,48 +214,64 @@ public sealed class ClipboardPasteService : IDisposable
         switch (vkCode)
         {
             case VK_ESCAPE:
-                System.Windows.Application.Current.Dispatcher.BeginInvoke(() => _window.Close());
+                PostWindowAction(window => window.Close());
                 return true;
             case VK_RETURN:
                 if (_acceptingFromHook)
                     return true;
                 _acceptingFromHook = true;
-                System.Windows.Application.Current.Dispatcher.BeginInvoke(async () =>
+                try
                 {
-                    try
+                    System.Windows.Application.Current?.Dispatcher.BeginInvoke(async () =>
                     {
-                        await _window.AcceptSelectedAsync();
-                        _window.Close();
-                    }
-                    finally
-                    {
-                        _acceptingFromHook = false;
-                    }
-                });
+                        try
+                        {
+                            var window = _window;
+                            if (window is not null)
+                            {
+                                await window.AcceptSelectedAsync();
+                                window.Close();
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Warning(ex, "ClipboardPasteService: accept from keyboard hook failed");
+                        }
+                        finally
+                        {
+                            _acceptingFromHook = false;
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug(ex, "ClipboardPasteService: failed to schedule accept from hook");
+                    _acceptingFromHook = false;
+                }
                 return true;
             case VK_UP:
-                System.Windows.Application.Current.Dispatcher.BeginInvoke(() => _window.MoveSelection(-1));
+                PostWindowAction(window => window.MoveSelection(-1));
                 return true;
             case VK_DOWN:
-                System.Windows.Application.Current.Dispatcher.BeginInvoke(() => _window.MoveSelection(1));
+                PostWindowAction(window => window.MoveSelection(1));
                 return true;
             case VK_PRIOR:
             case VK_HOME:
-                System.Windows.Application.Current.Dispatcher.BeginInvoke(() => _window.MoveSelection(-1000));
+                PostWindowAction(window => window.MoveSelection(-1000));
                 return true;
             case VK_NEXT:
             case VK_END:
-                System.Windows.Application.Current.Dispatcher.BeginInvoke(() => _window.MoveSelection(1000));
+                PostWindowAction(window => window.MoveSelection(1000));
                 return true;
             case VK_BACK:
-                System.Windows.Application.Current.Dispatcher.BeginInvoke(() => _window.BackspaceSearchText());
+                PostWindowAction(window => window.BackspaceSearchText());
                 return true;
             case VK_DELETE:
-                System.Windows.Application.Current.Dispatcher.BeginInvoke(() => _window.ClearSearchText());
+                PostWindowAction(window => window.ClearSearchText());
                 return true;
             case VK_SPACE:
                 if (Keyboard.Modifiers == ModifierKeys.None)
-                    System.Windows.Application.Current.Dispatcher.BeginInvoke(() => _window.HandleSpaceKey());
+                    PostWindowAction(window => window.HandleSpaceKey());
                 return true;
             case VK_LEFT:
             case VK_RIGHT:
@@ -259,11 +282,37 @@ public sealed class ClipboardPasteService : IDisposable
         var text = TryTranslateText(vkCode, scanCode);
         if (!string.IsNullOrEmpty(text))
         {
-            System.Windows.Application.Current.Dispatcher.BeginInvoke(() => _window.AppendSearchText(text));
+            PostWindowAction(window => window.AppendSearchText(text));
             return true;
         }
 
         return true;
+    }
+
+    private void PostWindowAction(Action<ClipboardPopupWindow> action)
+    {
+        try
+        {
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+            {
+                try
+                {
+                    var window = _window;
+                    if (window is null)
+                        return;
+
+                    action(window);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "ClipboardPasteService: keyboard hook action failed");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "ClipboardPasteService: failed to schedule keyboard hook action");
+        }
     }
 
     private static string TryTranslateText(int vkCode, uint scanCode)

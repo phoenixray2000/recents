@@ -38,6 +38,7 @@ public partial class App : WpfApp
         try
         {
             base.OnStartup(e);
+            var startupCommand = StartupCommand.Parse(e.Args);
 
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Debug()
@@ -45,11 +46,12 @@ public partial class App : WpfApp
                     System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Recents\logs\recents.log"),
                     rollingInterval: RollingInterval.Day)
                 .CreateLogger();
+            InstallUnhandledExceptionLogging();
 
             Log.Information("--- Recents Started ---");
 
             _singleInstance = new SingleInstanceService();
-            if (!_singleInstance.TryClaimInstance())
+            if (!_singleInstance.TryClaimInstance(startupCommand.ToSingleInstanceCommand()))
             {
                 Log.Information("Another Recents instance is already running.");
                 Shutdown();
@@ -101,6 +103,7 @@ public partial class App : WpfApp
             // 强制创建窗口句柄（即使窗口不显示），以确保全局热键能成功注册
             new System.Windows.Interop.WindowInteropHelper(mainWindow).EnsureHandle();
             _hotkey.Initialize(mainWindow);
+            mainWindow.RefreshExternalSpacePreview();
             _clipboardCapture = new ClipboardCaptureService(_settings, _clipboardStore, _statusHint);
             _clipboardActions.AttachCapture(_clipboardCapture);
             _clipboardCapture.Initialize(mainWindow);
@@ -116,20 +119,26 @@ public partial class App : WpfApp
             };
             _hotkey.RegistrationFailed += msg => _tray?.ShowBalloon(Localization.Loc.T("Error_HotkeyConflict"), msg, System.Windows.Forms.ToolTipIcon.Error);
             _singleInstance.ShowWindowRequested += () => Dispatcher.Invoke(mainWindow.ShowAndFocus);
+            _singleInstance.CommandRequested += command => Dispatcher.Invoke(() =>
+            {
+                if (command.Kind == SingleInstanceCommandKind.PreviewPath &&
+                    !string.IsNullOrWhiteSpace(command.Path))
+                {
+                    mainWindow.ShowExternalPreviewPath(command.Path);
+                }
+            });
 
             _tray.SetMainWindow(mainWindow);
             mainWindow.SetTrayService(_tray);
 
-            if (!e.Args.Contains("--minimized") && !_settings.Current.StartMinimized)
-                mainWindow.Show();
-
-            // §6.25 预热 PreviewWindow（后台异步，不阻塞启动）
-            if (_settings.Current.PreviewEnabled)
+            if (startupCommand.Kind == StartupCommandKind.PreviewPath &&
+                !string.IsNullOrWhiteSpace(startupCommand.Path))
             {
-                _ = Task.Run(() =>
-                {
-                    Dispatcher.BeginInvoke(() => mainWindow.PrewarmPreview());
-                });
+                Dispatcher.BeginInvoke(() => mainWindow.ShowExternalPreviewPath(startupCommand.Path));
+            }
+            else if (!e.Args.Contains("--minimized") && !_settings.Current.StartMinimized)
+            {
+                mainWindow.Show();
             }
 
             // 启动后延迟 1 秒再开始扫描，并切换状态
@@ -148,6 +157,29 @@ public partial class App : WpfApp
             Log.Fatal(ex, "App startup failed");
             Shutdown();
         }
+    }
+
+    private void InstallUnhandledExceptionLogging()
+    {
+        DispatcherUnhandledException += (_, args) =>
+        {
+            Log.Error(args.Exception, "Unhandled UI exception");
+            args.Handled = true;
+        };
+
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            Log.Error(args.Exception, "Unobserved task exception");
+            args.SetObserved();
+        };
+
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            if (args.ExceptionObject is Exception ex)
+                Log.Fatal(ex, "Unhandled app domain exception");
+            else
+                Log.Fatal("Unhandled app domain exception: {ExceptionObject}", args.ExceptionObject);
+        };
     }
 
     private async Task InitializeClipboardStoreAsync()

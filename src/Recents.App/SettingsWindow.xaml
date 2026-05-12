@@ -412,20 +412,37 @@
 
                             <TextBlock Text="{loc:T Key=Settings_Field_QuickPreview}" Style="{StaticResource FieldLabel}"/>
                             <Border Style="{StaticResource SettingsCard}" Padding="16,12">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <CheckBox IsChecked="{Binding PreviewEnabled}"
-                                              VerticalAlignment="Top" Margin="0,2,12,0"/>
-                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="{loc:T Key=Settings_Cb_QuickPreviewEnable}"
-                                                   Foreground="{DynamicResource TextPrimary}" FontWeight="Medium" FontSize="13"/>
-                                        <TextBlock Text="{loc:T Key=Settings_Cb_QuickPreviewDesc}"
-                                                   Foreground="{DynamicResource TextSecondary}" FontSize="11" Margin="0,2,0,0"/>
-                                    </StackPanel>
-                                </Grid>
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <CheckBox IsChecked="{Binding PreviewEnabled}"
+                                                  VerticalAlignment="Top" Margin="0,2,12,0"/>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{loc:T Key=Settings_Cb_QuickPreviewEnable}"
+                                                       Foreground="{DynamicResource TextPrimary}" FontWeight="Medium" FontSize="13"/>
+                                            <TextBlock Text="{loc:T Key=Settings_Cb_QuickPreviewDesc}"
+                                                       Foreground="{DynamicResource TextSecondary}" FontSize="11" Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <Grid Margin="0,12,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <CheckBox IsChecked="{Binding ExternalSpacePreviewEnabled}"
+                                                  VerticalAlignment="Top" Margin="0,2,12,0"/>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{loc:T Key=Settings_Cb_ExternalSpacePreviewEnable}"
+                                                       Foreground="{DynamicResource TextPrimary}" FontWeight="Medium" FontSize="13"/>
+                                            <TextBlock Text="{loc:T Key=Settings_Cb_ExternalSpacePreviewDesc}"
+                                                       Foreground="{DynamicResource TextSecondary}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
                             </Border>
 
                             <TextBlock Text="{loc:T Key=Settings_Field_OpenWith}" Style="{StaticResource FieldLabel}"/>

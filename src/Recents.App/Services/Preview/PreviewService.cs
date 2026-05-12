@@ -50,7 +50,8 @@ public static class PreviewService
     /// </param>
     public static async Task<PreviewDocument> PrepareAsync(
         string path,
-        string? virtualBase = null)
+        string? virtualBase = null,
+        HtmlPreviewTheme theme = HtmlPreviewTheme.Dark)
     {
         var fileName = Path.GetFileName(path);
         var ext      = Path.GetExtension(path).ToLowerInvariant();
@@ -60,44 +61,46 @@ public static class PreviewService
 
         return kind switch
         {
-            PreviewKind.MissingFile  => new(kind, HtmlTemplateEngine.RenderMissing(path), null, title, path),
-            PreviewKind.Folder       => new(kind, HtmlTemplateEngine.RenderFolder(BuildFolderPreview(path)), null, title, path),
-            PreviewKind.TooLarge     => new(kind, HtmlTemplateEngine.RenderTooLarge(fileName, size), null, title, path),
-            PreviewKind.Unsupported  => new(kind, HtmlTemplateEngine.RenderUnsupported(fileName, ext), null, title, path),
+            PreviewKind.MissingFile  => new(kind, HtmlTemplateEngine.RenderMissing(path, theme), null, title, path),
+            PreviewKind.Folder       => new(kind, HtmlTemplateEngine.RenderFolder(BuildFolderPreview(path), theme), null, title, path),
+            PreviewKind.TooLarge     => new(kind, HtmlTemplateEngine.RenderTooLarge(fileName, size, theme), null, title, path),
+            PreviewKind.Unsupported  => new(kind, HtmlTemplateEngine.RenderUnsupported(fileName, ext, theme), null, title, path),
 
             PreviewKind.Pdf          => new(kind, null, MakeFileUri(path), title, path),
 
             PreviewKind.Image        => new(kind,
-                                           HtmlTemplateEngine.RenderImage(MakeMediaUri(path, virtualBase), fileName),
+                                           HtmlTemplateEngine.RenderImage(MakeMediaUri(path, virtualBase), fileName, theme),
                                            null, title, path),
 
             PreviewKind.Audio        => new(kind,
-                                           HtmlTemplateEngine.RenderMedia(MakeMediaUri(path, virtualBase), fileName, false),
+                                           HtmlTemplateEngine.RenderMedia(MakeMediaUri(path, virtualBase), fileName, false, theme),
                                            null, title, path),
 
             PreviewKind.Video        => new(kind,
-                                           HtmlTemplateEngine.RenderMedia(MakeMediaUri(path, virtualBase), fileName, true),
+                                           HtmlTemplateEngine.RenderMedia(MakeMediaUri(path, virtualBase), fileName, true, theme),
                                            null, title, path),
+
+            PreviewKind.ShellHandler => new(kind, null, null, title, path),
 
             PreviewKind.Text or
             PreviewKind.Code         => new(kind,
-                                           HtmlTemplateEngine.RenderText(await ReadTextSafeAsync(path), fileName, kind == PreviewKind.Code),
+                                           HtmlTemplateEngine.RenderText(await ReadTextSafeAsync(path), fileName, kind == PreviewKind.Code, theme),
                                            null, title, path),
 
             PreviewKind.Html         => new(kind,
-                                           HtmlTemplateEngine.RenderHtmlFile(await ReadTextSafeAsync(path), fileName, virtualBase),
+                                           HtmlTemplateEngine.RenderHtmlFile(await ReadTextSafeAsync(path), fileName, virtualBase, theme),
                                            null, title, path),
 
             PreviewKind.Csv          => new(kind,
-                                           HtmlTemplateEngine.RenderCsv(await ReadTextSafeAsync(path), fileName),
+                                           HtmlTemplateEngine.RenderCsv(await ReadTextSafeAsync(path), fileName, theme),
                                            null, title, path),
 
             PreviewKind.Markdown     => new(kind,
-                                           HtmlTemplateEngine.RenderMarkdown(await ReadTextSafeAsync(path), fileName),
+                                           HtmlTemplateEngine.RenderMarkdown(await ReadTextSafeAsync(path), fileName, theme),
                                            null, title, path),
 
             _                        => new(PreviewKind.Unsupported,
-                                           HtmlTemplateEngine.RenderUnsupported(fileName, ext),
+                                           HtmlTemplateEngine.RenderUnsupported(fileName, ext, theme),
                                            null, title, path),
         };
     }

@@ -21,6 +21,7 @@ public class AppSettings
     public double? WindowLeft      { get; set; } = null;
     public bool  StartMinimized   { get; set; } = false;
     public bool PreviewEnabled { get; set; } = true;
+    public bool ExternalSpacePreviewEnabled { get; set; } = false;
     public bool ShowSystemAndHiddenFiles { get; set; } = false;
     public int OpenWithMaxAppsPerType { get; set; } = 3;
     public Dictionary<string, List<OpenWithAppConfig>> OpenWithHistory { get; set; } = new(StringComparer.OrdinalIgnoreCase);

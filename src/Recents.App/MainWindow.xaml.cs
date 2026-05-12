@@ -11,6 +11,7 @@ using WpfMouseEventArgs = System.Windows.Input.MouseEventArgs;
 using Recents.App.Services;
 using Recents.App.ViewModels;
 using Recents.App.Models;
+using Recents.App.Services.Preview;
 using Serilog;
 
 using Recents.App.Views;
@@ -40,6 +41,9 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
     // §6.25 预览窗口（单一持久实例）
     private PreviewWindow? _previewWindow;
     private CancellationTokenSource? _previewNavCts;
+    private bool _externalPreviewActive;
+    private bool _previewPrewarmStarted;
+    private ExternalSpacePreviewService? _externalSpacePreviewService;
     private readonly IWindowGroupFocusService _windowGroupFocusService;
     private CancellationTokenSource? _deactivateCts;
     private CancellationTokenSource? _actionHideCts;
@@ -87,6 +91,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         {
             SearchBox.Focus();
             PrewarmSegoeFluentIcons();
+            SchedulePreviewPrewarmAfterWindowShown();
         };
 
         // B2. 动态键盘提示
@@ -95,6 +100,19 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
 
         _windowGroupFocusService = App.WindowGroupFocusService;
         _windowGroupFocusService.RegisterWindow(this);
+        _externalSpacePreviewService = new ExternalSpacePreviewService(
+            _settings,
+            path => Dispatcher.BeginInvoke(() =>
+            {
+                try
+                {
+                    ShowExternalPreviewPath(path, toggleIfSame: true);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "MainWindow: external preview request failed");
+                }
+            }));
 
         Activated += OnRecentDockWindowActivated;
         Deactivated += OnRecentDockWindowDeactivated;
@@ -243,7 +261,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         {
             if (_previewWindow?.IsVisible == true)
             {
-                _previewWindow.Hide();
+                _previewWindow.HidePreview();
                 e.Handled = true;
                 return;
             }
@@ -306,7 +324,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         {
             // 若预览可见，Enter 打开文件并关闭预览
             if (_previewWindow?.IsVisible == true)
-                _previewWindow.Hide();
+                _previewWindow.HidePreview();
 
             if (FavoritesList.IsFocused)
                 TryOpenItem(FavoritesList.SelectedItem);
@@ -863,6 +881,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         Activate();
         SearchBox.Focus();
         SearchBox.SelectAll();
+        SchedulePreviewPrewarmAfterWindowShown();
     }
 
     public void ToggleVisibility()
@@ -871,7 +890,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         {
             if (_previewWindow?.IsVisible == true)
             {
-                _previewWindow.Hide();
+                _previewWindow.HidePreview();
                 Activate();
                 SearchBox.Focus();
                 return;
@@ -894,7 +913,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         _deactivateCts?.Cancel();
         SaveWindowBounds();
         if (_previewWindow?.IsVisible == true)
-            _previewWindow.Hide();
+            _previewWindow.HidePreview();
         Hide();
     }
 
@@ -985,9 +1004,11 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
     {
         if (_previewWindow?.IsVisible == true)
         {
-            _previewWindow.Hide();
+            _previewWindow.HidePreview();
             _previewWindow.Tag = null;
         }
+
+        _externalPreviewActive = false;
     }
 
     public void DisposePreviewForShutdown()
@@ -995,6 +1016,8 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         _previewNavCts?.Cancel();
         _previewNavCts?.Dispose();
         _previewNavCts = null;
+        _externalSpacePreviewService?.Dispose();
+        _externalSpacePreviewService = null;
 
         if (_previewWindow is null)
             return;
@@ -1008,6 +1031,9 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
 
     public void SelectNextAndRefreshPreview()
     {
+        if (_externalPreviewActive)
+            return;
+
         if (ItemsList.Items.Count == 0) return;
         int next = ItemsList.SelectedIndex + 1;
         if (next < ItemsList.Items.Count)
@@ -1019,6 +1045,9 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
 
     public void SelectPreviousAndRefreshPreview()
     {
+        if (_externalPreviewActive)
+            return;
+
         if (ItemsList.Items.Count == 0) return;
         int prev = ItemsList.SelectedIndex - 1;
         if (prev >= 0)
@@ -1087,9 +1116,15 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         Topmost = _settings.Current.AlwaysOnTop;
         _viewModel.UpdateHotkey(_settings.Current.Hotkey);
         _viewModel.UpdatePopPasteHotkey(_settings.Current.PopPasteHotkey);
+        RefreshExternalSpacePreview();
         _viewModel.ItemsView.Refresh();
         _viewModel.ClipboardItemsView.Refresh();
         _viewModel.FavoritesView.Refresh();
+    }
+
+    public void RefreshExternalSpacePreview()
+    {
+        _externalSpacePreviewService?.Refresh();
     }
 
     private void SortButton_Click(object sender, RoutedEventArgs e)
@@ -1284,8 +1319,33 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
             _previewWindow.Activated += OnRecentDockWindowActivated;
             _previewWindow.Deactivated += OnRecentDockWindowDeactivated;
         }
+
+        ConfigurePreviewWindowOwnership(_previewWindow);
         return _previewWindow;
     }
+
+    private void ConfigurePreviewWindowOwnership(PreviewWindow previewWindow)
+    {
+        if (ShouldAssignPreviewOwner(IsVisible, previewWindow.IsVisible, previewWindow.Owner == this))
+        {
+            try
+            {
+                previewWindow.Owner = this;
+            }
+            catch (InvalidOperationException ex)
+            {
+                Log.Debug(ex, "MainWindow: preview owner assignment skipped");
+            }
+        }
+
+        previewWindow.Topmost = Topmost;
+    }
+
+    internal static bool ShouldAssignPreviewOwner(
+        bool mainVisible,
+        bool previewVisible,
+        bool alreadyOwnedByMain) =>
+        mainVisible && !previewVisible && !alreadyOwnedByMain;
 
     private void TogglePreview()
     {
@@ -1305,14 +1365,15 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
         if (pw.IsVisible && pw.Tag as string == previewKey)
         {
             // 二次 Space → 关闭
-            pw.Hide();
+            pw.HidePreview();
         }
         else
         {
+            _externalPreviewActive = false;
             pw.Tag = previewKey;
             pw.PositionRelativeTo(this);
             if (pw.Owner == null) pw.Owner = this;
-            pw.Show();
+            pw.ShowPreviewWindow();
             _ = ShowPreviewForItemAsync(pw, item);
         }
     }
@@ -1321,6 +1382,7 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
     {
         var previewKey = GetPreviewKey(item);
         if (previewKey is null) return;
+        if (_externalPreviewActive) return;
 
         _previewNavCts?.Cancel();
         _previewNavCts = new System.Threading.CancellationTokenSource();
@@ -1371,8 +1433,57 @@ public partial class MainWindow : Window, IRecentDockWindow, IPreviewCommandHost
 
     public void PrewarmPreview()
     {
-        if (_settings.Current.PreviewEnabled)
-            _ = EnsurePreviewWindow(); // 触发 PreviewWindow 构造 + InitWebView2Async
+        if (!_settings.Current.PreviewEnabled)
+            return;
+
+        _ = EnsurePreviewWindow().PrewarmAsync();
+    }
+
+    private void SchedulePreviewPrewarmAfterWindowShown()
+    {
+        if (!ShouldSchedulePreviewPrewarmAfterWindowShown(_settings.Current.PreviewEnabled, _previewPrewarmStarted))
+            return;
+
+        _previewPrewarmStarted = true;
+        Log.Debug("MainWindow: scheduling preview prewarm after window shown");
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (!_settings.Current.PreviewEnabled || !IsVisible)
+                return;
+
+            PrewarmPreview();
+        }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+    }
+
+    internal static bool ShouldSchedulePreviewPrewarmAfterWindowShown(bool previewEnabled, bool prewarmStarted) =>
+        previewEnabled && !prewarmStarted;
+
+    public void ShowExternalPreviewPath(string path, bool toggleIfSame = false)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
+        if (!_settings.Current.PreviewEnabled)
+        {
+            System.Windows.MessageBox.Show("Quick preview is disabled because the WebView2 runtime is unavailable.",
+                "Preview unavailable", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var previewKey = "external:" + path;
+        var pw = EnsurePreviewWindow();
+        if (toggleIfSame && pw.IsVisible && pw.Tag as string == previewKey)
+        {
+            pw.HidePreview();
+            _externalPreviewActive = false;
+            return;
+        }
+
+        _externalPreviewActive = true;
+        pw.Tag = previewKey;
+        pw.PositionCenteredOnWorkArea();
+        pw.ShowPreviewWindow();
+        _ = pw.ShowFileAsync(path);
     }
 
     private async void MenuItem_Click(object sender, RoutedEventArgs e)

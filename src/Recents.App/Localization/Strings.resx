@@ -196,6 +196,8 @@
   <data name="Settings_Cb_CloseToTray" xml:space="preserve"><value>Hide to tray when closing</value></data>
   <data name="Settings_Cb_QuickPreviewEnable" xml:space="preserve"><value>Enable quick preview (Space)</value></data>
   <data name="Settings_Cb_QuickPreviewDesc" xml:space="preserve"><value>Press Space to preview supported files using WebView2 engine</value></data>
+  <data name="Settings_Cb_ExternalSpacePreviewEnable" xml:space="preserve"><value>Enable Space preview in Explorer and file dialogs</value></data>
+  <data name="Settings_Cb_ExternalSpacePreviewDesc" xml:space="preserve"><value>Opt-in system keyboard hook. Press Space on a selected file in Explorer or modern Open/Save dialogs.</value></data>
   <data name="Settings_Cb_ShowSystemHidden" xml:space="preserve"><value>Show system and hidden files</value></data>
   <data name="Settings_Cb_ShowFolders" xml:space="preserve"><value>Show folders in list</value></data>
   <data name="Settings_Lbl_HotkeyDesc" xml:space="preserve"><value>Press this hotkey from anywhere to show or hide Recents</value></data>

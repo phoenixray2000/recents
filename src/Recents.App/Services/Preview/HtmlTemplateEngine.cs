@@ -6,24 +6,43 @@ using System.Text;
 
 namespace Recents.App.Services.Preview;
 
+public enum HtmlPreviewTheme
+{
+    Dark,
+    Light
+}
+
 public static class HtmlTemplateEngine
 {
     // ── 公共 CSS 变量（与 PRD §7.4 颜色 token 对齐）──────────────────────
-    private const string BaseStyle = """
+    private static string BaseStyle(HtmlPreviewTheme theme = HtmlPreviewTheme.Dark)
+    {
+        var bg = theme == HtmlPreviewTheme.Light ? "#FFFFFF" : "#101216";
+        var surface = theme == HtmlPreviewTheme.Light ? "#F5F7FB" : "#191D26";
+        var border = theme == HtmlPreviewTheme.Light ? "#D1D8E2" : "#2B313D";
+        var text = theme == HtmlPreviewTheme.Light ? "#111827" : "#F3F4F6";
+        var muted = theme == HtmlPreviewTheme.Light ? "#4A5160" : "#A7ADBA";
+        var tertiary = theme == HtmlPreviewTheme.Light ? "#626A78" : "#7E8491";
+        var accent = theme == HtmlPreviewTheme.Light ? "#2563EB" : "#3B82F6";
+        var codeBg = theme == HtmlPreviewTheme.Light ? "#F3F4F6" : "#151922";
+        var success = theme == HtmlPreviewTheme.Light ? "#16A34A" : "#63C554";
+        var warning = theme == HtmlPreviewTheme.Light ? "#D97706" : "#F5B642";
+
+        return $$"""
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width,initial-scale=1">
         <style>
         :root {
-            --bg:        #101216;
-            --surface:   #191D26;
-            --border:    #2B313D;
-            --text:      #F3F4F6;
-            --muted:     #A7ADBA;
-            --tertiary:  #7E8491;
-            --accent:    #3B82F6;
-            --code-bg:   #151922;
-            --success:   #63C554;
-            --warning:   #F5B642;
+            --bg:        {{bg}};
+            --surface:   {{surface}};
+            --border:    {{border}};
+            --text:      {{text}};
+            --muted:     {{muted}};
+            --tertiary:  {{tertiary}};
+            --accent:    {{accent}};
+            --code-bg:   {{codeBg}};
+            --success:   {{success}};
+            --warning:   {{warning}};
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { width: 100%; height: 100%; overflow: auto; }
@@ -55,13 +74,14 @@ public static class HtmlTemplateEngine
         }
         </style>
         """;
+    }
 
     // ── 图片 ──────────────────────────────────────────────────────────────
     /// <param name="virtualUri">虚拟主机 URI，格式 https://preview.local/… 或 file://…</param>
-    public static string RenderImage(string virtualUri, string fileName)
+    public static string RenderImage(string virtualUri, string fileName, HtmlPreviewTheme theme = HtmlPreviewTheme.Dark)
     {
         return $$"""
-            <!DOCTYPE html><html><head>{{BaseStyle}}
+            <!DOCTYPE html><html><head>{{BaseStyle(theme)}}
             <style>
             body { margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; background: #000; overflow: hidden; }
             .content { flex: 1; position: relative; overflow: hidden; cursor: grab; display: flex; align-items: center; justify-content: center; }
@@ -139,12 +159,17 @@ public static class HtmlTemplateEngine
     }
 
     // ── 文本 / 代码（无语法高亮，P0 阶段）──────────────────────────────
-    public static string RenderText(string content, string fileName, bool isCode)
+    public static string RenderText(
+        string content,
+        string fileName,
+        bool isCode,
+        HtmlPreviewTheme theme = HtmlPreviewTheme.Dark)
     {
         var escaped = WebUtility.HtmlEncode(content);
         var lang = isCode ? Path.GetExtension(fileName).TrimStart('.') : "";
+        var preBackground = isCode ? "var(--code-bg)" : "var(--bg)";
         return $$"""
-            <!DOCTYPE html><html><head>{{BaseStyle}}
+            <!DOCTYPE html><html><head>{{BaseStyle(theme)}}
             <style>
             body { padding: 0; }
             .toolbar {
@@ -164,7 +189,7 @@ public static class HtmlTemplateEngine
                 margin: 0; padding: 12px 16px;
                 font-family: "Cascadia Code","Consolas","Fira Mono",monospace;
                 font-size: 13px; line-height: 1.5; white-space: pre-wrap;
-                word-break: break-word; background: var(--code-bg); color: var(--text);
+                word-break: break-word; background: {{preBackground}}; color: var(--text);
                 min-height: calc(100vh - 36px);
             }
             </style>
@@ -178,23 +203,30 @@ public static class HtmlTemplateEngine
             """;
     }
 
-    public static string RenderClipboardHtml(string fragment, string title)
+    public static string RenderClipboardHtml(
+        string fragment,
+        string title,
+        HtmlPreviewTheme theme = HtmlPreviewTheme.Dark)
     {
-        return RenderSafeHtml(fragment, title, baseHref: null);
+        return RenderSafeHtml(fragment, title, baseHref: null, theme);
     }
 
-    public static string RenderHtmlFile(string html, string fileName, string? baseHref)
+    public static string RenderHtmlFile(
+        string html,
+        string fileName,
+        string? baseHref,
+        HtmlPreviewTheme theme = HtmlPreviewTheme.Dark)
     {
-        return RenderSafeHtml(html, fileName, baseHref);
+        return RenderSafeHtml(html, fileName, baseHref, theme);
     }
 
-    private static string RenderSafeHtml(string html, string title, string? baseHref)
+    private static string RenderSafeHtml(string html, string title, string? baseHref, HtmlPreviewTheme theme)
     {
         var sanitized = HtmlSanitizer.SanitizeFragment(html);
         var iframeDocument = BuildSafeIframeDocument(sanitized, baseHref);
         var srcDoc = WebUtility.HtmlEncode(iframeDocument);
         return $$"""
-            <!DOCTYPE html><html><head>{{BaseStyle}}
+            <!DOCTYPE html><html><head>{{BaseStyle(theme)}}
             <style>
             body { padding: 0; overflow: hidden; }
             .toolbar {
@@ -270,7 +302,8 @@ public static class HtmlTemplateEngine
 
     public static string RenderClipboardFiles(
         IReadOnlyList<(string Path, bool IsFolder, bool Exists)> entries,
-        string title)
+        string title,
+        HtmlPreviewTheme theme = HtmlPreviewTheme.Dark)
     {
         var rows = new StringBuilder();
         foreach (var entry in entries)
@@ -289,7 +322,7 @@ public static class HtmlTemplateEngine
         }
 
         return $$"""
-            <!DOCTYPE html><html><head>{{BaseStyle}}
+            <!DOCTYPE html><html><head>{{BaseStyle(theme)}}
             <style>
             body{min-height:100vh;padding:18px 20px;}
             .header{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
@@ -319,12 +352,15 @@ public static class HtmlTemplateEngine
     }
 
     // ── CSV（表格视图，最多 500 行）─────────────────────────────────────
-    public static string RenderCsv(string content, string fileName)
+    public static string RenderCsv(
+        string content,
+        string fileName,
+        HtmlPreviewTheme theme = HtmlPreviewTheme.Dark)
     {
         var rows = content.Split('\n', StringSplitOptions.RemoveEmptyEntries)
                           .Take(500).ToList();
         var sb = new StringBuilder();
-        sb.AppendLine("<!DOCTYPE html><html><head>" + BaseStyle + """
+        sb.AppendLine("<!DOCTYPE html><html><head>" + BaseStyle(theme) + """
             <style>
             body { padding: 0; overflow-x: auto; }
             .toolbar { position:sticky;top:0;background:var(--surface);
@@ -374,14 +410,17 @@ public static class HtmlTemplateEngine
     }
 
     // ── Markdown ─────────────────────────────────────────────────────────
-    public static string RenderMarkdown(string content, string fileName)
+    public static string RenderMarkdown(
+        string content,
+        string fileName,
+        HtmlPreviewTheme theme = HtmlPreviewTheme.Dark)
     {
         var pipeline = new MarkdownPipelineBuilder()
             .UseAdvancedExtensions()   // 表格、删除线、任务列表等
             .Build();
         var body = Markdown.ToHtml(content, pipeline);
         return $$"""
-            <!DOCTYPE html><html><head>{{BaseStyle}}
+            <!DOCTYPE html><html><head>{{BaseStyle(theme)}}
             <style>
             .md { max-width: 820px; margin: 0 auto; padding: 24px 32px; }
             h1,h2,h3,h4 { color:var(--accent); margin:1em 0 .4em; }
@@ -409,14 +448,18 @@ public static class HtmlTemplateEngine
     }
 
     // ── 媒体（音频 / 视频）─────────────────────────────────────────────
-    public static string RenderMedia(string virtualUri, string fileName, bool isVideo)
+    public static string RenderMedia(
+        string virtualUri,
+        string fileName,
+        bool isVideo,
+        HtmlPreviewTheme theme = HtmlPreviewTheme.Dark)
     {
         var tag = isVideo ? "video" : "audio";
         var attrs = isVideo
             ? """"controls autoplay style="max-width:100%;max-height:80vh;border-radius:6px;""""
             : """"controls autoplay style="width:100%;"""";
         return $$"""
-            <!DOCTYPE html><html><head>{{BaseStyle}}
+            <!DOCTYPE html><html><head>{{BaseStyle(theme)}}
             <style>
             body { display:flex;flex-direction:column;align-items:center;
                    justify-content:center;min-height:100vh;gap:12px; }
@@ -432,8 +475,11 @@ public static class HtmlTemplateEngine
     }
 
     // ── 不支持 ───────────────────────────────────────────────────────────
-    public static string RenderUnsupported(string fileName, string ext) => $$"""
-        <!DOCTYPE html><html><head>{{BaseStyle}}
+    public static string RenderUnsupported(
+        string fileName,
+        string ext,
+        HtmlPreviewTheme theme = HtmlPreviewTheme.Dark) => $$"""
+        <!DOCTYPE html><html><head>{{BaseStyle(theme)}}
         <style>body{display:flex;align-items:center;justify-content:center;
         min-height:100vh;flex-direction:column;gap:8px;}
         .icon{font-family:"Segoe Fluent Icons";font-size:48px;color:var(--muted);}
@@ -446,7 +492,29 @@ public static class HtmlTemplateEngine
         </body></html>
         """;
 
-    public static string RenderFolder(FolderPreviewSummary summary)
+    public static string RenderShellHandlerUnavailable(
+        string fileName,
+        string details,
+        HtmlPreviewTheme theme = HtmlPreviewTheme.Dark) => $$"""
+        <!DOCTYPE html><html><head>{{BaseStyle(theme)}}
+        <style>body{display:flex;align-items:center;justify-content:center;
+        min-height:100vh;flex-direction:column;gap:8px;text-align:center;padding:24px;}
+        .icon{font-family:"Segoe Fluent Icons";font-size:48px;color:var(--warning);}
+        .msg{color:var(--muted);font-size:14px;max-width:560px;}
+        .name{color:var(--text);font-size:15px;font-weight:600;word-break:break-word;max-width:640px;}
+        .hint{color:var(--muted);font-size:12px;margin-top:4px;max-width:620px;}
+        </style></head><body>
+        <div class="icon">&#xE946;</div>
+        <div class="name">{{WebUtility.HtmlEncode(fileName)}}</div>
+        <div class="msg">Preview is unavailable because the system preview handler could not render this file.</div>
+        <div class="hint">{{WebUtility.HtmlEncode(details)}}</div>
+        <div class="hint">If Explorer's preview pane cannot preview this file either, install or repair the matching system preview handler.</div>
+        </body></html>
+        """;
+
+    public static string RenderFolder(
+        FolderPreviewSummary summary,
+        HtmlPreviewTheme theme = HtmlPreviewTheme.Dark)
     {
         var rows = new StringBuilder();
         foreach (var entry in summary.Entries)
@@ -483,7 +551,7 @@ public static class HtmlTemplateEngine
               """;
 
         return $$"""
-            <!DOCTYPE html><html><head>{{BaseStyle}}
+            <!DOCTYPE html><html><head>{{BaseStyle(theme)}}
             <style>
             body{min-height:100vh;padding:18px 20px;}
             .header{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px;}
@@ -524,8 +592,11 @@ public static class HtmlTemplateEngine
             """;
     }
 
-    public static string RenderTooLarge(string fileName, long size) => $$"""
-        <!DOCTYPE html><html><head>{{BaseStyle}}
+    public static string RenderTooLarge(
+        string fileName,
+        long size,
+        HtmlPreviewTheme theme = HtmlPreviewTheme.Dark) => $$"""
+        <!DOCTYPE html><html><head>{{BaseStyle(theme)}}
         <style>body{display:flex;align-items:center;justify-content:center;
         min-height:100vh;flex-direction:column;gap:8px;}
         .icon{font-family:"Segoe Fluent Icons";font-size:48px;color:var(--warning);}
@@ -537,8 +608,10 @@ public static class HtmlTemplateEngine
         </body></html>
         """;
 
-    public static string RenderMissing(string path) => $$"""
-        <!DOCTYPE html><html><head>{{BaseStyle}}
+    public static string RenderMissing(
+        string path,
+        HtmlPreviewTheme theme = HtmlPreviewTheme.Dark) => $$"""
+        <!DOCTYPE html><html><head>{{BaseStyle(theme)}}
         <style>body{display:flex;align-items:center;justify-content:center;
         min-height:100vh;flex-direction:column;gap:8px;}
         .icon{font-family:"Segoe Fluent Icons";font-size:48px;color:var(--warning);}
