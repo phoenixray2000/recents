@@ -185,9 +185,10 @@ Recents 会整合多个本机来源：
 Recents 默认按本地工具设计：
 
 - 不需要账号
-- 不做云同步
-- 不上传文件
-- 不上传剪贴板内容
+- 默认不做云同步
+- 默认不上传文件
+- 默认不上传剪贴板内容
+- 仅当用户显式开启 WebDAV 同步时，才会把当前最新剪贴板写入用户配置的 WebDAV 工作目录
 - 不删除原始文件
 - 剪贴板历史默认关闭
 - 敏感剪贴板内容默认过滤
@@ -205,7 +206,7 @@ Recents 不是：
 - 云盘
 - 文件管理器
 - 全文搜索引擎
-- 同步服务
+- 完整历史 / 文件同步服务
 - 自动化平台
 - 浏览器历史读取器
 - 聊天记录读取器
@@ -464,9 +465,10 @@ Recents combines several local sources:
 Recents is designed as a local desktop tool:
 
 - No account
-- No cloud sync
-- No file uploads
-- No clipboard uploads
+- No cloud sync by default
+- No file uploads by default
+- No clipboard uploads by default
+- Only when WebDAV sync is explicitly enabled does Recents write the current clipboard item to the configured WebDAV working directory
 - No deletion of original files
 - Clipboard History is off by default
 - Sensitive clipboard text is filtered by default
@@ -484,7 +486,7 @@ Recents is not:
 - A cloud drive
 - A file manager
 - A full-text search engine
-- A sync service
+- A full history or file sync service
 - An automation platform
 - A browser history reader
 - A chat history reader
