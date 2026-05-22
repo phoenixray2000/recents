@@ -80,4 +80,10 @@ public partial class SettingsWindow : Window, IRecentDockWindow
         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
         e.Handled = true;
     }
+
+    private void ClipboardWebDavPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is SettingsViewModel vm && sender is PasswordBox box)
+            vm.ClipboardWebDavPassword = box.Password;
+    }
 }

@@ -8,6 +8,7 @@ using Recents.App.Localization;
 using Recents.App.Models;
 using Recents.App.Services;
 using Recents.App.Services.Clipboard;
+using Recents.App.Services.ClipboardSync;
 using Recents.App.Services.Sources;
 using Forms = System.Windows.Forms;
 using Interaction = Microsoft.VisualBasic.Interaction;
@@ -154,6 +155,13 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _popPasteEnterBehavior = settings.Current.PopPasteEnterBehavior;
         _restoreClipboardAfterPaste = settings.Current.RestoreClipboardAfterPaste;
         _clipboardDataPath = _clipboardStore.DataDirectory;
+        _enableClipboardWebDavSync = settings.Current.ClipboardWebDavSync.Enabled;
+        _clipboardWebDavRemoteDirectoryUrl = settings.Current.ClipboardWebDavSync.RemoteDirectoryUrl;
+        _clipboardWebDavUsername = settings.Current.ClipboardWebDavSync.Username;
+        _clipboardWebDavPollIntervalSeconds = settings.Current.ClipboardWebDavSync.PollIntervalSeconds;
+        _clipboardWebDavIgnoreCertificateErrors = settings.Current.ClipboardWebDavSync.IgnoreCertificateErrors;
+        _clipboardWebDavDeletePreviousFiles = settings.Current.ClipboardWebDavSync.DeletePreviousFilesOnPush;
+        _saveRemoteClipboardItemsToHistory = settings.Current.ClipboardWebDavSync.SaveRemoteItemsToHistory;
     }
 
     [ObservableProperty] private bool _launchAtStartup;
@@ -195,6 +203,14 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _popPasteEnterBehavior = "PasteToActiveApp";
     [ObservableProperty] private bool _restoreClipboardAfterPaste;
     [ObservableProperty] private string _clipboardDataPath = string.Empty;
+    [ObservableProperty] private bool _enableClipboardWebDavSync;
+    [ObservableProperty] private string _clipboardWebDavRemoteDirectoryUrl = string.Empty;
+    [ObservableProperty] private string _clipboardWebDavUsername = string.Empty;
+    [ObservableProperty] private string _clipboardWebDavPassword = string.Empty;
+    [ObservableProperty] private int _clipboardWebDavPollIntervalSeconds = 10;
+    [ObservableProperty] private bool _clipboardWebDavIgnoreCertificateErrors;
+    [ObservableProperty] private bool _clipboardWebDavDeletePreviousFiles = true;
+    [ObservableProperty] private bool _saveRemoteClipboardItemsToHistory = true;
 
     partial void OnSelectedLanguageChanged(string value)
     {
@@ -267,6 +283,50 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         SaveAndNotify();
     }
     partial void OnRestoreClipboardAfterPasteChanged(bool value) { _settings.Current.RestoreClipboardAfterPaste = value; SaveAndNotify(); }
+    partial void OnEnableClipboardWebDavSyncChanged(bool value)
+    {
+        _settings.Current.ClipboardWebDavSync.Enabled = value;
+        SaveAndNotify();
+    }
+    partial void OnClipboardWebDavRemoteDirectoryUrlChanged(string value)
+    {
+        var url = value?.Trim() ?? string.Empty;
+        if (url.Length > 0 && !url.EndsWith("/", StringComparison.Ordinal))
+            url += "/";
+        _settings.Current.ClipboardWebDavSync.RemoteDirectoryUrl = url;
+        SaveAndNotify();
+    }
+    partial void OnClipboardWebDavUsernameChanged(string value)
+    {
+        _settings.Current.ClipboardWebDavSync.Username = value?.Trim() ?? string.Empty;
+        SaveAndNotify();
+    }
+    partial void OnClipboardWebDavPasswordChanged(string value)
+    {
+        if (!string.IsNullOrEmpty(value))
+            _settings.Current.ClipboardWebDavSync.ProtectedPassword = WindowsSecretProtector.ProtectToBase64(value);
+        SaveAndNotify();
+    }
+    partial void OnClipboardWebDavPollIntervalSecondsChanged(int value)
+    {
+        _settings.Current.ClipboardWebDavSync.PollIntervalSeconds = Math.Clamp(value, 5, 300);
+        SaveAndNotify();
+    }
+    partial void OnClipboardWebDavIgnoreCertificateErrorsChanged(bool value)
+    {
+        _settings.Current.ClipboardWebDavSync.IgnoreCertificateErrors = value;
+        SaveAndNotify();
+    }
+    partial void OnClipboardWebDavDeletePreviousFilesChanged(bool value)
+    {
+        _settings.Current.ClipboardWebDavSync.DeletePreviousFilesOnPush = value;
+        SaveAndNotify();
+    }
+    partial void OnSaveRemoteClipboardItemsToHistoryChanged(bool value)
+    {
+        _settings.Current.ClipboardWebDavSync.SaveRemoteItemsToHistory = value;
+        SaveAndNotify();
+    }
 
     [RelayCommand]
     private void ResetHotkey()
@@ -319,6 +379,30 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     {
         await _clipboardStore.CompactOrphanBlobsAsync();
         StatusMessage = "Clipboard blobs compacted";
+    }
+
+    [RelayCommand]
+    private async Task TestClipboardWebDavConnection()
+    {
+        StatusMessage = Loc.T("Settings_Clipboard_WebDav_Testing");
+        try
+        {
+            var sync = _settings.Current.ClipboardWebDavSync;
+            var handler = new System.Net.Http.HttpClientHandler();
+            if (sync.IgnoreCertificateErrors)
+                handler.ServerCertificateCustomValidationCallback = delegate { return true; };
+            using var http = new System.Net.Http.HttpClient(handler)
+            {
+                Timeout = Timeout.InfiniteTimeSpan
+            };
+            var client = new WebDavClipboardClient(http, sync);
+            await client.TestConnectionAsync();
+            StatusMessage = Loc.T("Settings_Clipboard_WebDav_TestOk");
+        }
+        catch
+        {
+            StatusMessage = Loc.T("Settings_Clipboard_WebDav_TestFailed");
+        }
     }
 
     [RelayCommand]

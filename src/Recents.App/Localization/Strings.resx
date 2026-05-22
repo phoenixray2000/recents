@@ -157,6 +157,20 @@
   <data name="Settings_Clipboard_IgnoreSystemHidden" xml:space="preserve"><value>Ignore system and hidden files</value></data>
   <data name="Settings_Clipboard_SensitivePatterns" xml:space="preserve"><value>Sensitive patterns</value></data>
   <data name="Settings_Clipboard_ExcludedApps" xml:space="preserve"><value>Excluded source apps</value></data>
+  <data name="Settings_Clipboard_Field_WebDavSync" xml:space="preserve"><value>WebDAV Sync</value></data>
+  <data name="Settings_Clipboard_WebDav_Enable" xml:space="preserve"><value>Sync the current clipboard through WebDAV</value></data>
+  <data name="Settings_Clipboard_WebDav_Url" xml:space="preserve"><value>WebDAV working directory URL</value></data>
+  <data name="Settings_Clipboard_WebDav_Username" xml:space="preserve"><value>Username</value></data>
+  <data name="Settings_Clipboard_WebDav_Password" xml:space="preserve"><value>Password</value></data>
+  <data name="Settings_Clipboard_WebDav_PollInterval" xml:space="preserve"><value>Poll interval (seconds)</value></data>
+  <data name="Settings_Clipboard_WebDav_DeletePrevious" xml:space="preserve"><value>Delete previous payloads on each upload</value></data>
+  <data name="Settings_Clipboard_WebDav_IgnoreCert" xml:space="preserve"><value>Trust self-signed certificates (insecure)</value></data>
+  <data name="Settings_Clipboard_WebDav_SaveToHistory" xml:space="preserve"><value>Save remote clipboard items to local history</value></data>
+  <data name="Settings_Clipboard_WebDav_Test" xml:space="preserve"><value>Test WebDAV connection</value></data>
+  <data name="Settings_Clipboard_WebDav_Testing" xml:space="preserve"><value>Testing WebDAV connection...</value></data>
+  <data name="Settings_Clipboard_WebDav_TestOk" xml:space="preserve"><value>WebDAV connection succeeded</value></data>
+  <data name="Settings_Clipboard_WebDav_TestFailed" xml:space="preserve"><value>WebDAV connection failed</value></data>
+  <data name="Settings_Clipboard_WebDav_PrivacyHint" xml:space="preserve"><value>When enabled, the current clipboard item is uploaded to RecentClipboard.json, with file/image payloads under file/, in the configured WebDAV directory. History, favorites, and recent files are never uploaded. Folders, and items larger than the size limit (default 20 MB), are skipped.</value></data>
   <data name="Settings_Clipboard_Pause10" xml:space="preserve"><value>Pause 10 min</value></data>
   <data name="Settings_Clipboard_PauseHour" xml:space="preserve"><value>Pause 1 hour</value></data>
   <data name="Settings_Clipboard_Resume" xml:space="preserve"><value>Resume</value></data>

@@ -684,6 +684,45 @@
                                 </StackPanel>
                             </Border>
 
+                            <TextBlock Text="{loc:T Key=Settings_Clipboard_Field_WebDavSync}" Style="{StaticResource FieldLabel}"/>
+                            <Border Style="{StaticResource SettingsCard}">
+                                <StackPanel>
+                                    <CheckBox Content="{loc:T Key=Settings_Clipboard_WebDav_Enable}"
+                                              IsChecked="{Binding EnableClipboardWebDavSync}"/>
+                                    <TextBlock Text="{loc:T Key=Settings_Clipboard_WebDav_Url}"
+                                               Foreground="{DynamicResource TextSecondary}" FontSize="12" Margin="0,12,0,6"/>
+                                    <TextBox Text="{Binding ClipboardWebDavRemoteDirectoryUrl, UpdateSourceTrigger=LostFocus}"/>
+                                    <TextBlock Text="{loc:T Key=Settings_Clipboard_WebDav_Username}"
+                                               Foreground="{DynamicResource TextSecondary}" FontSize="12" Margin="0,12,0,6"/>
+                                    <TextBox Text="{Binding ClipboardWebDavUsername, UpdateSourceTrigger=LostFocus}"/>
+                                    <TextBlock Text="{loc:T Key=Settings_Clipboard_WebDav_Password}"
+                                               Foreground="{DynamicResource TextSecondary}" FontSize="12" Margin="0,12,0,6"/>
+                                    <PasswordBox x:Name="ClipboardWebDavPasswordBox" PasswordChanged="ClipboardWebDavPasswordBox_PasswordChanged"/>
+                                    <Grid Margin="0,12,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" VerticalAlignment="Center"
+                                                   Text="{loc:T Key=Settings_Clipboard_WebDav_PollInterval}"
+                                                   Foreground="{DynamicResource TextSecondary}" FontSize="12" Margin="0,0,12,0"/>
+                                        <TextBox Grid.Column="1" Width="120" HorizontalAlignment="Left"
+                                                 Text="{Binding ClipboardWebDavPollIntervalSeconds, UpdateSourceTrigger=LostFocus}"/>
+                                    </Grid>
+                                    <CheckBox Content="{loc:T Key=Settings_Clipboard_WebDav_DeletePrevious}"
+                                              IsChecked="{Binding ClipboardWebDavDeletePreviousFiles}" Margin="0,12,0,0"/>
+                                    <CheckBox Content="{loc:T Key=Settings_Clipboard_WebDav_IgnoreCert}"
+                                              IsChecked="{Binding ClipboardWebDavIgnoreCertificateErrors}" Margin="0,8,0,0"/>
+                                    <CheckBox Content="{loc:T Key=Settings_Clipboard_WebDav_SaveToHistory}"
+                                              IsChecked="{Binding SaveRemoteClipboardItemsToHistory}" Margin="0,8,0,0"/>
+                                    <Button Content="{loc:T Key=Settings_Clipboard_WebDav_Test}"
+                                            Command="{Binding TestClipboardWebDavConnectionCommand}"
+                                            Style="{StaticResource SettingsButton}" HorizontalAlignment="Left" Margin="0,14,0,0"/>
+                                    <TextBlock Text="{loc:T Key=Settings_Clipboard_WebDav_PrivacyHint}"
+                                               Foreground="{DynamicResource TextSecondary}" FontSize="12" TextWrapping="Wrap" Margin="0,12,0,0"/>
+                                </StackPanel>
+                            </Border>
+
                             <TextBlock Text="{loc:T Key=Settings_Clipboard_Field_PopPasteBehavior}" Style="{StaticResource FieldLabel}"/>
                             <Border Style="{StaticResource SettingsCard}">
                                 <StackPanel>
