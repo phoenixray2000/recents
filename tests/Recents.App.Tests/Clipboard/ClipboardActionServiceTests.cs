@@ -59,6 +59,21 @@ public sealed class ClipboardActionServiceTests
     }
 
     [Fact]
+    public void CreateDataObject_TextIsReusableBySyncWriter()
+    {
+        var actions = new ClipboardActionService(null!);
+        var data = actions.CreateDataObject(new ClipboardItem
+        {
+            Type = ClipboardPayloadType.Text,
+            Hash = "hash",
+            PlainText = "synced text",
+            PreviewText = "synced text"
+        });
+
+        Assert.Equal("synced text", data.GetData(System.Windows.DataFormats.UnicodeText));
+    }
+
+    [Fact]
     public void CreateDataObject_ImageDoesNotExposeFileDropByDefault()
     {
         var directory = Path.Combine(AppContext.BaseDirectory, "clipboard-action-tests", Guid.NewGuid().ToString("N"));

@@ -58,6 +58,14 @@ public sealed class ClipboardActionService
         await _store.MarkUsedAsync(item);
     }
 
+    public Task WriteItemToClipboardWithoutHistoryAsync(ClipboardItem item, TimeSpan suppression)
+    {
+        var data = CreateDataObject(item);
+        _capture?.SuppressNext(item.Hash, suppression);
+        System.Windows.Clipboard.SetDataObject(data, true);
+        return Task.CompletedTask;
+    }
+
     public async Task CopyPlainTextAsync(ClipboardItem item)
     {
         var text = ReadPlainTextForClipboard(item);

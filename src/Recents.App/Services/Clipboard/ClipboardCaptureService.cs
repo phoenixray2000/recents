@@ -41,6 +41,8 @@ public sealed class ClipboardCaptureService : IDisposable
     private DateTime _suppressedHashUntilUtc;
     private bool _listenerAdded;
 
+    public event Func<ClipboardItem, Task>? ItemCaptured;
+
     public ClipboardCaptureService(SettingsService settings, ClipboardStoreService store, StatusHintService? status = null)
     {
         _settings = settings;
@@ -102,7 +104,7 @@ public sealed class ClipboardCaptureService : IDisposable
 
     private async Task CaptureCurrentAsync()
     {
-        if (!_settings.Current.EnableClipboardHistory)
+        if (!_settings.Current.EnableClipboardHistory && !_settings.Current.ClipboardWebDavSync.Enabled)
             return;
         if (_settings.Current.ClipboardPausedUntilUtc is { } paused && paused > DateTime.UtcNow)
             return;
@@ -114,7 +116,7 @@ public sealed class ClipboardCaptureService : IDisposable
         try
         {
             _status?.SetStatus(StatusHintService.AppStatus.ClipboardCapturing);
-            var sourceApp = GetSourceApp();
+            var sourceApp = GetSourceAppName();
             if (ShouldSkipSourceApp(sourceApp.AppName))
                 return;
 
@@ -140,8 +142,13 @@ public sealed class ClipboardCaptureService : IDisposable
                     return;
 
                 item.SourceAppName = sourceApp.AppName;
-                item.SourceAppPath = sourceApp.AppPath;
-                await _store.IngestAsync(item);
+                item.SourceAppPath = await Task.Run(() => ResolveSourceAppPath(sourceApp.ProcessId));
+
+                if (ItemCaptured is not null)
+                    await ItemCaptured.Invoke(item);
+
+                if (_settings.Current.EnableClipboardHistory)
+                    await _store.IngestAsync(item);
             }
         }
         catch (Exception ex)
@@ -251,7 +258,7 @@ public sealed class ClipboardCaptureService : IDisposable
                 return null;
 
             if (!IsLikelyBlackPlaceholder(payload.Bitmap))
-                return StoreImagePayload(payload);
+                return await Task.Run(() => StoreImagePayload(payload));
 
             lastBlackPayload = payload;
             Log.Debug("ClipboardCaptureService: black image placeholder suspected, retrying image capture");
@@ -454,32 +461,43 @@ public sealed class ClipboardCaptureService : IDisposable
         }
     }
 
-    private (string? AppName, string? AppPath) GetSourceApp()
+    private (uint ProcessId, string? AppName) GetSourceAppName()
     {
         try
         {
             var owner = GetClipboardOwner();
             if (owner == IntPtr.Zero)
-                return (null, null);
+                return (0, null);
 
             GetWindowThreadProcessId(owner, out var processId);
             if (processId == 0)
-                return (null, null);
+                return (0, null);
 
             using var process = Process.GetProcessById((int)processId);
             var appName = process.ProcessName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
                 ? process.ProcessName
                 : process.ProcessName + ".exe";
 
-            string? path = null;
-            try { path = process.MainModule?.FileName; }
-            catch { }
-
-            return (appName, path);
+            return (processId, appName);
         }
         catch
         {
-            return (null, null);
+            return (0, null);
+        }
+    }
+
+    private static string? ResolveSourceAppPath(uint processId)
+    {
+        if (processId == 0) return null;
+
+        try
+        {
+            using var process = Process.GetProcessById((int)processId);
+            return process.MainModule?.FileName;
+        }
+        catch
+        {
+            return null;
         }
     }
 
