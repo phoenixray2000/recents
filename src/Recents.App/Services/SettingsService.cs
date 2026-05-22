@@ -44,6 +44,7 @@ public class SettingsService
             EnsureOpenWithSettings(Current);
             EnsureClassificationGroups(Current);
             EnsureClipboardSettings(Current);
+            EnsureClipboardWebDavSyncSettings(Current);
             EnsureFavoriteGroups(Current);
             Save();
             return;
@@ -58,6 +59,7 @@ public class SettingsService
             EnsureOpenWithSettings(Current);
             EnsureClassificationGroups(Current);
             EnsureClipboardSettings(Current);
+            EnsureClipboardWebDavSyncSettings(Current);
             EnsureFavoriteGroups(Current);
             Log.Information("SettingsService: 配置加载成功，Sources={Count}", Current.Sources.Count);
         }
@@ -70,6 +72,7 @@ public class SettingsService
             EnsureOpenWithSettings(Current);
             EnsureClassificationGroups(Current);
             EnsureClipboardSettings(Current);
+            EnsureClipboardWebDavSyncSettings(Current);
             EnsureFavoriteGroups(Current);
             Save();
         }
@@ -216,6 +219,41 @@ public class SettingsService
         settings.PopPasteEnterBehavior = string.IsNullOrWhiteSpace(settings.PopPasteEnterBehavior)
             ? "PasteToActiveApp"
             : settings.PopPasteEnterBehavior;
+    }
+
+    internal static void NormalizeForTests(AppSettings settings)
+    {
+        EnsureClipboardSettings(settings);
+        EnsureClipboardWebDavSyncSettings(settings);
+    }
+
+    private static void EnsureClipboardWebDavSyncSettings(AppSettings settings)
+    {
+        settings.ClipboardWebDavSync ??= new ClipboardWebDavSyncSettings();
+        var sync = settings.ClipboardWebDavSync;
+
+        sync.RemoteDirectoryUrl = NormalizeRemoteDirectoryUrl(sync.RemoteDirectoryUrl);
+        sync.Username = sync.Username?.Trim() ?? string.Empty;
+        sync.ProtectedPassword ??= string.Empty;
+        sync.DeviceName = string.IsNullOrWhiteSpace(sync.DeviceName)
+            ? Environment.MachineName
+            : sync.DeviceName.Trim();
+        sync.DeviceId = Guid.TryParse(sync.DeviceId, out _)
+            ? sync.DeviceId
+            : Guid.NewGuid().ToString("D");
+        sync.PollIntervalSeconds = Math.Clamp(sync.PollIntervalSeconds, 5, 300);
+        sync.TimeoutSeconds = Math.Clamp(sync.TimeoutSeconds, 10, 600);
+        sync.RetryTimes = Math.Clamp(sync.RetryTimes, 0, 5);
+        sync.MaxPayloadBytes = Math.Clamp(sync.MaxPayloadBytes, 1024L * 1024, 1024L * 1024 * 1024);
+    }
+
+    private static string NormalizeRemoteDirectoryUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return string.Empty;
+
+        url = url.Trim();
+        return url.EndsWith("/", StringComparison.Ordinal) ? url : url + "/";
     }
 
     private static void EnsureFavoriteGroups(AppSettings settings)

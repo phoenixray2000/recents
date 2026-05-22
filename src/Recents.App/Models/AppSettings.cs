@@ -105,6 +105,7 @@ public class AppSettings
 
     public bool IgnoreSensitiveText { get; set; } = true;
     public bool IgnoreSystemAndHiddenFilesInClipboard { get; set; } = true;
+    public ClipboardWebDavSyncSettings ClipboardWebDavSync { get; set; } = new();
     public List<string> ClipboardSensitivePatterns { get; set; } = new()
     {
         @"(?i)password\s*[:=]",
