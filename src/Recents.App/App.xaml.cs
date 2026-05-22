@@ -3,6 +3,7 @@ using Microsoft.Web.WebView2.Core;
 using Recents.App.Models;
 using Recents.App.Services;
 using Recents.App.Services.Clipboard;
+using Recents.App.Services.ClipboardSync;
 using Recents.App.Services.Sources;
 using Recents.App.ViewModels;
 using Serilog;
@@ -21,6 +22,7 @@ public partial class App : WpfApp
     private ClipboardDragDropService _clipboardDragDrop = null!;
     private ClipboardCaptureService _clipboardCapture = null!;
     private ClipboardPasteService _clipboardPaste = null!;
+    private ClipboardWebDavSyncService? _clipboardWebDavSync;
     private HotkeyService _hotkey = null!;
     private TrayService _tray = null!;
     private StatusHintService _statusHint = null!;
@@ -107,6 +109,9 @@ public partial class App : WpfApp
             _clipboardCapture = new ClipboardCaptureService(_settings, _clipboardStore, _statusHint);
             _clipboardActions.AttachCapture(_clipboardCapture);
             _clipboardCapture.Initialize(mainWindow);
+            _clipboardWebDavSync = new ClipboardWebDavSyncService(
+                _settings, _clipboardCapture, _clipboardStore, _clipboardActions);
+            _clipboardWebDavSync.Start();
             _clipboardPaste = new ClipboardPasteService(_settings, _clipboardStore, _clipboardActions, WindowGroupFocusService, _statusHint);
             _hotkey.UpdatePopPasteHotkey(_settings.Current.PopPasteHotkey);
             
@@ -385,6 +390,7 @@ public partial class App : WpfApp
         _tray?.Dispose();
         _clipboardPaste?.Dispose();
         ClipboardPasteTarget.StopTracking();
+        _clipboardWebDavSync?.Dispose();
         _clipboardCapture?.Dispose();
         _hotkey?.Dispose();
         CancelSourceRestart();
