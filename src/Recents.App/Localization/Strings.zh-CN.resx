@@ -170,7 +170,7 @@
   <data name="Settings_Clipboard_WebDav_Testing" xml:space="preserve"><value>正在测试 WebDAV 连接……</value></data>
   <data name="Settings_Clipboard_WebDav_TestOk" xml:space="preserve"><value>WebDAV 连接成功</value></data>
   <data name="Settings_Clipboard_WebDav_TestFailed" xml:space="preserve"><value>WebDAV 连接失败</value></data>
-  <data name="Settings_Clipboard_WebDav_PrivacyHint" xml:space="preserve"><value>启用后，当前剪贴板条目会上传到配置的 WebDAV 目录中的 RecentClipboard.json，文件/图片载荷存放在 file/ 子目录。历史、收藏与最近文件不会上传。文件夹以及超过大小上限（默认 20MB）的内容不会同步。</value></data>
+  <data name="Settings_Clipboard_WebDav_PrivacyHint" xml:space="preserve"><value>启用后，当前剪贴板条目会以兼容 SyncClipboard 的 SyncClipboard.json 上传到配置的 WebDAV 目录，载荷存放在 file/ 子目录。历史、收藏与最近文件不会上传。文件夹以及超过大小上限（默认 20MB）的内容不会同步。</value></data>
   <data name="Settings_Clipboard_Pause10" xml:space="preserve"><value>暂停 10 分钟</value></data>
   <data name="Settings_Clipboard_PauseHour" xml:space="preserve"><value>暂停 1 小时</value></data>
   <data name="Settings_Clipboard_Resume" xml:space="preserve"><value>恢复</value></data>

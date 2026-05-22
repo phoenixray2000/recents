@@ -20,9 +20,32 @@ public sealed class ClipboardSyncPayloadServiceTests
 
         var export = await fixture.Service.ExportAsync(item, "device-1", "workstation", 1024 * 1024);
 
-        Assert.Equal("hello", export.Profile.PlainText);
+        Assert.Equal(SyncClipboardProfileType.Text, export.Profile.Type);
+        Assert.Equal("hello", export.Profile.Text);
+        Assert.Equal("2CF24DBA5FB0A30E26E83B2AC5B9E29E1B161E5C1FA7425E73043362938B9824", export.Profile.Hash);
+        Assert.False(export.Profile.HasData);
         Assert.Null(export.PayloadPath);
         Assert.Null(export.Profile.DataName);
+    }
+
+    [Fact]
+    public async Task ExportAsync_HtmlFallsBackToSyncClipboardText()
+    {
+        using var fixture = ClipboardSyncPayloadFixture.Create();
+        var item = new ClipboardItem
+        {
+            Type = ClipboardPayloadType.Html,
+            Hash = "recents-html-hash",
+            PreviewText = "hello",
+            PlainText = "hello"
+        };
+
+        var export = await fixture.Service.ExportAsync(item, "device-1", "workstation", 1024 * 1024);
+
+        Assert.Equal(SyncClipboardProfileType.Text, export.Profile.Type);
+        Assert.Equal("hello", export.Profile.Text);
+        Assert.False(export.Profile.HasData);
+        Assert.Null(export.PayloadPath);
     }
 
     [Fact]
@@ -46,14 +69,15 @@ public sealed class ClipboardSyncPayloadServiceTests
         var imported = await fixture.Service.ImportAsync(export.Profile, export.PayloadPath);
 
         Assert.NotNull(export.PayloadPath);
+        Assert.Equal(SyncClipboardProfileType.Image, export.Profile.Type);
+        Assert.True(export.Profile.HasData);
         Assert.EndsWith(".png", export.Profile.DataName, StringComparison.OrdinalIgnoreCase);
         Assert.True(File.Exists(imported.ImagePath));
         Assert.Equal(ClipboardPayloadType.Image, imported.Type);
-        Assert.Equal("hash-image", imported.Hash);
     }
 
     [Fact]
-    public async Task ExportAndImportAsync_FilesUsesZipAndRestores()
+    public async Task ExportAndImportAsync_SingleFileUsesSyncClipboardFilePayload()
     {
         using var fixture = ClipboardSyncPayloadFixture.Create();
         var filePath = Path.Combine(fixture.SourceDirectory, "note.txt");
@@ -62,7 +86,7 @@ public sealed class ClipboardSyncPayloadServiceTests
         var item = new ClipboardItem
         {
             Type = ClipboardPayloadType.Files,
-            Hash = "hash-files",
+            Hash = "recents-files-hash",
             PreviewText = "note.txt",
             PlainText = filePath,
             FilePaths = [new ClipboardFilePath { Path = filePath, ExistsAtCapture = true }]
@@ -72,10 +96,48 @@ public sealed class ClipboardSyncPayloadServiceTests
         var imported = await fixture.Service.ImportAsync(export.Profile, export.PayloadPath);
 
         Assert.NotNull(export.PayloadPath);
-        Assert.EndsWith(".zip", export.Profile.DataName, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(SyncClipboardProfileType.File, export.Profile.Type);
+        Assert.Equal("note.txt", export.Profile.Text);
+        Assert.Equal("note.txt", export.Profile.DataName);
+        Assert.True(export.Profile.HasData);
+        Assert.False(export.PayloadPath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
         var importedFile = Assert.Single(imported.FilePaths);
         Assert.True(File.Exists(importedFile.Path));
         Assert.Equal("hello", await File.ReadAllTextAsync(importedFile.Path));
+    }
+
+    [Fact]
+    public async Task ExportAndImportAsync_FilesUsesZipAndRestores()
+    {
+        using var fixture = ClipboardSyncPayloadFixture.Create();
+        var filePath = Path.Combine(fixture.SourceDirectory, "note.txt");
+        var otherPath = Path.Combine(fixture.SourceDirectory, "other.txt");
+        await File.WriteAllTextAsync(filePath, "hello");
+        await File.WriteAllTextAsync(otherPath, "world");
+
+        var item = new ClipboardItem
+        {
+            Type = ClipboardPayloadType.Files,
+            Hash = "hash-files",
+            PreviewText = "note.txt",
+            PlainText = filePath,
+            FilePaths =
+            [
+                new ClipboardFilePath { Path = filePath, ExistsAtCapture = true },
+                new ClipboardFilePath { Path = otherPath, ExistsAtCapture = true }
+            ]
+        };
+
+        var export = await fixture.Service.ExportAsync(item, "device-1", "workstation", 1024 * 1024);
+        var imported = await fixture.Service.ImportAsync(export.Profile, export.PayloadPath);
+
+        Assert.NotNull(export.PayloadPath);
+        Assert.Equal(SyncClipboardProfileType.Group, export.Profile.Type);
+        Assert.True(export.Profile.HasData);
+        Assert.EndsWith(".zip", export.Profile.DataName, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(2, imported.FilePaths.Count);
+        Assert.Contains(imported.FilePaths, file => File.Exists(file.Path) && Path.GetFileName(file.Path) == "note.txt");
+        Assert.Contains(imported.FilePaths, file => File.Exists(file.Path) && Path.GetFileName(file.Path) == "other.txt");
     }
 
     [Fact]

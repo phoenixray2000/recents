@@ -24,13 +24,13 @@ public sealed class WebDavClipboardClientTests
         var client = Make(handler, "https://example.com/dav/recents/", "ray",
             WindowsSecretProtector.ProtectToBase64("secret"));
 
-        await client.PutProfileAsync(new RecentClipboardProfile
+        await client.PutProfileAsync(new SyncClipboardProfile
         {
-            DeviceId = "device", Type = ClipboardPayloadType.Text, Hash = "hash", PreviewText = "hi", PlainText = "hi"
+            Type = SyncClipboardProfileType.Text, Hash = "hash", Text = "hi"
         });
 
         var put = Assert.Single(handler.Records, r => r.Method == "PUT" &&
-            r.Uri == "https://example.com/dav/recents/RecentClipboard.json");
+            r.Uri == "https://example.com/dav/recents/SyncClipboard.json");
         Assert.Equal("Basic", put.AuthScheme);
         Assert.NotNull(put.ContentLength);
         Assert.True(put.ContentLength > 0);
@@ -42,10 +42,10 @@ public sealed class WebDavClipboardClientTests
         var handler = new RecordingHandler();
         var client = Make(handler, "https://example.com/dav/recents");
 
-        await client.PutProfileAsync(new RecentClipboardProfile { Type = ClipboardPayloadType.Text, Hash = "h" });
+        await client.PutProfileAsync(new SyncClipboardProfile { Type = SyncClipboardProfileType.Text, Hash = "h" });
 
         Assert.Contains(handler.Records, r =>
-            r.Uri == "https://example.com/dav/recents/RecentClipboard.json");
+            r.Uri == "https://example.com/dav/recents/SyncClipboard.json");
     }
 
     [Fact]

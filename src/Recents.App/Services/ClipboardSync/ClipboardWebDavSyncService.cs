@@ -23,9 +23,8 @@ internal sealed class ClipboardWebDavSyncService : IDisposable
     private WebDavClipboardClient? _client;
     private string _clientFingerprint = string.Empty;
 
-    private string? _lastSyncedHash;
-    private DateTime? _lastAppliedRemoteUtc;
-    private DateTime? _lastLocalCaptureUtc;
+    private string? _lastSyncedRemoteKey;
+    private string? _lastSyncedLocalHash;
     private int _consecutiveFailures;
 
     public ClipboardWebDavSyncService(
@@ -62,7 +61,6 @@ internal sealed class ClipboardWebDavSyncService : IDisposable
         if (!IsConfigured())
             return Task.CompletedTask;
 
-        _lastLocalCaptureUtc = DateTime.UtcNow;
         _ = Task.Run(() => UploadCapturedAsync(item));
         return Task.CompletedTask;
     }
@@ -74,19 +72,23 @@ internal sealed class ClipboardWebDavSyncService : IDisposable
         {
             EnsureClient();
 
-            if (string.Equals(item.Hash, _lastSyncedHash, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(item.Hash, _lastSyncedLocalHash, StringComparison.OrdinalIgnoreCase))
                 return;
 
             var sync = _settings.Current.ClipboardWebDavSync;
+            var export = await _payloads.ExportAsync(item, sync.DeviceId, sync.DeviceName, sync.MaxPayloadBytes)
+                .ConfigureAwait(false);
 
             var remote = await _client!.GetProfileAsync().ConfigureAwait(false);
-            if (remote is not null && string.Equals(remote.Hash, item.Hash, StringComparison.OrdinalIgnoreCase))
+            if (remote is not null &&
+                string.Equals(RemoteContentKey(remote), RemoteContentKey(export.Profile), StringComparison.OrdinalIgnoreCase))
             {
-                _lastSyncedHash = item.Hash;
+                _lastSyncedRemoteKey = RemoteContentKey(remote);
+                _lastSyncedLocalHash = item.Hash;
                 return;
             }
 
-            await UploadWithRetryAsync(item, sync).ConfigureAwait(false);
+            await UploadWithRetryAsync(export, sync).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -98,14 +100,11 @@ internal sealed class ClipboardWebDavSyncService : IDisposable
         }
     }
 
-    private async Task UploadWithRetryAsync(ClipboardItem item, ClipboardWebDavSyncSettings sync)
+    private async Task UploadWithRetryAsync(ClipboardSyncExport export, ClipboardWebDavSyncSettings sync)
     {
-        var export = await _payloads.ExportAsync(item, sync.DeviceId, sync.DeviceName, sync.MaxPayloadBytes)
-            .ConfigureAwait(false);
-
-        if (item.Type != ClipboardPayloadType.Text && export.PayloadPath is null)
+        if (export.Profile.HasData && export.PayloadPath is null)
         {
-            Log.Information("Clipboard item not synced: payload missing or over size limit ({Type})", item.Type);
+            Log.Information("Clipboard item not synced: payload missing or over size limit ({Type})", export.Profile.Type);
             return;
         }
 
@@ -120,7 +119,8 @@ internal sealed class ClipboardWebDavSyncService : IDisposable
                     await _client!.PutPayloadAsync(export.Profile.DataName, export.PayloadPath).ConfigureAwait(false);
 
                 await _client!.PutProfileAsync(export.Profile).ConfigureAwait(false);
-                _lastSyncedHash = item.Hash;
+                _lastSyncedRemoteKey = RemoteContentKey(export.Profile);
+                _lastSyncedLocalHash = export.LocalHash;
                 _consecutiveFailures = 0;
                 return;
             }
@@ -144,20 +144,20 @@ internal sealed class ClipboardWebDavSyncService : IDisposable
             var sync = _settings.Current.ClipboardWebDavSync;
 
             var profile = await _client!.GetProfileAsync().ConfigureAwait(false);
-            if (!ShouldApplyRemote(profile, sync.DeviceId, _lastSyncedHash, _lastAppliedRemoteUtc, _lastLocalCaptureUtc))
+            if (!ShouldApplyRemote(profile, _lastSyncedRemoteKey))
             {
                 _consecutiveFailures = 0;
                 return;
             }
 
             string? payloadPath = null;
-            if (!string.IsNullOrWhiteSpace(profile!.DataName))
+            if (profile!.HasData && !string.IsNullOrWhiteSpace(profile.DataName))
                 payloadPath = await _client.DownloadPayloadAsync(profile.DataName, _downloadDirectory).ConfigureAwait(false);
 
             var item = await _payloads.ImportAsync(profile, payloadPath).ConfigureAwait(false);
 
-            _lastSyncedHash = item.Hash;
-            _lastAppliedRemoteUtc = profile.UpdatedUtc;
+            _lastSyncedRemoteKey = RemoteContentKey(profile);
+            _lastSyncedLocalHash = item.Hash;
 
             await InvokeOnDispatcherAsync(() =>
                 _actions.WriteItemToClipboardWithoutHistoryAsync(item, TimeSpan.FromSeconds(3))).ConfigureAwait(false);
@@ -179,28 +179,24 @@ internal sealed class ClipboardWebDavSyncService : IDisposable
     }
 
     public static bool ShouldApplyRemote(
-        RecentClipboardProfile? profile,
-        string localDeviceId,
-        string? lastSyncedHash,
-        DateTime? lastAppliedRemoteUtc,
-        DateTime? lastLocalCaptureUtc)
+        SyncClipboardProfile? profile,
+        string? lastSyncedRemoteKey)
     {
         if (profile is null)
             return false;
-        if (profile.Schema != RecentClipboardProfile.SchemaVersion)
+        if (profile.Type is SyncClipboardProfileType.Unknown or SyncClipboardProfileType.None)
             return false;
-        if (string.Equals(profile.DeviceId, localDeviceId, StringComparison.OrdinalIgnoreCase))
-            return false;
-        if (!string.IsNullOrWhiteSpace(lastSyncedHash) &&
-            string.Equals(profile.Hash, lastSyncedHash, StringComparison.OrdinalIgnoreCase))
-            return false;
-        if (lastAppliedRemoteUtc is { } applied && profile.UpdatedUtc <= applied)
-            return false;
-        if (lastLocalCaptureUtc is { } localUtc && profile.UpdatedUtc < localUtc)
+        if (!string.IsNullOrWhiteSpace(lastSyncedRemoteKey) &&
+            string.Equals(RemoteContentKey(profile), lastSyncedRemoteKey, StringComparison.OrdinalIgnoreCase))
             return false;
 
         return true;
     }
+
+    public static string RemoteContentKey(SyncClipboardProfile profile) =>
+        !string.IsNullOrWhiteSpace(profile.Hash)
+            ? $"{profile.Type}:{profile.Hash}"
+            : $"{profile.Type}:{profile.Text}:{profile.DataName}:{profile.Size}";
 
     private bool IsConfigured()
     {

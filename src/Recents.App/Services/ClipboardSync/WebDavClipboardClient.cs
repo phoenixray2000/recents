@@ -27,9 +27,9 @@ internal sealed class WebDavClipboardClient
         _baseUri = new Uri(url, UriKind.Absolute);
     }
 
-    public async Task<RecentClipboardProfile?> GetProfileAsync(CancellationToken token = default)
+    public async Task<SyncClipboardProfile?> GetProfileAsync(CancellationToken token = default)
     {
-        using var response = await SendAsync(HttpMethod.Get, RecentClipboardProfile.RemoteProfileFileName, null, token)
+        using var response = await SendAsync(HttpMethod.Get, SyncClipboardProfile.RemoteProfileFileName, null, token)
             .ConfigureAwait(false);
         if (response.StatusCode == HttpStatusCode.NotFound)
             return null;
@@ -41,7 +41,7 @@ internal sealed class WebDavClipboardClient
 
         try
         {
-            return JsonSerializer.Deserialize<RecentClipboardProfile>(json, RecentClipboardProfile.JsonOptions);
+            return JsonSerializer.Deserialize<SyncClipboardProfile>(json, SyncClipboardProfile.JsonOptions);
         }
         catch (JsonException)
         {
@@ -49,11 +49,11 @@ internal sealed class WebDavClipboardClient
         }
     }
 
-    public async Task PutProfileAsync(RecentClipboardProfile profile, CancellationToken token = default)
+    public async Task PutProfileAsync(SyncClipboardProfile profile, CancellationToken token = default)
     {
-        var json = JsonSerializer.Serialize(profile, RecentClipboardProfile.JsonOptions);
+        var json = JsonSerializer.Serialize(profile, SyncClipboardProfile.JsonOptions);
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
-        using var response = await SendAsync(HttpMethod.Put, RecentClipboardProfile.RemoteProfileFileName, content, token)
+        using var response = await SendAsync(HttpMethod.Put, SyncClipboardProfile.RemoteProfileFileName, content, token)
             .ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
     }
@@ -89,7 +89,7 @@ internal sealed class WebDavClipboardClient
     {
         try
         {
-            using var del = await SendAsync(HttpMethod.Delete, RecentClipboardProfile.RemoteFileDirectoryName + "/", null, token)
+            using var del = await SendAsync(HttpMethod.Delete, SyncClipboardProfile.RemoteFileDirectoryName + "/", null, token)
                 .ConfigureAwait(false);
         }
         catch
@@ -112,7 +112,7 @@ internal sealed class WebDavClipboardClient
 
     private async Task EnsurePayloadDirectoryAsync(CancellationToken token)
     {
-        using var response = await SendAsync(MkCol, RecentClipboardProfile.RemoteFileDirectoryName + "/", null, token)
+        using var response = await SendAsync(MkCol, SyncClipboardProfile.RemoteFileDirectoryName + "/", null, token)
             .ConfigureAwait(false);
         if (response.StatusCode is HttpStatusCode.MethodNotAllowed or HttpStatusCode.Conflict or HttpStatusCode.OK
             or HttpStatusCode.Created or HttpStatusCode.NoContent)
@@ -143,7 +143,7 @@ internal sealed class WebDavClipboardClient
         new(_baseUri, relativePath.Replace("\\", "/", StringComparison.Ordinal));
 
     private static string PayloadRelativePath(string dataName) =>
-        RecentClipboardProfile.RemoteFileDirectoryName + "/" + Uri.EscapeDataString(Path.GetFileName(dataName));
+        SyncClipboardProfile.RemoteFileDirectoryName + "/" + Uri.EscapeDataString(Path.GetFileName(dataName));
 
     private void ApplyAuthorization(HttpRequestMessage request)
     {

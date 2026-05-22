@@ -170,7 +170,7 @@
   <data name="Settings_Clipboard_WebDav_Testing" xml:space="preserve"><value>Testing WebDAV connection...</value></data>
   <data name="Settings_Clipboard_WebDav_TestOk" xml:space="preserve"><value>WebDAV connection succeeded</value></data>
   <data name="Settings_Clipboard_WebDav_TestFailed" xml:space="preserve"><value>WebDAV connection failed</value></data>
-  <data name="Settings_Clipboard_WebDav_PrivacyHint" xml:space="preserve"><value>When enabled, the current clipboard item is uploaded to RecentClipboard.json, with file/image payloads under file/, in the configured WebDAV directory. History, favorites, and recent files are never uploaded. Folders, and items larger than the size limit (default 20 MB), are skipped.</value></data>
+  <data name="Settings_Clipboard_WebDav_PrivacyHint" xml:space="preserve"><value>When enabled, the current clipboard item is uploaded as a SyncClipboard-compatible SyncClipboard.json, with payloads under file/, in the configured WebDAV directory. History, favorites, and recent files are never uploaded. Folders, and items larger than the size limit (default 20 MB), are skipped.</value></data>
   <data name="Settings_Clipboard_Pause10" xml:space="preserve"><value>Pause 10 min</value></data>
   <data name="Settings_Clipboard_PauseHour" xml:space="preserve"><value>Pause 1 hour</value></data>
   <data name="Settings_Clipboard_Resume" xml:space="preserve"><value>Resume</value></data>

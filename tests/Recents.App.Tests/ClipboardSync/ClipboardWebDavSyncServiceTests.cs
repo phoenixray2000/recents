@@ -5,59 +5,52 @@ namespace Recents.App.Tests.ClipboardSync;
 
 public sealed class ClipboardWebDavSyncServiceTests
 {
-    private static RecentClipboardProfile Remote(string device, string hash, DateTime updated) =>
-        new() { Schema = RecentClipboardProfile.SchemaVersion, DeviceId = device, Hash = hash, UpdatedUtc = updated };
+    private static SyncClipboardProfile Remote(string hash) =>
+        new() { Type = SyncClipboardProfileType.Text, Hash = hash, Text = "text" };
 
     [Fact]
-    public void ShouldApplyRemote_IgnoresOwnDeviceProfile()
+    public void ShouldApplyRemote_IgnoresNullProfile()
     {
         Assert.False(ClipboardWebDavSyncService.ShouldApplyRemote(
-            Remote("local", "hash", DateTime.UtcNow),
-            localDeviceId: "local", lastSyncedHash: null, lastAppliedRemoteUtc: null, lastLocalCaptureUtc: null));
+            null,
+            lastSyncedRemoteKey: null));
     }
 
     [Fact]
-    public void ShouldApplyRemote_IgnoresSchemaMismatch()
+    public void ShouldApplyRemote_IgnoresUnknownProfileType()
     {
-        var p = Remote("remote", "hash", DateTime.UtcNow);
-        p.Schema = 999;
+        var p = new SyncClipboardProfile { Type = SyncClipboardProfileType.Unknown, Hash = "hash" };
         Assert.False(ClipboardWebDavSyncService.ShouldApplyRemote(
-            p, "local", null, null, null));
+            p, null));
     }
 
     [Fact]
-    public void ShouldApplyRemote_IgnoresSameHash()
+    public void ShouldApplyRemote_IgnoresSameRemoteContentKey()
     {
+        var remote = Remote("same");
+        var key = ClipboardWebDavSyncService.RemoteContentKey(remote);
+
         Assert.False(ClipboardWebDavSyncService.ShouldApplyRemote(
-            Remote("remote", "same", DateTime.UtcNow),
-            "local", lastSyncedHash: "same", lastAppliedRemoteUtc: null, lastLocalCaptureUtc: null));
+            remote,
+            lastSyncedRemoteKey: key));
     }
 
     [Fact]
-    public void ShouldApplyRemote_IgnoresNotNewerThanLastApplied()
+    public void ShouldApplyRemote_UsesTypeAndTextWhenHashIsMissing()
     {
-        var now = DateTime.UtcNow;
+        var remote = new SyncClipboardProfile { Type = SyncClipboardProfileType.Text, Text = "same", Size = 4 };
+        var key = ClipboardWebDavSyncService.RemoteContentKey(remote);
+
         Assert.False(ClipboardWebDavSyncService.ShouldApplyRemote(
-            Remote("remote", "h", now.AddMinutes(-1)),
-            "local", null, lastAppliedRemoteUtc: now, lastLocalCaptureUtc: null));
+            remote,
+            lastSyncedRemoteKey: key));
     }
 
     [Fact]
-    public void ShouldApplyRemote_DoesNotClobberNewerLocal()
+    public void ShouldApplyRemote_AppliesDifferentRemote()
     {
-        var now = DateTime.UtcNow;
-        Assert.False(ClipboardWebDavSyncService.ShouldApplyRemote(
-            Remote("remote", "h", now.AddMinutes(-1)),
-            "local", null, lastAppliedRemoteUtc: null, lastLocalCaptureUtc: now));
-    }
-
-    [Fact]
-    public void ShouldApplyRemote_AppliesNewerDifferentRemote()
-    {
-        var now = DateTime.UtcNow;
         Assert.True(ClipboardWebDavSyncService.ShouldApplyRemote(
-            Remote("remote", "remote-hash", now),
-            "local", lastSyncedHash: "local-hash", lastAppliedRemoteUtc: now.AddMinutes(-5),
-            lastLocalCaptureUtc: now.AddMinutes(-10)));
+            Remote("remote-hash"),
+            lastSyncedRemoteKey: "Text:local-hash"));
     }
 }
