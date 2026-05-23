@@ -378,6 +378,32 @@ public sealed class ClipboardSyncPayloadServiceTests
     }
 
     [Fact]
+    public async Task ExportAsync_GroupHashMatchesSyncClipboardEntryFormat()
+    {
+        using var fixture = ClipboardSyncPayloadFixture.Create();
+        var folder = Path.Combine(fixture.SourceDirectory, "sub");
+        Directory.CreateDirectory(folder);
+        await File.WriteAllTextAsync(Path.Combine(folder, "inner.txt"), "x");
+        var filePath = Path.Combine(fixture.SourceDirectory, "note.txt");
+        await File.WriteAllTextAsync(filePath, "hello");
+
+        var item = new ClipboardItem
+        {
+            Type = ClipboardPayloadType.Files,
+            Hash = "hash-group-compatible",
+            FilePaths =
+            [
+                new ClipboardFilePath { Path = folder, IsFolder = true, ExistsAtCapture = true },
+                new ClipboardFilePath { Path = filePath, ExistsAtCapture = true }
+            ]
+        };
+
+        var export = await fixture.Service.ExportAsync(item, "device-1", "ws", 1024 * 1024);
+
+        Assert.Equal(ExpectedSyncClipboardGroupHash(fixture.SourceDirectory), export.Profile.Hash);
+    }
+
+    [Fact]
     public async Task ImportAsync_GroupRejectsZipEntryOutsideTargetDirectory()
     {
         using var fixture = ClipboardSyncPayloadFixture.Create();
@@ -489,6 +515,55 @@ public sealed class ClipboardSyncPayloadServiceTests
         using var output = new MemoryStream();
         encoder.Save(output);
         return output.ToArray();
+    }
+
+    private static string ExpectedSyncClipboardGroupHash(string root)
+    {
+        _ = root;
+        var innerHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes("x")));
+        var noteHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes("hello")));
+        var lines = new[]
+        {
+            "note.txt|5|" + noteHash,
+            "sub/",
+            "sub/inner.txt|1|" + innerHash
+        };
+
+        var ordered = lines
+            .Select(line => new { Line = line, Key = Encoding.UTF8.GetBytes(line.Split('|')[0]) })
+            .OrderBy(item => item.Key, ByteArrayComparerForTests.Instance)
+            .Select(item => item.Line);
+
+        using var incremental = System.Security.Cryptography.IncrementalHash.CreateHash(System.Security.Cryptography.HashAlgorithmName.SHA256);
+        foreach (var line in ordered)
+            incremental.AppendData(Encoding.UTF8.GetBytes(line));
+
+        return Convert.ToHexString(incremental.GetHashAndReset());
+    }
+
+    private sealed class ByteArrayComparerForTests : IComparer<byte[]>
+    {
+        public static readonly ByteArrayComparerForTests Instance = new();
+
+        public int Compare(byte[]? x, byte[]? y)
+        {
+            if (ReferenceEquals(x, y))
+                return 0;
+            if (x is null)
+                return -1;
+            if (y is null)
+                return 1;
+
+            var length = Math.Min(x.Length, y.Length);
+            for (var i = 0; i < length; i++)
+            {
+                var diff = x[i].CompareTo(y[i]);
+                if (diff != 0)
+                    return diff;
+            }
+
+            return x.Length.CompareTo(y.Length);
+        }
     }
 
     private static readonly byte[] PngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];

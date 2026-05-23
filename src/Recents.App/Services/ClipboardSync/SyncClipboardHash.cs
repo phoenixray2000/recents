@@ -16,19 +16,29 @@ internal static class SyncClipboardHash
         return Sha256Hex(Utf8NoBom.GetBytes($"{dataName}|{contentHash.ToUpperInvariant()}"));
     }
 
-    public static async Task<string> ForGroupAsync(IReadOnlyList<string> filePaths, CancellationToken token = default)
+    public static async Task<string> ForGroupAsync(IReadOnlyList<string> inputPaths, CancellationToken token = default)
     {
         var entries = new List<GroupEntry>();
-        foreach (var path in filePaths)
+        if (inputPaths.Count == 0)
+            return Sha256Hex([]);
+
+        var root = ResolveRootPath(inputPaths[0]);
+        foreach (var path in inputPaths)
         {
             token.ThrowIfCancellationRequested();
-            if (!File.Exists(path))
-                continue;
 
-            var fileName = Path.GetFileName(path);
-            var length = new FileInfo(path).Length;
-            var contentHash = await ForFileContentAsync(path, token).ConfigureAwait(false);
-            entries.Add(new GroupEntry(fileName, length, contentHash.ToUpperInvariant()));
+            if (Directory.Exists(path))
+            {
+                AddDirectoryEntry(entries, root, path);
+                foreach (var directory in Directory.GetDirectories(path, "*", SearchOption.AllDirectories))
+                    AddDirectoryEntry(entries, root, directory);
+                foreach (var file in Directory.GetFiles(path, "*", SearchOption.AllDirectories))
+                    await AddFileEntryAsync(entries, root, file, token).ConfigureAwait(false);
+            }
+            else if (File.Exists(path))
+            {
+                await AddFileEntryAsync(entries, root, path, token).ConfigureAwait(false);
+            }
         }
 
         var ordered = entries
@@ -38,11 +48,51 @@ internal static class SyncClipboardHash
         using var incremental = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         foreach (var entry in ordered)
         {
-            var line = $"F|{entry.Entry.Name}|{entry.Entry.Length}|{entry.Entry.ContentHash}\0";
+            var line = entry.Entry.IsDirectory
+                ? entry.Entry.Name
+                : $"{entry.Entry.Name}|{entry.Entry.Length}|{entry.Entry.ContentHash}";
             incremental.AppendData(Utf8NoBom.GetBytes(line));
         }
 
         return Convert.ToHexString(incremental.GetHashAndReset());
+    }
+
+    private static string ResolveRootPath(string firstPath)
+    {
+        var basePath = Directory.Exists(firstPath)
+            ? Path.TrimEndingDirectorySeparator(firstPath)
+            : firstPath;
+        return Path.GetDirectoryName(basePath) ?? Path.GetPathRoot(basePath) ?? Directory.GetCurrentDirectory();
+    }
+
+    private static void AddDirectoryEntry(List<GroupEntry> entries, string root, string path)
+    {
+        var name = BuildEntryName(root, path, isDirectory: true);
+        if (!string.IsNullOrWhiteSpace(name))
+            entries.Add(new GroupEntry(name, true, 0, string.Empty));
+    }
+
+    private static async Task AddFileEntryAsync(List<GroupEntry> entries, string root, string path, CancellationToken token)
+    {
+        var name = BuildEntryName(root, path, isDirectory: false);
+        if (string.IsNullOrWhiteSpace(name))
+            return;
+
+        var length = new FileInfo(path).Length;
+        var contentHash = await ForFileContentAsync(path, token).ConfigureAwait(false);
+        entries.Add(new GroupEntry(name, false, length, contentHash.ToUpperInvariant()));
+    }
+
+    private static string BuildEntryName(string root, string path, bool isDirectory)
+    {
+        var relative = Path.GetRelativePath(root, path)
+            .Replace(Path.DirectorySeparatorChar, '/')
+            .Replace(Path.AltDirectorySeparatorChar, '/')
+            .Trim('/');
+        if (string.IsNullOrWhiteSpace(relative) || relative == ".")
+            return string.Empty;
+
+        return isDirectory ? relative + "/" : relative;
     }
 
     private static async Task<string> ForFileContentAsync(string path, CancellationToken token)
@@ -60,7 +110,7 @@ internal static class SyncClipboardHash
 
     private static string Sha256Hex(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
 
-    private sealed record GroupEntry(string Name, long Length, string ContentHash);
+    private sealed record GroupEntry(string Name, bool IsDirectory, long Length, string ContentHash);
 
     private sealed class ByteArrayComparer : IComparer<byte[]>
     {
