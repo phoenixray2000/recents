@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Collections.Specialized;
 using System.IO;
 using System.Diagnostics;
@@ -16,6 +17,7 @@ namespace Recents.App.Services.Clipboard;
 public sealed class ClipboardCaptureService : IDisposable
 {
     private const int WM_CLIPBOARDUPDATE = 0x031D;
+    private const string DeviceIndependentBitmapFormat = "DeviceIndependentBitmap";
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool AddClipboardFormatListener(IntPtr hwnd);
@@ -270,7 +272,7 @@ public sealed class ClipboardCaptureService : IDisposable
         return null;
     }
 
-    private ClipboardImagePayload? TryReadImagePayload(System.Windows.IDataObject data)
+    internal static ClipboardImagePayload? TryReadImagePayload(System.Windows.IDataObject data)
     {
         var pngBytes = TryReadRawImageBytes(data, "PNG")
             ?? TryReadRawImageBytes(data, "image/png");
@@ -280,6 +282,14 @@ public sealed class ClipboardCaptureService : IDisposable
             var bitmap = DecodeBitmap(pngBytes);
             if (bitmap is not null)
                 return new ClipboardImagePayload(bitmap, pngBytes);
+        }
+
+        var dibBytes = TryReadRawImageBytes(data, DeviceIndependentBitmapFormat);
+        if (dibBytes is { Length: > 0 })
+        {
+            var bitmap = DecodeDibBitmap(dibBytes);
+            if (bitmap is not null)
+                return new ClipboardImagePayload(bitmap, EncodePng(bitmap));
         }
 
         if (data.GetData(WpfDataFormats.Bitmap) is not BitmapSource source)
@@ -405,9 +415,10 @@ public sealed class ClipboardCaptureService : IDisposable
         return ms.ToArray();
     }
 
-    private static bool HasImageData(System.Windows.IDataObject data) =>
+    internal static bool HasImageData(System.Windows.IDataObject data) =>
         data.GetDataPresent("PNG") ||
         data.GetDataPresent("image/png") ||
+        data.GetDataPresent(DeviceIndependentBitmapFormat) ||
         data.GetDataPresent(WpfDataFormats.Bitmap);
 
     internal static bool HasMeaningfulHtmlData(System.Windows.IDataObject data)
@@ -561,6 +572,51 @@ public sealed class ClipboardCaptureService : IDisposable
         }
     }
 
+    private static BitmapSource? DecodeDibBitmap(byte[] dibBytes)
+    {
+        var bmpBytes = WrapDibAsBmp(dibBytes);
+        return bmpBytes is null ? null : DecodeBitmap(bmpBytes);
+    }
+
+    private static byte[]? WrapDibAsBmp(byte[] dibBytes)
+    {
+        if (dibBytes.Length < 16)
+            return null;
+
+        var headerSize = BinaryPrimitives.ReadInt32LittleEndian(dibBytes.AsSpan(0, 4));
+        if (headerSize < 12 || headerSize > dibBytes.Length)
+            return null;
+
+        long pixelOffset = 14L + headerSize;
+        if (headerSize >= 40 && dibBytes.Length >= 40)
+        {
+            var bitCount = BinaryPrimitives.ReadUInt16LittleEndian(dibBytes.AsSpan(14, 2));
+            var compression = BinaryPrimitives.ReadUInt32LittleEndian(dibBytes.AsSpan(16, 4));
+            var colorsUsed = BinaryPrimitives.ReadUInt32LittleEndian(dibBytes.AsSpan(32, 4));
+            var colorTableEntries = bitCount <= 8
+                ? (colorsUsed == 0 ? 1u << bitCount : colorsUsed)
+                : 0u;
+            var maskBytes = headerSize == 40 && (compression == 3 || compression == 6)
+                ? compression == 6 ? 16 : 12
+                : 0;
+            if (colorTableEntries > int.MaxValue / 4)
+                return null;
+
+            pixelOffset += maskBytes + (long)colorTableEntries * 4;
+        }
+
+        if (pixelOffset > int.MaxValue || pixelOffset > 14L + dibBytes.Length)
+            return null;
+
+        var bmpBytes = new byte[14 + dibBytes.Length];
+        bmpBytes[0] = (byte)'B';
+        bmpBytes[1] = (byte)'M';
+        BinaryPrimitives.WriteInt32LittleEndian(bmpBytes.AsSpan(2, 4), bmpBytes.Length);
+        BinaryPrimitives.WriteInt32LittleEndian(bmpBytes.AsSpan(10, 4), (int)pixelOffset);
+        Buffer.BlockCopy(dibBytes, 0, bmpBytes, 14, dibBytes.Length);
+        return bmpBytes;
+    }
+
     private static BitmapSource FreezeOrClone(BitmapSource source)
     {
         if (source.IsFrozen)
@@ -686,5 +742,5 @@ public sealed class ClipboardCaptureService : IDisposable
         _source?.RemoveHook(WndProc);
     }
 
-    private sealed record ClipboardImagePayload(BitmapSource Bitmap, byte[] PngBytes);
+    internal sealed record ClipboardImagePayload(BitmapSource Bitmap, byte[] PngBytes);
 }

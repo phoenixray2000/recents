@@ -42,6 +42,22 @@ public sealed class ClipboardCaptureServiceTests
         Assert.True(ClipboardCaptureService.ShouldCaptureRtfBeforeImage(data));
     }
 
+    [Fact]
+    public void TryReadImagePayload_DecodesDeviceIndependentBitmap()
+    {
+        var data = new DataObject();
+        data.SetData("DeviceIndependentBitmap", BuildDibBytes());
+
+        Assert.True(ClipboardCaptureService.HasImageData(data));
+
+        var payload = ClipboardCaptureService.TryReadImagePayload(data);
+
+        Assert.NotNull(payload);
+        Assert.Equal(1, payload.Bitmap.PixelWidth);
+        Assert.Equal(1, payload.Bitmap.PixelHeight);
+        Assert.NotEmpty(payload.PngBytes);
+    }
+
     private static BitmapSource CreateBitmap()
     {
         var bitmap = BitmapSource.Create(
@@ -55,6 +71,23 @@ public sealed class ClipboardCaptureServiceTests
             4);
         bitmap.Freeze();
         return bitmap;
+    }
+
+    private static byte[] BuildDibBytes()
+    {
+        var bytes = new byte[44];
+        BitConverter.GetBytes(40).CopyTo(bytes, 0);
+        BitConverter.GetBytes(1).CopyTo(bytes, 4);
+        BitConverter.GetBytes(1).CopyTo(bytes, 8);
+        BitConverter.GetBytes((short)1).CopyTo(bytes, 12);
+        BitConverter.GetBytes((short)32).CopyTo(bytes, 14);
+        BitConverter.GetBytes(0).CopyTo(bytes, 16);
+        BitConverter.GetBytes(4).CopyTo(bytes, 20);
+        bytes[40] = 0x11;
+        bytes[41] = 0x22;
+        bytes[42] = 0x33;
+        bytes[43] = 0xFF;
+        return bytes;
     }
 
     private static string BuildCfHtml(string fragment)

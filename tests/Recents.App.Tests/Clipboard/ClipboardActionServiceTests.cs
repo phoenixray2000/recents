@@ -74,7 +74,7 @@ public sealed class ClipboardActionServiceTests
     }
 
     [Fact]
-    public void CreateDataObject_ImageDoesNotExposeFileDropByDefault()
+    public void CreateDataObject_ImageIncludesBitmapFileDropAndHtmlFormats()
     {
         var directory = Path.Combine(AppContext.BaseDirectory, "clipboard-action-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -92,7 +92,17 @@ public sealed class ClipboardActionServiceTests
             });
 
             Assert.True(data.GetDataPresent(System.Windows.DataFormats.Bitmap));
-            Assert.False(data.GetDataPresent(System.Windows.DataFormats.FileDrop));
+            Assert.True(data.GetDataPresent(System.Windows.DataFormats.FileDrop));
+            Assert.True(data.GetDataPresent(System.Windows.DataFormats.Html));
+            Assert.True(data.GetDataPresent("QQ_Unicode_RichEdit_Format"));
+
+            var files = data.GetFileDropList();
+            Assert.Single(files.Cast<string>());
+            Assert.Equal(imagePath, files[0]);
+
+            var html = Assert.IsType<string>(data.GetData(System.Windows.DataFormats.Html));
+            Assert.Contains("Version:0.9", html);
+            Assert.Contains(new Uri(imagePath).AbsoluteUri, html);
         }
         finally
         {

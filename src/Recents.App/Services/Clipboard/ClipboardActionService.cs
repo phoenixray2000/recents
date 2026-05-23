@@ -232,6 +232,7 @@ public sealed class ClipboardActionService
                     var bitmap = LoadBitmap(item.ImagePath);
                     if (bitmap is not null)
                         data.SetImage(bitmap);
+                    SetImageCompatibilityFormats(data, item.ImagePath);
                 }
                 break;
 
@@ -360,6 +361,40 @@ public sealed class ClipboardActionService
             return null;
         }
     }
+
+    private static void SetImageCompatibilityFormats(System.Windows.DataObject data, string imagePath)
+    {
+        var collection = new StringCollection { imagePath };
+        data.SetFileDropList(collection);
+        data.SetData(WpfDataFormats.Html, BuildImageHtml(imagePath));
+        data.SetData("QQ_Unicode_RichEdit_Format",
+            System.Text.Encoding.UTF8.GetBytes(BuildQqImageFormat(imagePath)));
+    }
+
+    private static string BuildImageHtml(string imagePath)
+    {
+        var uri = new Uri(imagePath);
+        return NormalizeHtmlForClipboard($@"<img src=""{uri}"">");
+    }
+
+    private const string QqImageFormatTemplate = """
+        <QQRichEditFormat>
+        <Info version="1001">
+        </Info>
+        <EditElement type="1" imagebiztype="0" textsummary="" filepath="<<<<<<" shortcut="">
+        </EditElement>
+        </QQRichEditFormat>
+        """;
+
+    private static string BuildQqImageFormat(string imagePath) =>
+        QqImageFormatTemplate.Replace("<<<<<<", EscapeXmlAttribute(imagePath), StringComparison.Ordinal);
+
+    private static string EscapeXmlAttribute(string value) =>
+        value
+            .Replace("&", "&amp;", StringComparison.Ordinal)
+            .Replace("\"", "&quot;", StringComparison.Ordinal)
+            .Replace("<", "&lt;", StringComparison.Ordinal)
+            .Replace(">", "&gt;", StringComparison.Ordinal);
 
     private static string? ReadFirstExisting(params string?[] paths)
     {
