@@ -38,6 +38,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- 剪贴板 HEIC/HEIF 图片归一化 -->
+    <PackageReference Include="Magick.NET-Q16-x64" Version="14.13.1" />
     <!-- §6.18 SQLite 索引 -->
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.14" />
     <!-- §6.4 .lnk 纯托管解析，禁用 WSH IWshRuntimeLibrary -->

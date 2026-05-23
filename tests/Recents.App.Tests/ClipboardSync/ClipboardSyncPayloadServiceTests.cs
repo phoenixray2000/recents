@@ -1,5 +1,7 @@
 using Recents.App.Models;
 using Recents.App.Services.ClipboardSync;
+using System.Buffers.Binary;
+using System.Text;
 using Xunit;
 
 namespace Recents.App.Tests.ClipboardSync;
@@ -74,6 +76,71 @@ public sealed class ClipboardSyncPayloadServiceTests
         Assert.EndsWith(".png", export.Profile.DataName, StringComparison.OrdinalIgnoreCase);
         Assert.True(File.Exists(imported.ImagePath));
         Assert.Equal(ClipboardPayloadType.Image, imported.Type);
+    }
+
+    [Fact]
+    public async Task ImportAsync_ImageNormalizesRemotePngPayload()
+    {
+        using var fixture = ClipboardSyncPayloadFixture.Create();
+        var payloadPath = Path.Combine(fixture.SourceDirectory, "Clipboard 2026年5月23日 22.59.png");
+        var remoteBytes = AddPngChunk(Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="),
+            "caBX",
+            Encoding.ASCII.GetBytes("mobile-extra"));
+        await File.WriteAllBytesAsync(payloadPath, remoteBytes);
+
+        var imported = await fixture.Service.ImportAsync(new SyncClipboardProfile
+        {
+            Type = SyncClipboardProfileType.Image,
+            Hash = "remote-image-hash",
+            Text = Path.GetFileName(payloadPath),
+            HasData = true,
+            DataName = Path.GetFileName(payloadPath),
+            Size = remoteBytes.Length
+        }, payloadPath);
+
+        Assert.Equal(ClipboardPayloadType.Image, imported.Type);
+        Assert.NotNull(imported.ImagePath);
+        Assert.EndsWith(".png", imported.ImagePath, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, imported.ImageWidth);
+        Assert.Equal(1, imported.ImageHeight);
+
+        var normalized = await File.ReadAllBytesAsync(imported.ImagePath);
+        Assert.False(ContainsSequence(normalized, Encoding.ASCII.GetBytes("caBX")));
+        Assert.NotEqual(remoteBytes, normalized);
+    }
+
+    [Fact]
+    public async Task ImportAsync_ImageNormalizesHeicPayloadWhenFixtureProvided()
+    {
+        var heicFixture = Environment.GetEnvironmentVariable("RECENTS_HEIC_FIXTURE");
+        if (string.IsNullOrWhiteSpace(heicFixture) || !File.Exists(heicFixture))
+            return;
+
+        using var fixture = ClipboardSyncPayloadFixture.Create();
+        var payloadPath = Path.Combine(fixture.SourceDirectory, "iphone.heic");
+        var remoteBytes = await File.ReadAllBytesAsync(heicFixture);
+        await File.WriteAllBytesAsync(payloadPath, remoteBytes);
+
+        var imported = await fixture.Service.ImportAsync(new SyncClipboardProfile
+        {
+            Type = SyncClipboardProfileType.Image,
+            Hash = "remote-heic-hash",
+            Text = "iphone.heic",
+            HasData = true,
+            DataName = "iphone.heic",
+            Size = remoteBytes.Length
+        }, payloadPath);
+
+        Assert.Equal(ClipboardPayloadType.Image, imported.Type);
+        Assert.NotNull(imported.ImagePath);
+        Assert.EndsWith(".png", imported.ImagePath, StringComparison.OrdinalIgnoreCase);
+        Assert.True(imported.ImageWidth > 0);
+        Assert.True(imported.ImageHeight > 0);
+
+        var normalized = await File.ReadAllBytesAsync(imported.ImagePath);
+        Assert.True(normalized.AsSpan(0, PngSignature.Length).SequenceEqual(PngSignature));
+        Assert.NotEqual(remoteBytes, normalized);
     }
 
     [Fact]
@@ -200,4 +267,50 @@ public sealed class ClipboardSyncPayloadServiceTests
             try { Directory.Delete(_root, recursive: true); } catch { }
         }
     }
+
+    private static byte[] AddPngChunk(byte[] pngBytes, string chunkType, byte[] chunkData)
+    {
+        var typeBytes = Encoding.ASCII.GetBytes(chunkType);
+        var insertAt = 8 + 4 + 4 + BinaryPrimitives.ReadInt32BigEndian(pngBytes.AsSpan(8, 4)) + 4;
+        using var output = new MemoryStream();
+        output.Write(pngBytes, 0, insertAt);
+
+        Span<byte> length = stackalloc byte[4];
+        BinaryPrimitives.WriteInt32BigEndian(length, chunkData.Length);
+        output.Write(length);
+        output.Write(typeBytes);
+        output.Write(chunkData);
+
+        Span<byte> crc = stackalloc byte[4];
+        BinaryPrimitives.WriteUInt32BigEndian(crc, Crc32(typeBytes, chunkData));
+        output.Write(crc);
+        output.Write(pngBytes, insertAt, pngBytes.Length - insertAt);
+        return output.ToArray();
+    }
+
+    private static uint Crc32(byte[] typeBytes, byte[] data)
+    {
+        var crc = 0xFFFFFFFFu;
+        foreach (var b in typeBytes.Concat(data))
+        {
+            crc ^= b;
+            for (var i = 0; i < 8; i++)
+                crc = (crc & 1) == 1 ? (crc >> 1) ^ 0xEDB88320u : crc >> 1;
+        }
+
+        return ~crc;
+    }
+
+    private static bool ContainsSequence(byte[] bytes, byte[] sequence)
+    {
+        for (var i = 0; i <= bytes.Length - sequence.Length; i++)
+        {
+            if (bytes.AsSpan(i, sequence.Length).SequenceEqual(sequence))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static readonly byte[] PngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 }

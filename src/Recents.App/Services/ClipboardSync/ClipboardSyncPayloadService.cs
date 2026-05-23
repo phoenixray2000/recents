@@ -1,5 +1,8 @@
 using System.IO;
 using System.IO.Compression;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using ImageMagick;
 using Recents.App.Models;
 using Recents.App.Services.Clipboard;
 
@@ -223,9 +226,141 @@ internal sealed class ClipboardSyncPayloadService
 
         var itemDirectory = Path.Combine(_incomingDirectory, SafeName(profile.Hash));
         Directory.CreateDirectory(itemDirectory);
-        item.ImagePath = await CopyIncomingAsync(payloadPath, itemDirectory, Path.GetFileName(profile.DataName ?? "remote.png")).ConfigureAwait(false);
-        item.Hash = ClipboardHash.ForImage(await File.ReadAllBytesAsync(item.ImagePath).ConfigureAwait(false));
+        var image = await ImportIncomingImageAsync(
+            payloadPath,
+            itemDirectory,
+            Path.GetFileName(profile.DataName ?? profile.Text ?? "remote.png")).ConfigureAwait(false);
+        item.ImagePath = image.Path;
+        item.Hash = ClipboardHash.ForImage(image.Bytes);
+        item.SizeBytes = image.Bytes.LongLength;
+        item.ImageWidth = image.Width;
+        item.ImageHeight = image.Height;
+        if (image.Width.HasValue && image.Height.HasValue && string.IsNullOrWhiteSpace(item.PreviewText))
+            item.PreviewText = $"Screenshot {image.Width}x{image.Height}";
         return item;
+    }
+
+    private static async Task<ImportedImagePayload> ImportIncomingImageAsync(
+        string payloadPath,
+        string itemDirectory,
+        string fileName)
+    {
+        var sourceBytes = await File.ReadAllBytesAsync(payloadPath).ConfigureAwait(false);
+        if (TryNormalizeImageBytes(sourceBytes, out var pngBytes, out var width, out var height))
+        {
+            var normalizedName = NormalizedImageFileName(fileName);
+            var target = Path.Combine(itemDirectory, normalizedName);
+            await WriteBytesAsync(target, pngBytes).ConfigureAwait(false);
+            return new ImportedImagePayload(target, pngBytes, width, height);
+        }
+
+        var copied = await CopyIncomingAsync(payloadPath, itemDirectory, Path.GetFileName(fileName)).ConfigureAwait(false);
+        return new ImportedImagePayload(copied, sourceBytes, null, null);
+    }
+
+    private static bool TryNormalizeImageBytes(
+        byte[] sourceBytes,
+        out byte[] pngBytes,
+        out int width,
+        out int height)
+    {
+        if (TryNormalizeImageBytesWithWpf(sourceBytes, out pngBytes, out width, out height))
+            return true;
+
+        return TryNormalizeImageBytesWithMagick(sourceBytes, out pngBytes, out width, out height);
+    }
+
+    private static bool TryNormalizeImageBytesWithWpf(
+        byte[] sourceBytes,
+        out byte[] pngBytes,
+        out int width,
+        out int height)
+    {
+        pngBytes = [];
+        width = 0;
+        height = 0;
+
+        try
+        {
+            using var input = new MemoryStream(sourceBytes);
+            var decoder = BitmapDecoder.Create(
+                input,
+                BitmapCreateOptions.PreservePixelFormat,
+                BitmapCacheOption.OnLoad);
+            var frame = decoder.Frames[0];
+            width = frame.PixelWidth;
+            height = frame.PixelHeight;
+
+            var clean = CopyPixelsWithoutMetadata(frame);
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(clean));
+            using var output = new MemoryStream();
+            encoder.Save(output);
+            pngBytes = output.ToArray();
+            return pngBytes.Length > 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryNormalizeImageBytesWithMagick(
+        byte[] sourceBytes,
+        out byte[] pngBytes,
+        out int width,
+        out int height)
+    {
+        pngBytes = [];
+        width = 0;
+        height = 0;
+
+        try
+        {
+            using var image = new MagickImage(sourceBytes);
+            image.AutoOrient();
+            image.Strip();
+            width = checked((int)image.Width);
+            height = checked((int)image.Height);
+            pngBytes = image.ToByteArray(MagickFormat.Png);
+            return pngBytes.Length > 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static BitmapSource CopyPixelsWithoutMetadata(BitmapSource source)
+    {
+        var bitmap = source.Format == PixelFormats.Bgra32
+            ? source
+            : new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
+        bitmap.Freeze();
+
+        var stride = checked((bitmap.PixelWidth * bitmap.Format.BitsPerPixel + 7) / 8);
+        var pixels = new byte[checked(stride * bitmap.PixelHeight)];
+        bitmap.CopyPixels(pixels, stride, 0);
+        var copy = BitmapSource.Create(
+            bitmap.PixelWidth,
+            bitmap.PixelHeight,
+            bitmap.DpiX,
+            bitmap.DpiY,
+            bitmap.Format,
+            null,
+            pixels,
+            stride);
+        copy.Freeze();
+        return copy;
+    }
+
+    private static string NormalizedImageFileName(string fileName)
+    {
+        var baseName = Path.GetFileNameWithoutExtension(fileName);
+        if (string.IsNullOrWhiteSpace(baseName))
+            baseName = "remote";
+
+        return baseName + ".png";
     }
 
     private async Task<ClipboardItem> ImportFileAsync(SyncClipboardProfile profile, string? payloadPath)
@@ -317,8 +452,16 @@ internal sealed class ClipboardSyncPayloadService
         await input.CopyToAsync(output);
     }
 
+    private static async Task WriteBytesAsync(string target, byte[] bytes)
+    {
+        await using var output = File.Create(target);
+        await output.WriteAsync(bytes).ConfigureAwait(false);
+    }
+
     private static string SafeName(string value) =>
         string.Concat(value.Where(char.IsLetterOrDigit)).ToLowerInvariant() is { Length: > 0 } safe
             ? safe
             : Guid.NewGuid().ToString("N");
+
+    private sealed record ImportedImagePayload(string Path, byte[] Bytes, int? Width, int? Height);
 }
