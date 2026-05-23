@@ -1,6 +1,7 @@
 using Recents.App.Models;
 using Recents.App.Services.ClipboardSync;
 using System.Buffers.Binary;
+using System.IO.Compression;
 using System.Text;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -340,24 +341,64 @@ public sealed class ClipboardSyncPayloadServiceTests
     }
 
     [Fact]
-    public async Task ExportAsync_ExcludesFolders()
+    public async Task ExportAndImportAsync_GroupIncludesFolderTree()
     {
         using var fixture = ClipboardSyncPayloadFixture.Create();
         var folder = Path.Combine(fixture.SourceDirectory, "sub");
         Directory.CreateDirectory(folder);
         await File.WriteAllTextAsync(Path.Combine(folder, "inner.txt"), "x");
+        var filePath = Path.Combine(fixture.SourceDirectory, "note.txt");
+        await File.WriteAllTextAsync(filePath, "hello");
 
         var item = new ClipboardItem
         {
             Type = ClipboardPayloadType.Files,
-            Hash = "hash-folder",
-            FilePaths = [new ClipboardFilePath { Path = folder, IsFolder = true, ExistsAtCapture = true }]
+            Hash = "hash-folder-group",
+            PreviewText = "sub + 1 more",
+            FilePaths =
+            [
+                new ClipboardFilePath { Path = folder, IsFolder = true, ExistsAtCapture = true },
+                new ClipboardFilePath { Path = filePath, ExistsAtCapture = true }
+            ]
         };
 
         var export = await fixture.Service.ExportAsync(item, "device-1", "ws", 1024 * 1024);
+        var imported = await fixture.Service.ImportAsync(export.Profile, export.PayloadPath);
 
-        Assert.Null(export.PayloadPath);
-        Assert.Null(export.Profile.DataName);
+        Assert.Equal(SyncClipboardProfileType.Group, export.Profile.Type);
+        Assert.NotNull(export.PayloadPath);
+        Assert.EndsWith(".zip", export.Profile.DataName, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("sub", export.Profile.Text);
+        Assert.Contains("note.txt", export.Profile.Text);
+
+        Assert.Equal(2, imported.FilePaths.Count);
+        var importedFolder = Assert.Single(imported.FilePaths, path => path.IsFolder);
+        Assert.True(File.Exists(Path.Combine(importedFolder.Path, "inner.txt")));
+        Assert.Contains(imported.FilePaths, path => File.Exists(path.Path) && Path.GetFileName(path.Path) == "note.txt");
+    }
+
+    [Fact]
+    public async Task ImportAsync_GroupRejectsZipEntryOutsideTargetDirectory()
+    {
+        using var fixture = ClipboardSyncPayloadFixture.Create();
+        var zipPath = Path.Combine(fixture.SourceDirectory, "bad.zip");
+        using (var zip = ZipFile.Open(zipPath, ZipArchiveMode.Create))
+        {
+            var entry = zip.CreateEntry("../escape.txt");
+            await using var stream = entry.Open();
+            await using var writer = new StreamWriter(stream, Encoding.UTF8);
+            await writer.WriteAsync("bad");
+        }
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Service.ImportAsync(new SyncClipboardProfile
+        {
+            Type = SyncClipboardProfileType.Group,
+            Hash = "bad-group-hash",
+            Text = "escape.txt",
+            HasData = true,
+            DataName = "bad.zip",
+            Size = new FileInfo(zipPath).Length
+        }, zipPath));
     }
 
     private sealed class ClipboardSyncPayloadFixture : IDisposable
