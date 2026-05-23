@@ -281,7 +281,7 @@ public sealed class ClipboardCaptureService : IDisposable
         {
             var bitmap = DecodeBitmap(pngBytes);
             if (bitmap is not null)
-                return new ClipboardImagePayload(bitmap, pngBytes);
+                return new ClipboardImagePayload(DetachBitmapForCrossThreadUse(bitmap), pngBytes);
         }
 
         var dibBytes = TryReadRawImageBytes(data, DeviceIndependentBitmapFormat);
@@ -289,14 +289,17 @@ public sealed class ClipboardCaptureService : IDisposable
         {
             var bitmap = DecodeDibBitmap(dibBytes);
             if (bitmap is not null)
-                return new ClipboardImagePayload(bitmap, EncodePng(bitmap));
+            {
+                var detached = DetachBitmapForCrossThreadUse(bitmap);
+                return new ClipboardImagePayload(detached, EncodePng(detached));
+            }
         }
 
         if (data.GetData(WpfDataFormats.Bitmap) is not BitmapSource source)
             return null;
 
-        var frozen = FreezeOrClone(source);
-        return new ClipboardImagePayload(frozen, EncodePng(frozen));
+        var detachedSource = DetachBitmapForCrossThreadUse(source);
+        return new ClipboardImagePayload(detachedSource, EncodePng(detachedSource));
     }
 
     private ClipboardItem StoreImagePayload(ClipboardImagePayload payload)
@@ -309,7 +312,7 @@ public sealed class ClipboardCaptureService : IDisposable
 
         var thumbName = ClipboardBlobNamer.Build(ClipboardPayloadType.Image, created, hash, ".jpg");
         var thumbPath = ClipboardBlobNamer.EnsureUnique(_store.ThumbnailDirectory, thumbName);
-        WriteJpegThumbnail(payload.Bitmap, thumbPath);
+        WriteJpegThumbnail(payload.Bitmap, thumbPath, payload.PngBytes);
 
         return new ClipboardItem
         {
@@ -639,6 +642,54 @@ public sealed class ClipboardCaptureService : IDisposable
         return clone;
     }
 
+    private static BitmapSource DetachBitmapForCrossThreadUse(BitmapSource source)
+    {
+        var frozen = FreezeOrClone(source);
+        if (TryCopyBitmapSource(frozen, out var copy))
+            return copy;
+
+        var converted = new FormatConvertedBitmap(frozen, PixelFormats.Bgra32, null, 0);
+        converted.Freeze();
+        if (TryCopyBitmapSource(converted, out copy))
+            return copy;
+
+        return converted;
+    }
+
+    private static bool TryCopyBitmapSource(BitmapSource source, out BitmapSource copy)
+    {
+        copy = null!;
+        try
+        {
+            var stride = CheckedStride(source.PixelWidth, source.Format.BitsPerPixel);
+            var pixels = new byte[checked(stride * source.PixelHeight)];
+            source.CopyPixels(pixels, stride, 0);
+            copy = BitmapSource.Create(
+                source.PixelWidth,
+                source.PixelHeight,
+                source.DpiX,
+                source.DpiY,
+                source.Format,
+                source.Palette,
+                pixels,
+                stride);
+            copy.Freeze();
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static int CheckedStride(int width, int bitsPerPixel)
+    {
+        if (width <= 0 || bitsPerPixel <= 0)
+            throw new ArgumentOutOfRangeException(nameof(width));
+
+        return checked((width * bitsPerPixel + 7) / 8);
+    }
+
     private static bool IsLikelyBlackPlaceholder(BitmapSource source)
     {
         if (source.PixelWidth * source.PixelHeight < 256)
@@ -682,7 +733,7 @@ public sealed class ClipboardCaptureService : IDisposable
         }
     }
 
-    private static void WriteJpegThumbnail(BitmapSource source, string path)
+    private static void WriteJpegThumbnail(BitmapSource source, string path, byte[] fallbackPngBytes)
     {
         var tempPath = path + ".tmp";
         try
@@ -704,7 +755,7 @@ public sealed class ClipboardCaptureService : IDisposable
         catch
         {
             TryDelete(tempPath);
-            WriteBytesAtomically(path, EncodePng(source));
+            WriteBytesAtomically(path, fallbackPngBytes);
         }
     }
 

@@ -58,6 +58,20 @@ public sealed class ClipboardCaptureServiceTests
         Assert.NotEmpty(payload.PngBytes);
     }
 
+    [Fact]
+    public async Task TryReadImagePayload_ReturnsThreadPortableBitmap()
+    {
+        var data = new DataObject();
+        data.SetData("image/png", new MemoryStream(Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=")));
+
+        var payload = ClipboardCaptureService.TryReadImagePayload(data);
+
+        Assert.NotNull(payload);
+        var encoded = await Task.Run(() => EncodePng(payload.Bitmap));
+        Assert.NotEmpty(encoded);
+    }
+
     private static BitmapSource CreateBitmap()
     {
         var bitmap = BitmapSource.Create(
@@ -88,6 +102,15 @@ public sealed class ClipboardCaptureServiceTests
         bytes[42] = 0x33;
         bytes[43] = 0xFF;
         return bytes;
+    }
+
+    private static byte[] EncodePng(BitmapSource bitmap)
+    {
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var ms = new MemoryStream();
+        encoder.Save(ms);
+        return ms.ToArray();
     }
 
     private static string BuildCfHtml(string fragment)
