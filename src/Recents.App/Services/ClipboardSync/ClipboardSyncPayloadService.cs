@@ -52,6 +52,8 @@ internal sealed class ClipboardSyncPayloadService
         {
             SyncClipboardProfileType.Text => await ImportTextAsync(profile, payloadPath).ConfigureAwait(false),
             SyncClipboardProfileType.Image => await ImportImageAsync(profile, payloadPath).ConfigureAwait(false),
+            SyncClipboardProfileType.File when SyncClipboardPayloadFormats.IsStandardImageFileName(profile.DataName ?? profile.Text) =>
+                await ImportImageAsync(profile, payloadPath).ConfigureAwait(false),
             SyncClipboardProfileType.File => await ImportFileAsync(profile, payloadPath).ConfigureAwait(false),
             SyncClipboardProfileType.Group => await ImportGroupAsync(profile, payloadPath).ConfigureAwait(false),
             _ => new ClipboardItem
@@ -112,6 +114,42 @@ internal sealed class ClipboardSyncPayloadService
         return new ClipboardSyncExport(profile, target, item.Hash);
     }
 
+    private async Task<ClipboardSyncExport?> TryExportComplexImageFileAsync(
+        ClipboardItem item,
+        string sourcePath,
+        long maxPayloadBytes)
+    {
+        var sourceBytes = await File.ReadAllBytesAsync(sourcePath).ConfigureAwait(false);
+        if (!TryConvertComplexImageBytes(sourceBytes, Path.GetFileName(sourcePath), out var convertedName, out var convertedBytes, out _, out _))
+            return null;
+
+        if (convertedBytes.LongLength > maxPayloadBytes)
+        {
+            return new ClipboardSyncExport(new SyncClipboardProfile
+            {
+                Type = SyncClipboardProfileType.Image,
+                Text = convertedName,
+                HasData = true,
+                Size = convertedBytes.LongLength
+            }, null, item.Hash);
+        }
+
+        var target = Path.Combine(_outgoingDirectory, convertedName);
+        await WriteBytesAsync(target, convertedBytes).ConfigureAwait(false);
+
+        var profile = new SyncClipboardProfile
+        {
+            Type = SyncClipboardProfileType.Image,
+            Text = convertedName,
+            HasData = true,
+            DataName = convertedName,
+            Hash = await SyncClipboardHash.ForFileAsync(target, convertedName).ConfigureAwait(false),
+            Size = convertedBytes.LongLength
+        };
+
+        return new ClipboardSyncExport(profile, target, item.Hash);
+    }
+
     private async Task<ClipboardSyncExport> ExportFilesAsync(ClipboardItem item, long maxPayloadBytes)
     {
         var existing = item.FilePaths
@@ -132,26 +170,18 @@ internal sealed class ClipboardSyncPayloadService
         if (existing.Count == 1)
         {
             var source = existing[0];
-            var length = new FileInfo(source).Length;
             var dataName = Path.GetFileName(source);
-            var profile = new SyncClipboardProfile
+
+            if (SyncClipboardPayloadFormats.IsStandardImageFileName(dataName))
+                return await ExportSinglePayloadAsync(item, SyncClipboardProfileType.Image, source, maxPayloadBytes).ConfigureAwait(false);
+
+            if (SyncClipboardPayloadFormats.IsComplexImageFileName(dataName) &&
+                await TryExportComplexImageFileAsync(item, source, maxPayloadBytes).ConfigureAwait(false) is { } convertedImage)
             {
-                Type = SyncClipboardProfileType.File,
-                Text = dataName,
-                HasData = true,
-                DataName = length <= maxPayloadBytes ? dataName : null,
-                Hash = length <= maxPayloadBytes
-                    ? await SyncClipboardHash.ForFileAsync(source, dataName).ConfigureAwait(false)
-                    : string.Empty,
-                Size = length
-            };
+                return convertedImage;
+            }
 
-            if (length > maxPayloadBytes)
-                return new ClipboardSyncExport(profile, null, item.Hash);
-
-            var target = Path.Combine(_outgoingDirectory, dataName);
-            await CopyFileAsync(source, target).ConfigureAwait(false);
-            return new ClipboardSyncExport(profile, target, item.Hash);
+            return await ExportSinglePayloadAsync(item, SyncClipboardProfileType.File, source, maxPayloadBytes).ConfigureAwait(false);
         }
 
         var zipDataName = $"{SafeName(item.Hash)}.zip";

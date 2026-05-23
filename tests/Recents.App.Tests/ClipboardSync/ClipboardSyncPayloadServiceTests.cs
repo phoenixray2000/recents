@@ -81,6 +81,91 @@ public sealed class ClipboardSyncPayloadServiceTests
     }
 
     [Fact]
+    public async Task ExportAsync_SingleStandardImageFileUsesSyncClipboardImagePayload()
+    {
+        using var fixture = ClipboardSyncPayloadFixture.Create();
+        var imagePath = Path.Combine(fixture.SourceDirectory, "photo.jpg");
+        var imageBytes = CreateJpegBytes();
+        await File.WriteAllBytesAsync(imagePath, imageBytes);
+
+        var item = new ClipboardItem
+        {
+            Type = ClipboardPayloadType.Files,
+            Hash = "filedrop-image-hash",
+            PreviewText = "photo.jpg",
+            PlainText = imagePath,
+            FilePaths = [new ClipboardFilePath { Path = imagePath, ExistsAtCapture = true }]
+        };
+
+        var export = await fixture.Service.ExportAsync(item, "device-1", "workstation", 1024 * 1024);
+
+        Assert.Equal(SyncClipboardProfileType.Image, export.Profile.Type);
+        Assert.Equal("photo.jpg", export.Profile.Text);
+        Assert.Equal("photo.jpg", export.Profile.DataName);
+        Assert.True(export.Profile.HasData);
+        Assert.NotNull(export.PayloadPath);
+        Assert.Equal(imageBytes, await File.ReadAllBytesAsync(export.PayloadPath));
+    }
+
+    [Fact]
+    public async Task ImportAsync_FileProfileWithStandardImageDataNameImportsAsImage()
+    {
+        using var fixture = ClipboardSyncPayloadFixture.Create();
+        var payloadPath = Path.Combine(fixture.SourceDirectory, "photo.jpg");
+        var imageBytes = CreateJpegBytes();
+        await File.WriteAllBytesAsync(payloadPath, imageBytes);
+
+        var imported = await fixture.Service.ImportAsync(new SyncClipboardProfile
+        {
+            Type = SyncClipboardProfileType.File,
+            Hash = await SyncClipboardHash.ForFileAsync(payloadPath, "photo.jpg"),
+            Text = "photo.jpg",
+            HasData = true,
+            DataName = "photo.jpg",
+            Size = imageBytes.Length
+        }, payloadPath);
+
+        Assert.Equal(ClipboardPayloadType.Image, imported.Type);
+        Assert.NotNull(imported.ImagePath);
+        Assert.EndsWith(".jpg", imported.ImagePath, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(imported.FilePaths);
+    }
+
+    [Fact]
+    public async Task ExportAsync_SingleComplexImageFileConvertsToSyncClipboardJpegImagePayloadWhenFixtureProvided()
+    {
+        var heicFixture = Environment.GetEnvironmentVariable("RECENTS_HEIC_FIXTURE");
+        if (string.IsNullOrWhiteSpace(heicFixture) || !File.Exists(heicFixture))
+            return;
+
+        using var fixture = ClipboardSyncPayloadFixture.Create();
+        var imagePath = Path.Combine(fixture.SourceDirectory, "iphone.heic");
+        await File.WriteAllBytesAsync(imagePath, await File.ReadAllBytesAsync(heicFixture));
+
+        var item = new ClipboardItem
+        {
+            Type = ClipboardPayloadType.Files,
+            Hash = "filedrop-heic-hash",
+            PreviewText = "iphone.heic",
+            PlainText = imagePath,
+            FilePaths = [new ClipboardFilePath { Path = imagePath, ExistsAtCapture = true }]
+        };
+
+        var export = await fixture.Service.ExportAsync(item, "device-1", "workstation", 20 * 1024 * 1024);
+
+        Assert.Equal(SyncClipboardProfileType.Image, export.Profile.Type);
+        Assert.Equal("iphone.jpg", export.Profile.DataName);
+        Assert.Equal("iphone.jpg", export.Profile.Text);
+        Assert.NotNull(export.PayloadPath);
+        Assert.EndsWith(".jpg", export.PayloadPath, StringComparison.OrdinalIgnoreCase);
+
+        var converted = await File.ReadAllBytesAsync(export.PayloadPath);
+        Assert.True(converted.Length > 2);
+        Assert.Equal(0xFF, converted[0]);
+        Assert.Equal(0xD8, converted[1]);
+    }
+
+    [Fact]
     public async Task ImportAsync_ImagePreservesStandardRemotePngPayload()
     {
         using var fixture = ClipboardSyncPayloadFixture.Create();
