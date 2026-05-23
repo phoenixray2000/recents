@@ -2,6 +2,8 @@ using Recents.App.Models;
 using Recents.App.Services.ClipboardSync;
 using System.Buffers.Binary;
 using System.Text;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Xunit;
 
 namespace Recents.App.Tests.ClipboardSync;
@@ -79,7 +81,7 @@ public sealed class ClipboardSyncPayloadServiceTests
     }
 
     [Fact]
-    public async Task ImportAsync_ImageNormalizesRemotePngPayload()
+    public async Task ImportAsync_ImagePreservesStandardRemotePngPayload()
     {
         using var fixture = ClipboardSyncPayloadFixture.Create();
         var payloadPath = Path.Combine(fixture.SourceDirectory, "Clipboard 2026年5月23日 22.59.png");
@@ -105,9 +107,37 @@ public sealed class ClipboardSyncPayloadServiceTests
         Assert.Equal(1, imported.ImageWidth);
         Assert.Equal(1, imported.ImageHeight);
 
-        var normalized = await File.ReadAllBytesAsync(imported.ImagePath);
-        Assert.False(ContainsSequence(normalized, Encoding.ASCII.GetBytes("caBX")));
-        Assert.NotEqual(remoteBytes, normalized);
+        var preserved = await File.ReadAllBytesAsync(imported.ImagePath);
+        Assert.True(ContainsSequence(preserved, Encoding.ASCII.GetBytes("caBX")));
+        Assert.Equal(remoteBytes, preserved);
+    }
+
+    [Fact]
+    public async Task ImportAsync_ImagePreservesStandardRemoteJpegPayload()
+    {
+        using var fixture = ClipboardSyncPayloadFixture.Create();
+        var payloadPath = Path.Combine(fixture.SourceDirectory, "photo.jpeg");
+        var remoteBytes = CreateJpegBytes();
+        await File.WriteAllBytesAsync(payloadPath, remoteBytes);
+
+        var imported = await fixture.Service.ImportAsync(new SyncClipboardProfile
+        {
+            Type = SyncClipboardProfileType.Image,
+            Hash = "remote-jpeg-image-hash",
+            Text = "photo.jpeg",
+            HasData = true,
+            DataName = "photo.jpeg",
+            Size = remoteBytes.Length
+        }, payloadPath);
+
+        Assert.Equal(ClipboardPayloadType.Image, imported.Type);
+        Assert.NotNull(imported.ImagePath);
+        Assert.EndsWith(".jpeg", imported.ImagePath, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, imported.ImageWidth);
+        Assert.Equal(1, imported.ImageHeight);
+
+        var preserved = await File.ReadAllBytesAsync(imported.ImagePath);
+        Assert.Equal(remoteBytes, preserved);
     }
 
     [Fact]
@@ -134,13 +164,15 @@ public sealed class ClipboardSyncPayloadServiceTests
 
         Assert.Equal(ClipboardPayloadType.Image, imported.Type);
         Assert.NotNull(imported.ImagePath);
-        Assert.EndsWith(".png", imported.ImagePath, StringComparison.OrdinalIgnoreCase);
+        Assert.EndsWith(".jpg", imported.ImagePath, StringComparison.OrdinalIgnoreCase);
         Assert.True(imported.ImageWidth > 0);
         Assert.True(imported.ImageHeight > 0);
 
-        var normalized = await File.ReadAllBytesAsync(imported.ImagePath);
-        Assert.True(normalized.AsSpan(0, PngSignature.Length).SequenceEqual(PngSignature));
-        Assert.NotEqual(remoteBytes, normalized);
+        var converted = await File.ReadAllBytesAsync(imported.ImagePath);
+        Assert.True(converted.Length > 2);
+        Assert.Equal(0xFF, converted[0]);
+        Assert.Equal(0xD8, converted[1]);
+        Assert.NotEqual(remoteBytes, converted);
     }
 
     [Fact]
@@ -310,6 +342,27 @@ public sealed class ClipboardSyncPayloadServiceTests
         }
 
         return false;
+    }
+
+    private static byte[] CreateJpegBytes()
+    {
+        var pixels = new byte[] { 0x20, 0x40, 0x80, 0xFF };
+        var bitmap = BitmapSource.Create(
+            1,
+            1,
+            96,
+            96,
+            PixelFormats.Bgra32,
+            null,
+            pixels,
+            4);
+        bitmap.Freeze();
+
+        var encoder = new JpegBitmapEncoder { QualityLevel = 90 };
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var output = new MemoryStream();
+        encoder.Save(output);
+        return output.ToArray();
     }
 
     private static readonly byte[] PngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];

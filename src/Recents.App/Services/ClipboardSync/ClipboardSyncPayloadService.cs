@@ -245,32 +245,132 @@ internal sealed class ClipboardSyncPayloadService
         string itemDirectory,
         string fileName)
     {
+        var safeFileName = SyncClipboardPayloadFormats.SafePayloadFileName(fileName, "remote.png");
         var sourceBytes = await File.ReadAllBytesAsync(payloadPath).ConfigureAwait(false);
-        if (TryNormalizeImageBytes(sourceBytes, out var pngBytes, out var width, out var height))
+
+        if (SyncClipboardPayloadFormats.IsStandardImageFileName(safeFileName))
         {
-            var normalizedName = NormalizedImageFileName(fileName);
-            var target = Path.Combine(itemDirectory, normalizedName);
+            var target = Path.Combine(itemDirectory, safeFileName);
+            await WriteBytesAsync(target, sourceBytes).ConfigureAwait(false);
+            var dimensions = TryReadImageDimensions(sourceBytes);
+            return new ImportedImagePayload(target, sourceBytes, dimensions.Width, dimensions.Height);
+        }
+
+        if (SyncClipboardPayloadFormats.IsComplexImageFileName(safeFileName) &&
+            TryConvertComplexImageBytes(sourceBytes, safeFileName, out var convertedName, out var convertedBytes, out var convertedWidth, out var convertedHeight))
+        {
+            var target = Path.Combine(itemDirectory, convertedName);
+            await WriteBytesAsync(target, convertedBytes).ConfigureAwait(false);
+            return new ImportedImagePayload(target, convertedBytes, convertedWidth, convertedHeight);
+        }
+
+        if (TryNormalizeUnknownImageBytes(sourceBytes, safeFileName, out var pngName, out var pngBytes, out var width, out var height))
+        {
+            var target = Path.Combine(itemDirectory, pngName);
             await WriteBytesAsync(target, pngBytes).ConfigureAwait(false);
             return new ImportedImagePayload(target, pngBytes, width, height);
         }
 
-        var copied = await CopyIncomingAsync(payloadPath, itemDirectory, Path.GetFileName(fileName)).ConfigureAwait(false);
+        var copied = await CopyIncomingAsync(payloadPath, itemDirectory, safeFileName).ConfigureAwait(false);
         return new ImportedImagePayload(copied, sourceBytes, null, null);
     }
 
-    private static bool TryNormalizeImageBytes(
+    private static (int? Width, int? Height) TryReadImageDimensions(byte[] sourceBytes)
+    {
+        try
+        {
+            using var input = new MemoryStream(sourceBytes);
+            var decoder = BitmapDecoder.Create(input, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+            var frame = decoder.Frames[0];
+            return (frame.PixelWidth, frame.PixelHeight);
+        }
+        catch
+        {
+            try
+            {
+                using var image = new MagickImage(sourceBytes);
+                return (checked((int)image.Width), checked((int)image.Height));
+            }
+            catch
+            {
+                return (null, null);
+            }
+        }
+    }
+
+    private static bool TryConvertComplexImageBytes(
         byte[] sourceBytes,
+        string sourceFileName,
+        out string convertedName,
+        out byte[] convertedBytes,
+        out int width,
+        out int height)
+    {
+        convertedName = string.Empty;
+        convertedBytes = [];
+        width = 0;
+        height = 0;
+
+        try
+        {
+            using var images = new MagickImageCollection(sourceBytes);
+            if (images.Count == 0)
+                return false;
+
+            var baseName = Path.GetFileNameWithoutExtension(sourceFileName);
+            if (string.IsNullOrWhiteSpace(baseName))
+                baseName = "remote";
+
+            if (images.Count >= 2)
+            {
+                images.Coalesce();
+                width = checked((int)images[0].Width);
+                height = checked((int)images[0].Height);
+                using var output = new MemoryStream();
+                images.Write(output, MagickFormat.Gif);
+                convertedBytes = output.ToArray();
+                convertedName = baseName + ".gif";
+                return convertedBytes.Length > 0;
+            }
+
+            using var image = new MagickImage(sourceBytes);
+            image.AutoOrient();
+            image.Strip();
+            width = checked((int)image.Width);
+            height = checked((int)image.Height);
+            convertedBytes = image.ToByteArray(MagickFormat.Jpeg);
+            convertedName = baseName + ".jpg";
+            return convertedBytes.Length > 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryNormalizeUnknownImageBytes(
+        byte[] sourceBytes,
+        string sourceFileName,
+        out string pngName,
         out byte[] pngBytes,
         out int width,
         out int height)
     {
-        if (TryNormalizeImageBytesWithWpf(sourceBytes, out pngBytes, out width, out height))
+        pngName = Path.GetFileNameWithoutExtension(sourceFileName);
+        if (string.IsNullOrWhiteSpace(pngName))
+            pngName = "remote";
+        pngName += ".png";
+        pngBytes = [];
+        width = 0;
+        height = 0;
+
+        if (TryNormalizeUnknownImageBytesWithWpf(sourceBytes, out pngBytes, out width, out height))
             return true;
 
-        return TryNormalizeImageBytesWithMagick(sourceBytes, out pngBytes, out width, out height);
+        return TryNormalizeUnknownImageBytesWithMagick(sourceBytes, out pngBytes, out width, out height);
     }
 
-    private static bool TryNormalizeImageBytesWithWpf(
+    private static bool TryNormalizeUnknownImageBytesWithWpf(
         byte[] sourceBytes,
         out byte[] pngBytes,
         out int width,
@@ -305,7 +405,7 @@ internal sealed class ClipboardSyncPayloadService
         }
     }
 
-    private static bool TryNormalizeImageBytesWithMagick(
+    private static bool TryNormalizeUnknownImageBytesWithMagick(
         byte[] sourceBytes,
         out byte[] pngBytes,
         out int width,
@@ -352,15 +452,6 @@ internal sealed class ClipboardSyncPayloadService
             stride);
         copy.Freeze();
         return copy;
-    }
-
-    private static string NormalizedImageFileName(string fileName)
-    {
-        var baseName = Path.GetFileNameWithoutExtension(fileName);
-        if (string.IsNullOrWhiteSpace(baseName))
-            baseName = "remote";
-
-        return baseName + ".png";
     }
 
     private async Task<ClipboardItem> ImportFileAsync(SyncClipboardProfile profile, string? payloadPath)
