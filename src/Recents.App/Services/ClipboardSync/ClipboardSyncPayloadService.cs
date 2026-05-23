@@ -48,6 +48,9 @@ internal sealed class ClipboardSyncPayloadService
 
     public async Task<ClipboardItem> ImportAsync(SyncClipboardProfile profile, string? payloadPath)
     {
+        if (ShouldImportTextPayloadAsImage(profile, payloadPath))
+            return await ImportImageAsync(profile, payloadPath).ConfigureAwait(false);
+
         return profile.Type switch
         {
             SyncClipboardProfileType.Text => await ImportTextAsync(profile, payloadPath).ConfigureAwait(false),
@@ -64,6 +67,19 @@ internal sealed class ClipboardSyncPayloadService
                 SizeBytes = profile.Size
             }
         };
+    }
+
+    private static bool ShouldImportTextPayloadAsImage(SyncClipboardProfile profile, string? payloadPath)
+    {
+        if (profile.Type != SyncClipboardProfileType.Text ||
+            !profile.HasData ||
+            string.IsNullOrWhiteSpace(payloadPath) ||
+            !File.Exists(payloadPath))
+        {
+            return false;
+        }
+
+        return SyncClipboardPayloadFormats.IsKnownImageFileName(profile.DataName ?? profile.Text);
     }
 
     private static ClipboardSyncExport ExportTextLike(ClipboardItem item)

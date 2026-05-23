@@ -133,6 +133,56 @@ public sealed class ClipboardSyncPayloadServiceTests
     }
 
     [Fact]
+    public async Task ImportAsync_TextProfileWithImageDataNameImportsAsImage()
+    {
+        using var fixture = ClipboardSyncPayloadFixture.Create();
+        var payloadPath = Path.Combine(fixture.SourceDirectory, "Clipboard 2026年5月24日 00.51.png");
+        var remoteBytes = AddPngChunk(Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="),
+            "caBX",
+            Encoding.ASCII.GetBytes("iphone-extra"));
+        await File.WriteAllBytesAsync(payloadPath, remoteBytes);
+
+        var imported = await fixture.Service.ImportAsync(new SyncClipboardProfile
+        {
+            Type = SyncClipboardProfileType.Text,
+            Hash = "remote-text-image-hash",
+            Text = Path.GetFileName(payloadPath),
+            HasData = true,
+            DataName = Path.GetFileName(payloadPath),
+            Size = remoteBytes.Length
+        }, payloadPath);
+
+        Assert.Equal(ClipboardPayloadType.Image, imported.Type);
+        Assert.Null(imported.PlainText);
+        Assert.NotNull(imported.ImagePath);
+        Assert.EndsWith(".png", imported.ImagePath, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(remoteBytes, await File.ReadAllBytesAsync(imported.ImagePath));
+    }
+
+    [Fact]
+    public async Task ImportAsync_TextProfileWithTextDataNameImportsAsText()
+    {
+        using var fixture = ClipboardSyncPayloadFixture.Create();
+        var payloadPath = Path.Combine(fixture.SourceDirectory, "note.txt");
+        await File.WriteAllTextAsync(payloadPath, "hello from data", Encoding.UTF8);
+
+        var imported = await fixture.Service.ImportAsync(new SyncClipboardProfile
+        {
+            Type = SyncClipboardProfileType.Text,
+            Hash = "remote-text-data-hash",
+            Text = "note.txt",
+            HasData = true,
+            DataName = "note.txt",
+            Size = new FileInfo(payloadPath).Length
+        }, payloadPath);
+
+        Assert.Equal(ClipboardPayloadType.Text, imported.Type);
+        Assert.Equal("hello from data", imported.PlainText);
+        Assert.Null(imported.ImagePath);
+    }
+
+    [Fact]
     public async Task ExportAsync_SingleComplexImageFileConvertsToSyncClipboardJpegImagePayloadWhenFixtureProvided()
     {
         var heicFixture = Environment.GetEnvironmentVariable("RECENTS_HEIC_FIXTURE");
