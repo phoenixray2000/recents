@@ -277,6 +277,38 @@ public sealed class ClipboardFavoritesTests
         SizeBytes = 3,
     };
 
+    [Fact]
+    public async Task Compact_KeepsLiveFavoriteFileSubtree_DeletesOrphanFavoriteSubtree()
+    {
+        using var fixture = ClipboardStoreFixture.Create();
+        var store = fixture.Store;
+
+        var sub = Path.Combine(store.FilesDirectory, "imported");
+        Directory.CreateDirectory(sub);
+        var src = Path.Combine(sub, "doc.txt");
+        await File.WriteAllTextAsync(src, "x");
+        var item = new ClipboardItem
+        {
+            Id = "imp", Type = ClipboardPayloadType.Files, Hash = "imp-hash",
+            CreatedUtc = DateTime.UtcNow, LastUsedUtc = DateTime.UtcNow,
+            PreviewText = "doc.txt", PlainText = src,
+            FilePaths = [new ClipboardFilePath { Path = src, ExistsAtCapture = true }]
+        };
+        await store.IngestAsync(item);
+        await store.AddToFavoritesAsync("imp");
+        var liveFavPath = Assert.Single(Assert.Single(store.Favorites).Item.FilePaths).Path;
+
+        // Orphan favorite subtree (no favorite references it).
+        var orphan = Path.Combine(store.FavoriteFilesDirectory, Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(orphan);
+        await File.WriteAllTextAsync(Path.Combine(orphan, "junk.txt"), "junk");
+
+        await store.CompactOrphanBlobsAsync();
+
+        Assert.True(File.Exists(liveFavPath), "live favorite content must be kept");
+        Assert.False(Directory.Exists(orphan), "orphan favorite subtree must be deleted");
+    }
+
     private sealed class ClipboardStoreFixture : IDisposable
     {
         private readonly string _directory;

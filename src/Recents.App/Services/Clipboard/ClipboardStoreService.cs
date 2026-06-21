@@ -509,6 +509,7 @@ public sealed class ClipboardStoreService : IDisposable, IClipboardManagedStorag
                 DeleteUnreferencedFiles(FavoriteBlobDirectory, favoritePaths.SelectMany(v => new[] { v.BlobPath, v.HtmlBlobPath, v.RtfBlobPath }), graceCutoffUtc);
                 DeleteUnreferencedFiles(FavoriteImageDirectory, favoritePaths.Select(v => v.ImagePath), graceCutoffUtc);
                 DeleteUnreferencedFiles(FavoriteThumbnailDirectory, favoritePaths.Select(v => v.ThumbnailPath), graceCutoffUtc);
+                DeleteUnreferencedFavoriteFileTrees(favoritePaths.SelectMany(v => v.FilePaths.Select(f => f.Path)));
 
                 var retainedManagedFilePaths = _repo.LoadRetainedManagedFilePaths(deletedCutoffUtc);
                 DeleteUnreferencedFileTrees(retainedManagedFilePaths);
@@ -890,6 +891,34 @@ public sealed class ClipboardStoreService : IDisposable, IClipboardManagedStorag
         catch (Exception ex)
         {
             Log.Warning(ex, "ClipboardStoreService: files reconciliation failed");
+        }
+    }
+
+    private void DeleteUnreferencedFavoriteFileTrees(IEnumerable<string?> referencedPaths)
+    {
+        try
+        {
+            Directory.CreateDirectory(FavoriteFilesDirectory);
+            var favRoot = Path.GetFullPath(FavoriteFilesDirectory);
+            var referenced = referencedPaths
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Select(p => Path.GetFullPath(p!))
+                .Where(p => p.StartsWith(favRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            foreach (var subdir in Directory.EnumerateDirectories(FavoriteFilesDirectory))
+            {
+                var prefix = Path.GetFullPath(subdir) + Path.DirectorySeparatorChar;
+                var isReferenced = referenced.Any(r => r.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+                if (isReferenced)
+                    continue;
+                try { Directory.Delete(subdir, recursive: true); }
+                catch (Exception ex) { Log.Warning(ex, "ClipboardStoreService: favorite file tree delete failed {Dir}", LogPrivacy.Format(subdir)); }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "ClipboardStoreService: favorite files reconciliation failed");
         }
     }
 
