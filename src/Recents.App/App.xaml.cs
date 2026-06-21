@@ -85,6 +85,12 @@ public partial class App : WpfApp
             _statusHint.SetStatus(StatusHintService.AppStatus.Initializing);
 
             var mainVm = new MainViewModel(_index, _clipboardStore, _hotkey, _statusHint, _settings);
+
+            // M1: delete legacy webdav/incoming/ BEFORE the store load so HasUsableContent prunes
+            // dangling incoming-backed rows during LoadFromDatabaseSnapshot.
+            var clipboardSyncRoot = System.IO.Path.Combine(_clipboardStore.DataDirectory, "webdav");
+            ClipboardWebDavSyncService.DeleteLegacyIncomingDirectory(clipboardSyncRoot);
+
             _ = InitializeClipboardStoreAsync();
 
             _ = _index.LoadFromDatabaseAsync(_settings.Current.MaxRecentItems);

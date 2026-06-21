@@ -49,6 +49,9 @@ internal sealed class ClipboardWebDavSyncService : IDisposable
 
     public void Start()
     {
+        WipeStagingDirectory(_outgoingDirectory);
+        WipeStagingDirectory(_downloadDirectory);
+
         var interval = TimeSpan.FromSeconds(_settings.Current.ClipboardWebDavSync.PollIntervalSeconds);
         _pollTimer ??= new System.Threading.Timer(_ => _ = PollOnceAsync(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
         _pollTimer.Change(TimeSpan.Zero, interval);
@@ -79,16 +82,11 @@ internal sealed class ClipboardWebDavSyncService : IDisposable
             var export = await _payloads.ExportAsync(item, sync.DeviceId, sync.DeviceName, sync.MaxPayloadBytes)
                 .ConfigureAwait(false);
 
-            var remote = await _client!.GetProfileAsync().ConfigureAwait(false);
-            if (remote is not null &&
-                string.Equals(RemoteContentKey(remote), RemoteContentKey(export.Profile), StringComparison.OrdinalIgnoreCase))
-            {
-                _lastSyncedRemoteKey = RemoteContentKey(remote);
-                _lastSyncedLocalHash = item.Hash;
-                return;
-            }
-
-            await UploadWithRetryAsync(export, sync).ConfigureAwait(false);
+            // R2-1: RunUploadFlowAsync owns the OUTGOING delete-after-use finally over the WHOLE
+            // exported-payload lifetime (duplicate-check + upload), so the staged payload is
+            // deleted on every exit path — duplicate short-circuit, upload success, and throw.
+            var transport = new WebDavPayloadTransport(this, item.Hash);
+            await RunUploadFlowAsync(transport, export, sync).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -150,20 +148,12 @@ internal sealed class ClipboardWebDavSyncService : IDisposable
                 return;
             }
 
-            string? payloadPath = null;
-            if (profile!.HasData && !string.IsNullOrWhiteSpace(profile.DataName))
-                payloadPath = await _client.DownloadPayloadAsync(profile.DataName, _downloadDirectory).ConfigureAwait(false);
-
-            var item = await _payloads.ImportAsync(profile, payloadPath).ConfigureAwait(false);
-
-            _lastSyncedRemoteKey = RemoteContentKey(profile);
-            _lastSyncedLocalHash = item.Hash;
-
-            await InvokeOnDispatcherAsync(() =>
-                _actions.WriteItemToClipboardWithoutHistoryAsync(item, TimeSpan.FromSeconds(3))).ConfigureAwait(false);
-
-            if (_settings.Current.EnableClipboardHistory && sync.SaveRemoteItemsToHistory)
-                await _store.IngestAsync(item).ConfigureAwait(false);
+            // DownloadImportThenDeleteAsync owns the downloads/ delete-after-use finally; the raw
+            // download is removed whether the consume callback (import + apply) succeeds or throws.
+            var transport = new WebDavPayloadTransport(this, null);
+            await DownloadImportThenDeleteAsync(
+                transport, profile!, _downloadDirectory,
+                (p, payloadPath) => ImportAndApplyAsync(p, payloadPath, sync)).ConfigureAwait(false);
 
             _consecutiveFailures = 0;
         }
@@ -176,6 +166,148 @@ internal sealed class ClipboardWebDavSyncService : IDisposable
         {
             _syncGate.Release();
         }
+    }
+
+    private async Task<ClipboardItem> ImportAndApplyAsync(
+        SyncClipboardProfile profile, string? payloadPath, ClipboardWebDavSyncSettings sync)
+    {
+        var item = await _payloads.ImportAsync(profile, payloadPath).ConfigureAwait(false);
+
+        _lastSyncedRemoteKey = RemoteContentKey(profile);
+        _lastSyncedLocalHash = item.Hash;
+
+        await InvokeOnDispatcherAsync(() =>
+            _actions.WriteItemToClipboardWithoutHistoryAsync(item, TimeSpan.FromSeconds(3))).ConfigureAwait(false);
+
+        if (_settings.Current.EnableClipboardHistory && sync.SaveRemoteItemsToHistory)
+            await _store.IngestAsync(item).ConfigureAwait(false);
+
+        return item;
+    }
+
+    internal interface IWebDavPayloadTransport
+    {
+        // True => remote already matches this export => skip the upload (the duplicate
+        // short-circuit). In production this wraps GetProfileAsync + RemoteContentKey compare.
+        Task<bool> IsRemoteDuplicateAsync(ClipboardSyncExport export);
+        Task UploadAsync(ClipboardSyncExport export, ClipboardWebDavSyncSettings sync);
+        Task<string?> DownloadAsync(SyncClipboardProfile profile, string downloadDirectory);
+    }
+
+    // R2-1: owns the OUTGOING delete-after-use finally over the ENTIRE exported-payload
+    // lifetime — the duplicate-check AND the upload. The duplicate short-circuit returns
+    // BEFORE UploadAsync, but the finally still deletes export.PayloadPath. This is the single
+    // source of truth for deleting the staged outgoing payload; the upload itself is pure.
+    internal static async Task RunUploadFlowAsync(
+        IWebDavPayloadTransport transport,
+        ClipboardSyncExport export,
+        ClipboardWebDavSyncSettings sync)
+    {
+        try
+        {
+            if (await transport.IsRemoteDuplicateAsync(export).ConfigureAwait(false))
+                return; // remote already matches — short-circuit BEFORE upload (R2-1)
+
+            await transport.UploadAsync(export, sync).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (export.PayloadPath is not null)
+                TryDeleteFile(export.PayloadPath);
+        }
+    }
+
+    // Owns the downloads/ delete-after-use finally. Deletes the raw download whether
+    // ImportAsync (the consume callback) succeeds OR throws.
+    internal static async Task<ClipboardItem> DownloadImportThenDeleteAsync(
+        IWebDavPayloadTransport transport,
+        SyncClipboardProfile profile,
+        string downloadDirectory,
+        Func<SyncClipboardProfile, string?, Task<ClipboardItem>> consume)
+    {
+        string? payloadPath = null;
+        try
+        {
+            if (profile.HasData && !string.IsNullOrWhiteSpace(profile.DataName))
+                payloadPath = await transport.DownloadAsync(profile, downloadDirectory).ConfigureAwait(false);
+            return await consume(profile, payloadPath).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (payloadPath is not null)
+                TryDeleteFile(payloadPath);
+        }
+    }
+
+    // Production transport over the live WebDavClipboardClient. IsRemoteDuplicateAsync wraps the
+    // GetProfile + RemoteContentKey compare and performs the short-circuit bookkeeping; UploadAsync
+    // runs the existing retry loop; DownloadAsync wraps DownloadPayloadAsync.
+    private sealed class WebDavPayloadTransport : IWebDavPayloadTransport
+    {
+        private readonly ClipboardWebDavSyncService _owner;
+        private readonly string? _localHash;
+
+        public WebDavPayloadTransport(ClipboardWebDavSyncService owner, string? localHash)
+        {
+            _owner = owner;
+            _localHash = localHash;
+        }
+
+        public async Task<bool> IsRemoteDuplicateAsync(ClipboardSyncExport export)
+        {
+            var remote = await _owner._client!.GetProfileAsync().ConfigureAwait(false);
+            if (remote is not null &&
+                string.Equals(RemoteContentKey(remote), RemoteContentKey(export.Profile), StringComparison.OrdinalIgnoreCase))
+            {
+                _owner._lastSyncedRemoteKey = RemoteContentKey(remote);
+                _owner._lastSyncedLocalHash = _localHash;
+                return true;
+            }
+
+            return false;
+        }
+
+        public Task UploadAsync(ClipboardSyncExport export, ClipboardWebDavSyncSettings sync)
+            => _owner.UploadWithRetryAsync(export, sync);
+
+        public Task<string?> DownloadAsync(SyncClipboardProfile profile, string downloadDirectory)
+            => _owner._client!.DownloadPayloadAsync(profile.DataName!, downloadDirectory);
+    }
+
+    internal static void WipeStagingDirectory(string directory)
+    {
+        try
+        {
+            if (!Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+                return;
+            }
+            foreach (var file in Directory.EnumerateFiles(directory))
+                TryDeleteFile(file);
+            foreach (var dir in Directory.EnumerateDirectories(directory))
+                TryDeleteDirectory(dir);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Clipboard WebDAV: failed to wipe staging {Directory}", directory);
+        }
+    }
+
+    internal static void DeleteLegacyIncomingDirectory(string syncRoot)
+    {
+        var legacy = Path.Combine(syncRoot, "incoming");
+        TryDeleteDirectory(legacy);
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); } catch (Exception ex) { Log.Debug(ex, "Clipboard WebDAV: staging file delete failed {Path}", path); }
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try { if (Directory.Exists(path)) Directory.Delete(path, recursive: true); } catch (Exception ex) { Log.Debug(ex, "Clipboard WebDAV: staging dir delete failed {Path}", path); }
     }
 
     public static bool ShouldApplyRemote(
