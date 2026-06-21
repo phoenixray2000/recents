@@ -122,11 +122,16 @@ internal sealed class ClipboardSyncPayloadService
 
         var dataName = Path.GetFileName(sourcePath);
         var target = Path.Combine(_outgoingDirectory, dataName);
-        await CopyFileAsync(sourcePath, target).ConfigureAwait(false);
+
+        var hash = await BuildOutgoingPayloadAsync(target, async () =>
+        {
+            await CopyFileAsync(sourcePath, target).ConfigureAwait(false);
+            return await SyncClipboardHash.ForFileAsync(target, dataName).ConfigureAwait(false);
+        }).ConfigureAwait(false);
 
         profile.DataName = dataName;
         profile.Text = dataName;
-        profile.Hash = await SyncClipboardHash.ForFileAsync(target, dataName).ConfigureAwait(false);
+        profile.Hash = hash;
         profile.Size = length;
 
         return new ClipboardSyncExport(profile, target, item.Hash);
@@ -153,7 +158,12 @@ internal sealed class ClipboardSyncPayloadService
         }
 
         var target = Path.Combine(_outgoingDirectory, convertedName);
-        await WriteBytesAsync(target, convertedBytes).ConfigureAwait(false);
+
+        var hash = await BuildOutgoingPayloadAsync(target, async () =>
+        {
+            await WriteBytesAsync(target, convertedBytes).ConfigureAwait(false);
+            return await SyncClipboardHash.ForFileAsync(target, convertedName).ConfigureAwait(false);
+        }).ConfigureAwait(false);
 
         var profile = new SyncClipboardProfile
         {
@@ -161,7 +171,7 @@ internal sealed class ClipboardSyncPayloadService
             Text = convertedName,
             HasData = true,
             DataName = convertedName,
-            Hash = await SyncClipboardHash.ForFileAsync(target, convertedName).ConfigureAwait(false),
+            Hash = hash,
             Size = convertedBytes.LongLength
         };
 
@@ -207,7 +217,13 @@ internal sealed class ClipboardSyncPayloadService
         if (File.Exists(zipTarget))
             File.Delete(zipTarget);
 
-        await CreateGroupArchiveAsync(existing, zipTarget).ConfigureAwait(false);
+        // C1: if archiving or hashing throws mid-way (e.g. a source path becomes invalid during
+        // the archive), delete the partially-written zip before the exception propagates.
+        var groupHash = await BuildOutgoingPayloadAsync(zipTarget, async () =>
+        {
+            await CreateGroupArchiveAsync(existing, zipTarget).ConfigureAwait(false);
+            return await SyncClipboardHash.ForGroupAsync(existing).ConfigureAwait(false);
+        }).ConfigureAwait(false);
 
         var zipLength = new FileInfo(zipTarget).Length;
         if (zipLength > maxPayloadBytes)
@@ -224,7 +240,7 @@ internal sealed class ClipboardSyncPayloadService
         var groupProfile = new SyncClipboardProfile
         {
             Type = SyncClipboardProfileType.Group,
-            Hash = await SyncClipboardHash.ForGroupAsync(existing).ConfigureAwait(false),
+            Hash = groupHash,
             Text = string.Join('\n', existing.Select(Path.GetFileName)),
             HasData = true,
             DataName = zipDataName,
@@ -675,6 +691,31 @@ internal sealed class ClipboardSyncPayloadService
         await using var input = File.OpenRead(source);
         await using var output = File.Create(target);
         await input.CopyToAsync(output);
+    }
+
+    // C1: run an outgoing-payload build that writes into `target`; if it throws AFTER the file is
+    // (partially) created, delete the partial before rethrowing so the staged file never leaks.
+    // The exception still propagates — the caller logs it; we only avoid leaving the partial behind.
+    private static async Task<T> BuildOutgoingPayloadAsync<T>(string target, Func<Task<T>> build)
+    {
+        try
+        {
+            return await build().ConfigureAwait(false);
+        }
+        catch
+        {
+            try
+            {
+                if (File.Exists(target))
+                    File.Delete(target);
+            }
+            catch
+            {
+                // Best-effort cleanup; the next startup wipe is the backstop.
+            }
+
+            throw;
+        }
     }
 
     private static async Task WriteBytesAsync(string target, byte[] bytes)

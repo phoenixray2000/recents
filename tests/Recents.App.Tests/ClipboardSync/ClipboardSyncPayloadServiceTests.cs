@@ -638,6 +638,39 @@ public sealed class ClipboardSyncPayloadServiceTests
         }
     }
 
+    [Fact]
+    public async Task ExportAsync_GroupArchiveFailure_LeavesNoPartialPayloadInOutgoing()
+    {
+        // C1: if archiving throws after the zip file is partially created, the staged partial
+        // must NOT leak into outgoing/, and the exception must still propagate to the caller.
+        using var fixture = ClipboardSyncPayloadFixture.Create();
+        var goodPath = Path.Combine(fixture.SourceDirectory, "good.txt");
+        var lockedPath = Path.Combine(fixture.SourceDirectory, "locked.txt");
+        await File.WriteAllTextAsync(goodPath, "good");
+        await File.WriteAllTextAsync(lockedPath, "locked");
+
+        var item = new ClipboardItem
+        {
+            Type = ClipboardPayloadType.Files,
+            Hash = "c1-partial-hash",
+            FilePaths =
+            [
+                new ClipboardFilePath { Path = goodPath, ExistsAtCapture = true },
+                new ClipboardFilePath { Path = lockedPath, ExistsAtCapture = true }
+            ]
+        };
+
+        // Open the second source exclusively so the archive write throws mid-creation (after the
+        // zip target file already exists on disk).
+        using (var exclusive = new FileStream(lockedPath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            await Assert.ThrowsAnyAsync<IOException>(() =>
+                fixture.Service.ExportAsync(item, "device-1", "ws", 1024 * 1024));
+        }
+
+        Assert.Empty(Directory.GetFiles(fixture.OutgoingDirectory));
+    }
+
     private static (string PayloadPath, string DataName) WriteConvertibleImagePayload(string sourceDirectory)
     {
         // Encode a small real image as WebP so the complex/convert import branch (IsComplexImageFileName)
@@ -659,6 +692,7 @@ public sealed class ClipboardSyncPayloadServiceTests
         public string ImageDirectory { get; }
         public string ThumbnailDirectory { get; }
         public string FilesDirectory { get; }
+        public string OutgoingDirectory { get; }
         public ClipboardSyncPayloadService Service { get; }
 
         private ClipboardSyncPayloadFixture(string root)
@@ -668,9 +702,10 @@ public sealed class ClipboardSyncPayloadServiceTests
             ImageDirectory = Path.Combine(root, "images");
             ThumbnailDirectory = Path.Combine(root, "thumbs");
             FilesDirectory = Path.Combine(root, "files");
+            OutgoingDirectory = Path.Combine(root, "outgoing");
             Directory.CreateDirectory(SourceDirectory);
             var managed = new TestManagedStorage(ImageDirectory, ThumbnailDirectory, FilesDirectory);
-            Service = new ClipboardSyncPayloadService(Path.Combine(root, "outgoing"), managed);
+            Service = new ClipboardSyncPayloadService(OutgoingDirectory, managed);
         }
 
         public static ClipboardSyncPayloadFixture Create() =>
