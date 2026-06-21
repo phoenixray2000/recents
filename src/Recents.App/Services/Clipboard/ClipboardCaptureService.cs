@@ -312,7 +312,7 @@ public sealed class ClipboardCaptureService : IDisposable
 
         var thumbName = ClipboardBlobNamer.Build(ClipboardPayloadType.Image, created, hash, ".jpg");
         var thumbPath = ClipboardBlobNamer.EnsureUnique(_store.ThumbnailDirectory, thumbName);
-        WriteJpegThumbnail(payload.Bitmap, thumbPath, payload.PngBytes);
+        ClipboardThumbnailWriter.WriteJpegThumbnail(payload.Bitmap, thumbPath, payload.PngBytes);
 
         return new ClipboardItem
         {
@@ -733,32 +733,6 @@ public sealed class ClipboardCaptureService : IDisposable
         }
     }
 
-    private static void WriteJpegThumbnail(BitmapSource source, string path, byte[] fallbackPngBytes)
-    {
-        var tempPath = path + ".tmp";
-        try
-        {
-            var scale = Math.Min(1.0, 160.0 / Math.Max(source.PixelWidth, source.PixelHeight));
-            var width = Math.Max(1, (int)(source.PixelWidth * scale));
-            var height = Math.Max(1, (int)(source.PixelHeight * scale));
-            var resized = new TransformedBitmap(source, new System.Windows.Media.ScaleTransform(
-                (double)width / source.PixelWidth,
-                (double)height / source.PixelHeight));
-            resized.Freeze();
-            var encoder = new JpegBitmapEncoder { QualityLevel = 82 };
-            encoder.Frames.Add(BitmapFrame.Create(resized));
-            using var fs = File.Create(tempPath);
-            encoder.Save(fs);
-            fs.Close();
-            File.Move(tempPath, path, overwrite: true);
-        }
-        catch
-        {
-            TryDelete(tempPath);
-            WriteBytesAtomically(path, fallbackPngBytes);
-        }
-    }
-
     private static void WriteTextAtomically(string path, string content)
     {
         var tempPath = path + ".tmp";
@@ -771,18 +745,6 @@ public sealed class ClipboardCaptureService : IDisposable
         var tempPath = path + ".tmp";
         File.WriteAllBytes(tempPath, bytes);
         File.Move(tempPath, path, overwrite: true);
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-                File.Delete(path);
-        }
-        catch
-        {
-        }
     }
 
     public void Dispose()
