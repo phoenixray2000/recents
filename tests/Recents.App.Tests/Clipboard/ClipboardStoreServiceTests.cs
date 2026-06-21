@@ -91,7 +91,7 @@ public sealed class ClipboardStoreServiceTests
     }
 
     [Fact]
-    public async Task Compact_KeepsReferencedFilesTrees_DeletesUnreferencedPastGrace_KeepsRecent_RemovesEmpty()
+    public async Task Compact_KeepsReferencedFilesTrees_DeletesUnreferencedPastGrace_KeepsRecent_RemovesEmptyPastGrace_KeepsEmptyRecent()
     {
         using var fixture = ClipboardStoreFixture.Create();
         var store = fixture.Store;
@@ -124,9 +124,15 @@ public sealed class ClipboardStoreServiceTests
         var recentFile = Path.Combine(recentSub, "recent.txt");
         await File.WriteAllTextAsync(recentFile, "recent");
 
-        // Empty subdir (m1): must be removed regardless of grace, even if recent.
-        var emptySub = Path.Combine(store.FilesDirectory, "empty-recent");
-        Directory.CreateDirectory(emptySub);
+        // Empty + OLD subdir (past grace): must be removed (spec §6.4 — empty subdirs removed after grace).
+        var emptyOldSub = Path.Combine(store.FilesDirectory, "empty-old");
+        Directory.CreateDirectory(emptyOldSub);
+        Directory.SetLastWriteTimeUtc(emptyOldSub, DateTime.UtcNow.AddDays(-3));
+
+        // Empty + RECENT subdir (C2): an in-progress import does CreateDirectory THEN populates;
+        // a recent empty dir must be KEPT so compaction never races and deletes a live import dir.
+        var emptyRecentSub = Path.Combine(store.FilesDirectory, "empty-recent");
+        Directory.CreateDirectory(emptyRecentSub);
 
         await store.CompactOrphanBlobsAsync();
 
@@ -134,7 +140,8 @@ public sealed class ClipboardStoreServiceTests
         Assert.True(File.Exists(refFile));
         Assert.False(Directory.Exists(oldSub), "old unreferenced subtree past grace must be deleted");
         Assert.True(Directory.Exists(recentSub), "recent unreferenced subtree within grace must be kept");
-        Assert.False(Directory.Exists(emptySub), "empty subdir must be removed regardless of grace (m1)");
+        Assert.False(Directory.Exists(emptyOldSub), "empty subdir past grace must be removed (spec §6.4)");
+        Assert.True(Directory.Exists(emptyRecentSub), "recent empty subdir (in-progress import) must be kept (C2 race closed)");
     }
 
     [Fact]

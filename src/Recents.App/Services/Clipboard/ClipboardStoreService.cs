@@ -873,17 +873,17 @@ public sealed class ClipboardStoreService : IDisposable, IClipboardManagedStorag
                 if (isReferenced)
                     continue;
 
-                // m1: empty subdirs are removed regardless of grace.
-                var isEmpty = !Directory.EnumerateFileSystemEntries(fullSub).Any();
-                if (!isEmpty)
-                {
-                    DateTime lastWrite;
-                    try { lastWrite = Directory.GetLastWriteTimeUtc(fullSub); }
-                    catch { lastWrite = DateTime.UtcNow; }
+                // C2: empty AND non-empty subdirs both respect the grace window. An import does
+                // Directory.CreateDirectory(itemDirectory) and THEN populates it, so a just-created
+                // import dir is briefly empty; deleting empty dirs regardless of grace would race
+                // that window and break the remote apply. Past-grace empty dirs are still removed
+                // (Directory.Delete handles empty dirs), satisfying spec §6.4.
+                DateTime lastWrite;
+                try { lastWrite = Directory.GetLastWriteTimeUtc(fullSub); }
+                catch { lastWrite = DateTime.UtcNow; }
 
-                    if (lastWrite >= graceCutoff)
-                        continue; // non-empty + within grace — keep transient just-imported content
-                }
+                if (lastWrite >= graceCutoff)
+                    continue; // within grace — keep transient just-imported content (in-progress or recent)
 
                 try { Directory.Delete(fullSub, recursive: true); }
                 catch (Exception ex) { Log.Warning(ex, "ClipboardStoreService: failed to delete file tree {Dir}", LogPrivacy.Format(fullSub)); }
