@@ -8,7 +8,7 @@
 
 你刚下载的文件、刚保存的文档、刚复制的文字、刚截图的图片，都可以在一个窗口里找回、搜索、预览、拖走或粘贴。
 
-当前版本：**1.3**
+当前版本：**1.3.1**
 
 [English](#recents-english)
 
@@ -311,7 +311,7 @@ dotnet build Recents.sln --no-restore
 
 The file you just downloaded, the document you just saved, the text you just copied, and the screenshot you just took can all be found, searched, previewed, dragged, or pasted from one place.
 
-Current version: **1.3**
+Current version: **1.3.1**
 
 [中文](#recents)
 

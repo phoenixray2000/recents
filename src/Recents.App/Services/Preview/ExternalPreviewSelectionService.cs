@@ -7,7 +7,13 @@ using Serilog;
 
 namespace Recents.App.Services.Preview;
 
-public sealed class ExternalPreviewSelectionService
+internal interface IExternalPreviewSelectionService
+{
+    ExternalPreviewFocusedControlKind GetFocusedControlKind();
+    string? TryGetSelectedPath(IntPtr hwnd, ExternalPreviewTargetKind targetKind);
+}
+
+public sealed class ExternalPreviewSelectionService : IExternalPreviewSelectionService
 {
     public string? TryGetSelectedPath(IntPtr hwnd, ExternalPreviewTargetKind targetKind)
     {
@@ -240,14 +246,17 @@ public sealed class ExternalSpacePreviewService : IDisposable
     private const int VkMenu = 0x12;
     private const int VkLwin = 0x5B;
     private const int VkRwin = 0x5C;
+    private static readonly TimeSpan DefaultSelectionTimeout = TimeSpan.FromSeconds(2);
 
     private readonly SettingsService _settings;
     private readonly Action<string> _previewPath;
     private readonly IExternalPreviewKeyboardHook _keyboardHook;
-    private readonly ExternalPreviewSelectionService _selectionService = new();
+    private readonly IExternalPreviewSelectionService _selectionService;
+    private readonly TimeSpan _selectionTimeout;
     private readonly ExternalSpacePreviewKeyboardProc _proc;
     private IntPtr _hookId;
     private bool _disposed;
+    private int _lookupInFlight;
 
     public ExternalSpacePreviewService(SettingsService settings, Action<string> previewPath)
         : this(settings, previewPath, new Win32ExternalPreviewKeyboardHook())
@@ -258,10 +267,22 @@ public sealed class ExternalSpacePreviewService : IDisposable
         SettingsService settings,
         Action<string> previewPath,
         IExternalPreviewKeyboardHook keyboardHook)
+        : this(settings, previewPath, keyboardHook, new ExternalPreviewSelectionService(), DefaultSelectionTimeout)
+    {
+    }
+
+    internal ExternalSpacePreviewService(
+        SettingsService settings,
+        Action<string> previewPath,
+        IExternalPreviewKeyboardHook keyboardHook,
+        IExternalPreviewSelectionService selectionService,
+        TimeSpan selectionTimeout)
     {
         _settings = settings;
         _previewPath = previewPath;
         _keyboardHook = keyboardHook;
+        _selectionService = selectionService;
+        _selectionTimeout = selectionTimeout > TimeSpan.Zero ? selectionTimeout : DefaultSelectionTimeout;
         _proc = HookCallback;
     }
 
@@ -348,27 +369,82 @@ public sealed class ExternalSpacePreviewService : IDisposable
     {
         try
         {
-            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+            if (Interlocked.CompareExchange(ref _lookupInFlight, 1, 0) != 0)
             {
-                try
-                {
-                    if (_disposed)
-                        return;
+                Log.Debug("External preview: selection lookup skipped because another lookup is still running");
+                return;
+            }
 
-                    var path = _selectionService.TryGetSelectedPath(hwnd, targetKind);
-                    if (!string.IsNullOrWhiteSpace(path))
-                        _previewPath(path);
-                }
-                catch (Exception ex)
-                {
-                    Log.Warning(ex, "External preview: preview dispatch failed");
-                }
-            });
+            var lookupTask = Task.Run(() => _selectionService.TryGetSelectedPath(hwnd, targetKind));
+            _ = CompletePreviewLookupAsync(lookupTask);
         }
         catch (Exception ex)
         {
             Log.Debug(ex, "External preview: failed to schedule preview dispatch");
+            Interlocked.Exchange(ref _lookupInFlight, 0);
         }
+    }
+
+    private async Task CompletePreviewLookupAsync(Task<string?> lookupTask)
+    {
+        var resetGateNow = true;
+        try
+        {
+            var timeoutTask = Task.Delay(_selectionTimeout);
+            var completed = await Task.WhenAny(lookupTask, timeoutTask).ConfigureAwait(false);
+            if (completed != lookupTask)
+            {
+                resetGateNow = false;
+                Log.Warning("External preview: selection lookup timed out after {TimeoutMs}ms", _selectionTimeout.TotalMilliseconds);
+                ResetLookupGateWhenCompleted(lookupTask);
+                return;
+            }
+
+            if (_disposed)
+                return;
+
+            var path = await lookupTask.ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(path))
+                return;
+
+            try
+            {
+                _previewPath(path);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "External preview: preview request failed");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "External preview: preview dispatch failed");
+        }
+        finally
+        {
+            if (resetGateNow)
+                Interlocked.Exchange(ref _lookupInFlight, 0);
+        }
+    }
+
+    private void ResetLookupGateWhenCompleted(Task<string?> lookupTask)
+    {
+        _ = lookupTask.ContinueWith(
+            task =>
+            {
+                try
+                {
+                    if (task.IsFaulted && task.Exception is not null)
+                        Log.Debug(task.Exception, "External preview: timed-out selection lookup failed later");
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref _lookupInFlight, 0);
+                }
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 
     private bool HasModifierDown() =>
