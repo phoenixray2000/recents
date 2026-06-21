@@ -8,7 +8,7 @@ using WpfApplication = System.Windows.Application;
 
 namespace Recents.App.Services.Clipboard;
 
-public sealed class ClipboardStoreService : IDisposable
+public sealed class ClipboardStoreService : IDisposable, IClipboardManagedStorage
 {
     private readonly SettingsService _settings;
     private readonly ClipboardRepository _repo;
@@ -32,6 +32,8 @@ public sealed class ClipboardStoreService : IDisposable
     public string FavoriteBlobDirectory { get; }
     public string FavoriteImageDirectory { get; }
     public string FavoriteThumbnailDirectory { get; }
+    public string FilesDirectory { get; }
+    public string FavoriteFilesDirectory { get; }
 
     public ClipboardStoreService(SettingsService settings)
         : this(
@@ -52,6 +54,8 @@ public sealed class ClipboardStoreService : IDisposable
         FavoriteBlobDirectory = Path.Combine(FavoriteDirectory, "blobs");
         FavoriteImageDirectory = Path.Combine(FavoriteDirectory, "images");
         FavoriteThumbnailDirectory = Path.Combine(FavoriteDirectory, "thumbs");
+        FilesDirectory = Path.Combine(DataDirectory, "files");
+        FavoriteFilesDirectory = Path.Combine(FavoriteDirectory, "files");
 
         Directory.CreateDirectory(BlobDirectory);
         Directory.CreateDirectory(ImageDirectory);
@@ -59,6 +63,8 @@ public sealed class ClipboardStoreService : IDisposable
         Directory.CreateDirectory(FavoriteBlobDirectory);
         Directory.CreateDirectory(FavoriteImageDirectory);
         Directory.CreateDirectory(FavoriteThumbnailDirectory);
+        Directory.CreateDirectory(FilesDirectory);
+        Directory.CreateDirectory(FavoriteFilesDirectory);
 
         _repo = new ClipboardRepository(dbPath);
         BindingOperations.EnableCollectionSynchronization(Items, _sync);
@@ -762,6 +768,9 @@ public sealed class ClipboardStoreService : IDisposable
 
         return dispatcher.InvokeAsync(action).Task;
     }
+
+    public void WriteThumbnail(System.Windows.Media.Imaging.BitmapSource source, string path, byte[] fallbackPngBytes)
+        => ClipboardThumbnailWriter.WriteJpegThumbnail(source, path, fallbackPngBytes);
 
     public void Dispose()
     {

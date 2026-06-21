@@ -1,3 +1,4 @@
+using System.IO;
 using Recents.App.Models;
 using Recents.App.Services;
 using Recents.App.Services.Clipboard;
@@ -77,6 +78,16 @@ public sealed class ClipboardStoreServiceTests
         bool expected)
     {
         Assert.Equal(expected, MainViewModel.ClipboardTypeMatchesFilter(type, subFilter));
+    }
+
+    [Fact]
+    public void Store_CreatesManagedFilesDirectories()
+    {
+        using var fixture = ClipboardStoreFixture.Create();
+        Assert.True(Directory.Exists(fixture.Store.FilesDirectory));
+        Assert.True(Directory.Exists(fixture.Store.FavoriteFilesDirectory));
+        Assert.EndsWith(Path.Combine("data", "files"), fixture.Store.FilesDirectory.TrimEnd(Path.DirectorySeparatorChar));
+        Assert.EndsWith(Path.Combine("favorites", "files"), fixture.Store.FavoriteFilesDirectory.TrimEnd(Path.DirectorySeparatorChar));
     }
 
     private static ClipboardItem NewTextItem(string id, string hash, DateTime createdUtc) => new()
