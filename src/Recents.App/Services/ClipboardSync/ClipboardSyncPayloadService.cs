@@ -13,14 +13,16 @@ internal sealed record ClipboardSyncExport(SyncClipboardProfile Profile, string?
 internal sealed class ClipboardSyncPayloadService
 {
     private readonly string _outgoingDirectory;
-    private readonly string _incomingDirectory;
+    private readonly IClipboardManagedStorage _managed;
 
-    public ClipboardSyncPayloadService(string outgoingDirectory, string incomingDirectory)
+    public ClipboardSyncPayloadService(string outgoingDirectory, IClipboardManagedStorage managed)
     {
         _outgoingDirectory = outgoingDirectory;
-        _incomingDirectory = incomingDirectory;
+        _managed = managed;
         Directory.CreateDirectory(_outgoingDirectory);
-        Directory.CreateDirectory(_incomingDirectory);
+        Directory.CreateDirectory(_managed.ImageDirectory);
+        Directory.CreateDirectory(_managed.ThumbnailDirectory);
+        Directory.CreateDirectory(_managed.FilesDirectory);
     }
 
     public async Task<ClipboardSyncExport> ExportAsync(
@@ -266,7 +268,7 @@ internal sealed class ClipboardSyncPayloadService
         if (string.IsNullOrWhiteSpace(payloadPath) || !File.Exists(payloadPath))
             return item;
 
-        var itemDirectory = Path.Combine(_incomingDirectory, SafeName(profile.Hash));
+        var itemDirectory = Path.Combine(_managed.FilesDirectory, SafeName(profile.Hash));
         Directory.CreateDirectory(itemDirectory);
         var image = await ImportIncomingImageAsync(
             payloadPath,
@@ -507,7 +509,7 @@ internal sealed class ClipboardSyncPayloadService
         if (string.IsNullOrWhiteSpace(payloadPath) || !File.Exists(payloadPath))
             return FileDropItem(profile, []);
 
-        var itemDirectory = Path.Combine(_incomingDirectory, SafeName(profile.Hash));
+        var itemDirectory = Path.Combine(_managed.FilesDirectory, SafeName(profile.Hash));
         Directory.CreateDirectory(itemDirectory);
         var paths = ExtractZip(payloadPath, itemDirectory);
         return FileDropItem(profile, paths);
@@ -518,7 +520,7 @@ internal sealed class ClipboardSyncPayloadService
         if (string.IsNullOrWhiteSpace(payloadPath) || !File.Exists(payloadPath))
             return null;
 
-        var itemDirectory = Path.Combine(_incomingDirectory, SafeName(profile.Hash));
+        var itemDirectory = Path.Combine(_managed.FilesDirectory, SafeName(profile.Hash));
         Directory.CreateDirectory(itemDirectory);
         return await CopyIncomingAsync(payloadPath, itemDirectory, Path.GetFileName(fileName)).ConfigureAwait(false);
     }

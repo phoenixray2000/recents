@@ -15,6 +15,7 @@ internal sealed class ClipboardWebDavSyncService : IDisposable
     private readonly ClipboardStoreService _store;
     private readonly ClipboardActionService _actions;
     private readonly ClipboardSyncPayloadService _payloads;
+    private readonly string _outgoingDirectory;
     private readonly string _downloadDirectory;
     private readonly SemaphoreSlim _syncGate = new(1, 1);
 
@@ -39,10 +40,9 @@ internal sealed class ClipboardWebDavSyncService : IDisposable
         _actions = actions;
 
         var syncRoot = Path.Combine(_store.DataDirectory, "webdav");
-        _payloads = new ClipboardSyncPayloadService(
-            Path.Combine(syncRoot, "outgoing"),
-            Path.Combine(syncRoot, "incoming"));
+        _outgoingDirectory = Path.Combine(syncRoot, "outgoing");
         _downloadDirectory = Path.Combine(syncRoot, "downloads");
+        _payloads = new ClipboardSyncPayloadService(_outgoingDirectory, _store);
 
         _capture.ItemCaptured += OnItemCapturedAsync;
     }

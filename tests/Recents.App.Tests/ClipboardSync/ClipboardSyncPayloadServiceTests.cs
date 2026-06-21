@@ -481,16 +481,21 @@ public sealed class ClipboardSyncPayloadServiceTests
     {
         private readonly string _root;
         public string SourceDirectory { get; }
+        public string ImageDirectory { get; }
+        public string ThumbnailDirectory { get; }
+        public string FilesDirectory { get; }
         public ClipboardSyncPayloadService Service { get; }
 
         private ClipboardSyncPayloadFixture(string root)
         {
             _root = root;
             SourceDirectory = Path.Combine(root, "source");
+            ImageDirectory = Path.Combine(root, "images");
+            ThumbnailDirectory = Path.Combine(root, "thumbs");
+            FilesDirectory = Path.Combine(root, "files");
             Directory.CreateDirectory(SourceDirectory);
-            Service = new ClipboardSyncPayloadService(
-                Path.Combine(root, "outgoing"),
-                Path.Combine(root, "incoming"));
+            var managed = new TestManagedStorage(ImageDirectory, ThumbnailDirectory, FilesDirectory);
+            Service = new ClipboardSyncPayloadService(Path.Combine(root, "outgoing"), managed);
         }
 
         public static ClipboardSyncPayloadFixture Create() =>
@@ -500,6 +505,23 @@ public sealed class ClipboardSyncPayloadServiceTests
         {
             try { Directory.Delete(_root, recursive: true); } catch { }
         }
+    }
+
+    private sealed class TestManagedStorage : Recents.App.Services.Clipboard.IClipboardManagedStorage
+    {
+        public TestManagedStorage(string imageDir, string thumbDir, string filesDir)
+        {
+            ImageDirectory = imageDir;
+            ThumbnailDirectory = thumbDir;
+            FilesDirectory = filesDir;
+        }
+
+        public string ImageDirectory { get; }
+        public string ThumbnailDirectory { get; }
+        public string FilesDirectory { get; }
+
+        public void WriteThumbnail(System.Windows.Media.Imaging.BitmapSource source, string path, byte[] fallbackPngBytes)
+            => Recents.App.Services.Clipboard.ClipboardThumbnailWriter.WriteJpegThumbnail(source, path, fallbackPngBytes);
     }
 
     private static byte[] AddPngChunk(byte[] pngBytes, string chunkType, byte[] chunkData)
