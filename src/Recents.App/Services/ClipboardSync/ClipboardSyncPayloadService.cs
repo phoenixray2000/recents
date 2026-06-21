@@ -268,12 +268,11 @@ internal sealed class ClipboardSyncPayloadService
         if (string.IsNullOrWhiteSpace(payloadPath) || !File.Exists(payloadPath))
             return item;
 
-        var itemDirectory = Path.Combine(_managed.FilesDirectory, SafeName(profile.Hash));
-        Directory.CreateDirectory(itemDirectory);
-        var image = await ImportIncomingImageAsync(
+        var image = await ImportManagedImageAsync(
             payloadPath,
-            itemDirectory,
+            _managed.ImageDirectory,
             Path.GetFileName(profile.DataName ?? profile.Text ?? "remote.png")).ConfigureAwait(false);
+
         item.ImagePath = image.Path;
         item.Hash = ClipboardHash.ForImage(image.Bytes);
         item.SizeBytes = image.Bytes.LongLength;
@@ -281,12 +280,14 @@ internal sealed class ClipboardSyncPayloadService
         item.ImageHeight = image.Height;
         if (image.Width.HasValue && image.Height.HasValue && string.IsNullOrWhiteSpace(item.PreviewText))
             item.PreviewText = $"Screenshot {image.Width}x{image.Height}";
+
+        TryWriteImportedThumbnail(item, image.Bytes, created);
         return item;
     }
 
-    private static async Task<ImportedImagePayload> ImportIncomingImageAsync(
+    private static async Task<ImportedImagePayload> ImportManagedImageAsync(
         string payloadPath,
-        string itemDirectory,
+        string imageDirectory,
         string fileName)
     {
         var safeFileName = SyncClipboardPayloadFormats.SafePayloadFileName(fileName, "remote.png");
@@ -294,7 +295,7 @@ internal sealed class ClipboardSyncPayloadService
 
         if (SyncClipboardPayloadFormats.IsStandardImageFileName(safeFileName))
         {
-            var target = Path.Combine(itemDirectory, safeFileName);
+            var target = ManagedImageTarget(imageDirectory, safeFileName);
             await WriteBytesAsync(target, sourceBytes).ConfigureAwait(false);
             var dimensions = TryReadImageDimensions(sourceBytes);
             return new ImportedImagePayload(target, sourceBytes, dimensions.Width, dimensions.Height);
@@ -303,20 +304,45 @@ internal sealed class ClipboardSyncPayloadService
         if (SyncClipboardPayloadFormats.IsComplexImageFileName(safeFileName) &&
             TryConvertComplexImageBytes(sourceBytes, safeFileName, out var convertedName, out var convertedBytes, out var convertedWidth, out var convertedHeight))
         {
-            var target = Path.Combine(itemDirectory, convertedName);
+            var target = ManagedImageTarget(imageDirectory, convertedName);
             await WriteBytesAsync(target, convertedBytes).ConfigureAwait(false);
             return new ImportedImagePayload(target, convertedBytes, convertedWidth, convertedHeight);
         }
 
         if (TryNormalizeUnknownImageBytes(sourceBytes, safeFileName, out var pngName, out var pngBytes, out var width, out var height))
         {
-            var target = Path.Combine(itemDirectory, pngName);
+            var target = ManagedImageTarget(imageDirectory, pngName);
             await WriteBytesAsync(target, pngBytes).ConfigureAwait(false);
             return new ImportedImagePayload(target, pngBytes, width, height);
         }
 
-        var copied = await CopyIncomingAsync(payloadPath, itemDirectory, safeFileName).ConfigureAwait(false);
-        return new ImportedImagePayload(copied, sourceBytes, null, null);
+        var fallback = ClipboardBlobNamer.EnsureUnique(imageDirectory, safeFileName);
+        await CopyManagedAsync(payloadPath, imageDirectory, Path.GetFileName(fallback)).ConfigureAwait(false);
+        return new ImportedImagePayload(fallback, sourceBytes, null, null);
+    }
+
+    private static string ManagedImageTarget(string imageDirectory, string fileName)
+        => ClipboardBlobNamer.EnsureUnique(imageDirectory, fileName);
+
+    private void TryWriteImportedThumbnail(ClipboardItem item, byte[] imageBytes, DateTime created)
+    {
+        if (string.IsNullOrWhiteSpace(item.ImagePath))
+            return;
+        try
+        {
+            using var ms = new MemoryStream(imageBytes);
+            var decoder = BitmapDecoder.Create(ms, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+            var frame = decoder.Frames[0];
+            frame.Freeze();
+            var thumbName = ClipboardBlobNamer.Build(ClipboardPayloadType.Image, created, item.Hash, ".jpg");
+            var thumbPath = ClipboardBlobNamer.EnsureUnique(_managed.ThumbnailDirectory, thumbName);
+            _managed.WriteThumbnail(frame, thumbPath, imageBytes);
+            item.ThumbnailPath = thumbPath;
+        }
+        catch
+        {
+            // Only reached for a genuinely-undecodable fallback copy; image remains usable without a thumbnail.
+        }
     }
 
     private static (int? Width, int? Height) TryReadImageDimensions(byte[] sourceBytes)
@@ -500,7 +526,7 @@ internal sealed class ClipboardSyncPayloadService
 
     private async Task<ClipboardItem> ImportFileAsync(SyncClipboardProfile profile, string? payloadPath)
     {
-        var path = await CopyIncomingPayloadAsync(profile, payloadPath, profile.DataName ?? profile.Text).ConfigureAwait(false);
+        var path = await CopyManagedPayloadAsync(profile, payloadPath, profile.DataName ?? profile.Text).ConfigureAwait(false);
         return FileDropItem(profile, path is null ? [] : [path]);
     }
 
@@ -515,14 +541,14 @@ internal sealed class ClipboardSyncPayloadService
         return FileDropItem(profile, paths);
     }
 
-    private async Task<string?> CopyIncomingPayloadAsync(SyncClipboardProfile profile, string? payloadPath, string fileName)
+    private async Task<string?> CopyManagedPayloadAsync(SyncClipboardProfile profile, string? payloadPath, string fileName)
     {
         if (string.IsNullOrWhiteSpace(payloadPath) || !File.Exists(payloadPath))
             return null;
 
         var itemDirectory = Path.Combine(_managed.FilesDirectory, SafeName(profile.Hash));
         Directory.CreateDirectory(itemDirectory);
-        return await CopyIncomingAsync(payloadPath, itemDirectory, Path.GetFileName(fileName)).ConfigureAwait(false);
+        return await CopyManagedAsync(payloadPath, itemDirectory, Path.GetFileName(fileName)).ConfigureAwait(false);
     }
 
     private static ClipboardItem FileDropItem(SyncClipboardProfile profile, IReadOnlyList<string> paths)
@@ -637,7 +663,7 @@ internal sealed class ClipboardSyncPayloadService
             .Sum(file => new FileInfo(file).Length);
     }
 
-    private static async Task<string> CopyIncomingAsync(string source, string targetDirectory, string fileName)
+    private static async Task<string> CopyManagedAsync(string source, string targetDirectory, string fileName)
     {
         var target = Path.Combine(targetDirectory, fileName);
         await CopyFileAsync(source, target).ConfigureAwait(false);

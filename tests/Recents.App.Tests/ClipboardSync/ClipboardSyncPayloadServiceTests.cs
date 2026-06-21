@@ -1,4 +1,6 @@
 using Recents.App.Models;
+using Recents.App.Services;
+using Recents.App.Services.Clipboard;
 using Recents.App.Services.ClipboardSync;
 using System.Buffers.Binary;
 using System.IO.Compression;
@@ -475,6 +477,179 @@ public sealed class ClipboardSyncPayloadServiceTests
             DataName = "bad.zip",
             Size = new FileInfo(zipPath).Length
         }, zipPath));
+    }
+
+    [Fact]
+    public async Task ImportAsync_StandardImageLandsInManagedImagesWithThumbnail()
+    {
+        using var fixture = ClipboardSyncPayloadFixture.Create();
+        var payloadPath = Path.Combine(fixture.SourceDirectory, "remote.png");
+        await File.WriteAllBytesAsync(payloadPath, Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="));
+
+        var imported = await fixture.Service.ImportAsync(new SyncClipboardProfile
+        {
+            Type = SyncClipboardProfileType.Image,
+            Hash = "remote-img",
+            Text = "remote.png",
+            HasData = true,
+            DataName = "remote.png",
+            Size = new FileInfo(payloadPath).Length
+        }, payloadPath);
+
+        Assert.NotNull(imported.ImagePath);
+        Assert.StartsWith(fixture.ImageDirectory, Path.GetFullPath(imported.ImagePath!), StringComparison.OrdinalIgnoreCase);
+        Assert.True(File.Exists(imported.ImagePath));            // apply path reads ImagePath directly
+        Assert.NotNull(imported.ThumbnailPath);
+        Assert.StartsWith(fixture.ThumbnailDirectory, Path.GetFullPath(imported.ThumbnailPath!), StringComparison.OrdinalIgnoreCase);
+        Assert.True(File.Exists(imported.ThumbnailPath));        // M4: thumbnail always written for a decodable image
+    }
+
+    [Fact]
+    public async Task ImportAsync_ConvertedImageAlsoWritesThumbnail()
+    {
+        // Use an image filename whose extension routes through the complex/convert branch.
+        using var fixture = ClipboardSyncPayloadFixture.Create();
+        var (payloadPath, dataName) = WriteConvertibleImagePayload(fixture.SourceDirectory);
+        var imported = await fixture.Service.ImportAsync(new SyncClipboardProfile
+        {
+            Type = SyncClipboardProfileType.Image,
+            Hash = "remote-converted",
+            Text = dataName,
+            HasData = true,
+            DataName = dataName,
+            Size = new FileInfo(payloadPath).Length
+        }, payloadPath);
+
+        Assert.NotNull(imported.ImagePath);
+        Assert.StartsWith(fixture.ImageDirectory, Path.GetFullPath(imported.ImagePath!), StringComparison.OrdinalIgnoreCase);
+        Assert.NotNull(imported.ThumbnailPath);
+        Assert.True(File.Exists(imported.ThumbnailPath));        // M4: converted path also writes a thumbnail
+    }
+
+    [Fact]
+    public async Task ImportAsync_GroupLandsUnderManagedFilesDirectory()
+    {
+        using var fixture = ClipboardSyncPayloadFixture.Create();
+        var filePath = Path.Combine(fixture.SourceDirectory, "note.txt");
+        var otherPath = Path.Combine(fixture.SourceDirectory, "other.txt");
+        await File.WriteAllTextAsync(filePath, "hello");
+        await File.WriteAllTextAsync(otherPath, "world");
+        var item = new ClipboardItem
+        {
+            Type = ClipboardPayloadType.Files, Hash = "g",
+            FilePaths =
+            [
+                new ClipboardFilePath { Path = filePath, ExistsAtCapture = true },
+                new ClipboardFilePath { Path = otherPath, ExistsAtCapture = true }
+            ]
+        };
+        var export = await fixture.Service.ExportAsync(item, "d", "ws", 1024 * 1024);
+        var imported = await fixture.Service.ImportAsync(export.Profile, export.PayloadPath);
+
+        Assert.NotEmpty(imported.FilePaths);
+        foreach (var f in imported.FilePaths)
+        {
+            Assert.StartsWith(fixture.FilesDirectory, Path.GetFullPath(f.Path), StringComparison.OrdinalIgnoreCase);
+            Assert.True(File.Exists(f.Path));                    // M3: on-disk content usable by the apply path even when not saved to history
+        }
+    }
+
+    [Fact]
+    public async Task ImportedImage_NotIngested_AppliesViaDataObject()
+    {
+        // Real store so import lands in store.ImageDirectory.
+        var dir = Path.Combine(AppContext.BaseDirectory, "r2-3-image", Guid.NewGuid().ToString("N"));
+        var settings = new SettingsService();
+        var store = new ClipboardStoreService(settings, Path.Combine(dir, "data"), Path.Combine(dir, "clipboard.db"));
+        var actions = new ClipboardActionService(store);
+        store.AttachActions(actions);
+        store.OpenDatabase();
+        try
+        {
+            var payloads = new ClipboardSyncPayloadService(Path.Combine(dir, "outgoing"), store);
+            var payloadPath = Path.Combine(dir, "remote.png");
+            Directory.CreateDirectory(dir);
+            await File.WriteAllBytesAsync(payloadPath, Convert.FromBase64String(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="));
+
+            var item = await payloads.ImportAsync(new SyncClipboardProfile
+            {
+                Type = SyncClipboardProfileType.Image, Hash = "img", Text = "remote.png",
+                HasData = true, DataName = "remote.png", Size = new FileInfo(payloadPath).Length
+            }, payloadPath);
+
+            // History NOT ingested — item is unreferenced by the DB (mirrors SaveRemoteItemsToHistory=false).
+            Assert.True(actions.HasUsableContent(item));
+            var data = actions.CreateDataObject(item);
+            Assert.True(data.GetDataPresent(System.Windows.DataFormats.Bitmap), "imported image must apply as a bitmap");
+            Assert.True(data.GetDataPresent(System.Windows.DataFormats.FileDrop), "imported image must apply via file-drop compatibility");
+        }
+        finally
+        {
+            store.Dispose();
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task ImportedGroup_NotIngested_AppliesViaFileDrop()
+    {
+        var dir = Path.Combine(AppContext.BaseDirectory, "r2-3-group", Guid.NewGuid().ToString("N"));
+        var settings = new SettingsService();
+        var store = new ClipboardStoreService(settings, Path.Combine(dir, "data"), Path.Combine(dir, "clipboard.db"));
+        var actions = new ClipboardActionService(store);
+        store.AttachActions(actions);
+        store.OpenDatabase();
+        try
+        {
+            var payloads = new ClipboardSyncPayloadService(Path.Combine(dir, "outgoing"), store);
+            var srcDir = Path.Combine(dir, "src");
+            Directory.CreateDirectory(srcDir);
+            var f1 = Path.Combine(srcDir, "a.txt");
+            var f2 = Path.Combine(srcDir, "b.txt");
+            await File.WriteAllTextAsync(f1, "alpha");
+            await File.WriteAllTextAsync(f2, "beta");
+            var sourceItem = new ClipboardItem
+            {
+                Type = ClipboardPayloadType.Files, Hash = "g",
+                FilePaths =
+                [
+                    new ClipboardFilePath { Path = f1, ExistsAtCapture = true },
+                    new ClipboardFilePath { Path = f2, ExistsAtCapture = true }
+                ]
+            };
+            var export = await payloads.ExportAsync(sourceItem, "d", "ws", 1024 * 1024);
+            var item = await payloads.ImportAsync(export.Profile, export.PayloadPath);
+
+            // History NOT ingested.
+            Assert.True(actions.HasUsableContent(item));
+            var data = actions.CreateDataObject(item);
+            var drop = data.GetFileDropList();
+            Assert.NotNull(drop);
+            Assert.True(drop!.Count > 0, "imported group must apply as a non-empty file-drop list");
+            foreach (var p in drop!)
+                Assert.True(File.Exists(p), "every applied file-drop path must exist on disk even when not saved to history");
+        }
+        finally
+        {
+            store.Dispose();
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    private static (string PayloadPath, string DataName) WriteConvertibleImagePayload(string sourceDirectory)
+    {
+        // Encode a small real image as WebP so the complex/convert import branch (IsComplexImageFileName)
+        // decodes it and emits decoded bytes the thumbnail writer can use.
+        var pixels = new byte[2 * 2 * 4];
+        for (var i = 0; i < pixels.Length; i++) pixels[i] = (byte)(i * 37 % 251);
+        using var magick = new ImageMagick.MagickImage(pixels, new ImageMagick.PixelReadSettings(2, 2, ImageMagick.StorageType.Char, ImageMagick.PixelMapping.BGRA));
+        var webpBytes = magick.ToByteArray(ImageMagick.MagickFormat.WebP);
+        var dataName = "remote.webp";
+        var payloadPath = Path.Combine(sourceDirectory, dataName);
+        File.WriteAllBytes(payloadPath, webpBytes);
+        return (payloadPath, dataName);
     }
 
     private sealed class ClipboardSyncPayloadFixture : IDisposable
