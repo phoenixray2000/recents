@@ -19,6 +19,7 @@ public sealed class ClipboardStoreService : IDisposable, IClipboardManagedStorag
     private readonly Dictionary<string, ClipboardFavoriteViewModel> _favoritesByHash = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _sync = new();
     private readonly ClipboardBlobDeletionQueue _deletionQueue = new();
+    private static readonly TimeSpan FilesGraceWindow = TimeSpan.FromDays(1);
     private readonly System.Windows.Threading.DispatcherTimer _maintenanceTimer;
     private ClipboardActionService? _actions;
 
@@ -500,13 +501,17 @@ public sealed class ClipboardStoreService : IDisposable, IClipboardManagedStorag
                 var deletedCutoffUtc = _deletionQueue.CutoffUtc;
                 var retainedNormalPaths = _repo.LoadRetainedBlobPaths(deletedCutoffUtc);
                 _repo.CompactDeletedItems(deletedCutoffUtc);
-                DeleteUnreferencedFiles(BlobDirectory, retainedNormalPaths);
-                DeleteUnreferencedFiles(ImageDirectory, retainedNormalPaths);
-                DeleteUnreferencedFiles(ThumbnailDirectory, retainedNormalPaths);
+                var graceCutoffUtc = DateTime.UtcNow - FilesGraceWindow;
+                DeleteUnreferencedFiles(BlobDirectory, retainedNormalPaths, graceCutoffUtc);
+                DeleteUnreferencedFiles(ImageDirectory, retainedNormalPaths, graceCutoffUtc);
+                DeleteUnreferencedFiles(ThumbnailDirectory, retainedNormalPaths, graceCutoffUtc);
                 var favoritePaths = _repo.LoadFavorites();
-                DeleteUnreferencedFiles(FavoriteBlobDirectory, favoritePaths.SelectMany(v => new[] { v.BlobPath, v.HtmlBlobPath, v.RtfBlobPath }));
-                DeleteUnreferencedFiles(FavoriteImageDirectory, favoritePaths.Select(v => v.ImagePath));
-                DeleteUnreferencedFiles(FavoriteThumbnailDirectory, favoritePaths.Select(v => v.ThumbnailPath));
+                DeleteUnreferencedFiles(FavoriteBlobDirectory, favoritePaths.SelectMany(v => new[] { v.BlobPath, v.HtmlBlobPath, v.RtfBlobPath }), graceCutoffUtc);
+                DeleteUnreferencedFiles(FavoriteImageDirectory, favoritePaths.Select(v => v.ImagePath), graceCutoffUtc);
+                DeleteUnreferencedFiles(FavoriteThumbnailDirectory, favoritePaths.Select(v => v.ThumbnailPath), graceCutoffUtc);
+
+                var retainedManagedFilePaths = _repo.LoadRetainedManagedFilePaths(deletedCutoffUtc);
+                DeleteUnreferencedFileTrees(retainedManagedFilePaths);
 
                 if (removedItems.Count > 0 || removedFavorites.Count > 0)
                 {
@@ -680,7 +685,7 @@ public sealed class ClipboardStoreService : IDisposable, IClipboardManagedStorag
         return (removedItems, removedFavorites);
     }
 
-    private static void DeleteUnreferencedFiles(string directory, IEnumerable<string?> referencedPaths)
+    private static void DeleteUnreferencedFiles(string directory, IEnumerable<string?> referencedPaths, DateTime graceCutoffUtc)
     {
         try
         {
@@ -692,13 +697,72 @@ public sealed class ClipboardStoreService : IDisposable, IClipboardManagedStorag
 
             foreach (var file in Directory.EnumerateFiles(directory))
             {
-                if (!referenced.Contains(Path.GetFullPath(file)))
-                    TryDeleteFile(file);
+                if (referenced.Contains(Path.GetFullPath(file)))
+                    continue;
+
+                DateTime lastWrite;
+                try { lastWrite = File.GetLastWriteTimeUtc(file); }
+                catch { lastWrite = DateTime.UtcNow; }
+                if (lastWrite >= graceCutoffUtc)
+                    continue; // within grace — keep just-imported not-yet-referenced content
+
+                TryDeleteFile(file);
             }
         }
         catch (Exception ex)
         {
             Log.Warning(ex, "ClipboardStoreService: compact failed {Directory}", LogPrivacy.Format(directory));
+        }
+    }
+
+    private void DeleteUnreferencedFileTrees(IEnumerable<string?> referencedPaths)
+    {
+        try
+        {
+            Directory.CreateDirectory(FilesDirectory);
+            var filesRoot = Path.GetFullPath(FilesDirectory);
+
+            // Only references that actually live under FilesDirectory matter here;
+            // user-real-path drops are outside and must be ignored.
+            var referenced = referencedPaths
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Select(p => Path.GetFullPath(p!))
+                .Where(p => p.StartsWith(filesRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            var graceCutoff = DateTime.UtcNow - FilesGraceWindow;
+
+            foreach (var subdir in Directory.EnumerateDirectories(FilesDirectory))
+            {
+                var fullSub = Path.GetFullPath(subdir);
+                var prefix = fullSub + Path.DirectorySeparatorChar;
+
+                var isReferenced = referenced.Any(r =>
+                    r.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(r, fullSub, StringComparison.OrdinalIgnoreCase));
+
+                if (isReferenced)
+                    continue;
+
+                // m1: empty subdirs are removed regardless of grace.
+                var isEmpty = !Directory.EnumerateFileSystemEntries(fullSub).Any();
+                if (!isEmpty)
+                {
+                    DateTime lastWrite;
+                    try { lastWrite = Directory.GetLastWriteTimeUtc(fullSub); }
+                    catch { lastWrite = DateTime.UtcNow; }
+
+                    if (lastWrite >= graceCutoff)
+                        continue; // non-empty + within grace — keep transient just-imported content
+                }
+
+                try { Directory.Delete(fullSub, recursive: true); }
+                catch (Exception ex) { Log.Warning(ex, "ClipboardStoreService: failed to delete file tree {Dir}", LogPrivacy.Format(fullSub)); }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "ClipboardStoreService: files reconciliation failed");
         }
     }
 

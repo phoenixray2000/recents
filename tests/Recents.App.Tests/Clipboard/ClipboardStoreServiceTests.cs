@@ -90,6 +90,96 @@ public sealed class ClipboardStoreServiceTests
         Assert.EndsWith(Path.Combine("favorites", "files"), fixture.Store.FavoriteFilesDirectory.TrimEnd(Path.DirectorySeparatorChar));
     }
 
+    [Fact]
+    public async Task Compact_KeepsReferencedFilesTrees_DeletesUnreferencedPastGrace_KeepsRecent_RemovesEmpty()
+    {
+        using var fixture = ClipboardStoreFixture.Create();
+        var store = fixture.Store;
+
+        // Referenced subtree: belongs to a live item.
+        var refSub = Path.Combine(store.FilesDirectory, "referenced");
+        Directory.CreateDirectory(refSub);
+        var refFile = Path.Combine(refSub, "keep.txt");
+        await File.WriteAllTextAsync(refFile, "keep");
+
+        var item = new ClipboardItem
+        {
+            Id = "files-item", Type = ClipboardPayloadType.Files,
+            Hash = "files-hash", CreatedUtc = DateTime.UtcNow, LastUsedUtc = DateTime.UtcNow,
+            PreviewText = "keep.txt", PlainText = refFile,
+            FilePaths = [new ClipboardFilePath { Path = refFile, ExistsAtCapture = true }]
+        };
+        await store.IngestAsync(item);
+
+        // Unreferenced + OLD subtree (past 1-day grace): must be deleted.
+        var oldSub = Path.Combine(store.FilesDirectory, "orphan-old");
+        Directory.CreateDirectory(oldSub);
+        var oldFile = Path.Combine(oldSub, "old.txt");
+        await File.WriteAllTextAsync(oldFile, "old");
+        Directory.SetLastWriteTimeUtc(oldSub, DateTime.UtcNow.AddDays(-3));
+
+        // Unreferenced + RECENT subtree (within grace): must survive.
+        var recentSub = Path.Combine(store.FilesDirectory, "orphan-recent");
+        Directory.CreateDirectory(recentSub);
+        var recentFile = Path.Combine(recentSub, "recent.txt");
+        await File.WriteAllTextAsync(recentFile, "recent");
+
+        // Empty subdir (m1): must be removed regardless of grace, even if recent.
+        var emptySub = Path.Combine(store.FilesDirectory, "empty-recent");
+        Directory.CreateDirectory(emptySub);
+
+        await store.CompactOrphanBlobsAsync();
+
+        Assert.True(Directory.Exists(refSub), "referenced subtree must be kept");
+        Assert.True(File.Exists(refFile));
+        Assert.False(Directory.Exists(oldSub), "old unreferenced subtree past grace must be deleted");
+        Assert.True(Directory.Exists(recentSub), "recent unreferenced subtree within grace must be kept");
+        Assert.False(Directory.Exists(emptySub), "empty subdir must be removed regardless of grace (m1)");
+    }
+
+    [Fact]
+    public async Task Compact_NeverDeletesUserRealPathFiles()
+    {
+        using var fixture = ClipboardStoreFixture.Create();
+        var store = fixture.Store;
+
+        // A local file drop referencing the user's real path (OUTSIDE FilesDirectory).
+        var userDir = Path.Combine(AppContext.BaseDirectory, "user-real", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(userDir);
+        var userFile = Path.Combine(userDir, "mydoc.txt");
+        await File.WriteAllTextAsync(userFile, "user content");
+
+        var item = new ClipboardItem
+        {
+            Id = "local-files", Type = ClipboardPayloadType.Files,
+            Hash = "local-hash", CreatedUtc = DateTime.UtcNow, LastUsedUtc = DateTime.UtcNow,
+            PreviewText = "mydoc.txt", PlainText = userFile,
+            FilePaths = [new ClipboardFilePath { Path = userFile, ExistsAtCapture = true }]
+        };
+        await store.IngestAsync(item);
+
+        await store.CompactOrphanBlobsAsync();
+
+        Assert.True(File.Exists(userFile), "user real path must never be touched by reconciliation");
+        try { Directory.Delete(userDir, recursive: true); } catch { }
+    }
+
+    [Fact]
+    public async Task Compact_KeepsRecentlyImportedUnreferencedImageWithinGrace()
+    {
+        // M2: an imported not-saved image lands in images/ unreferenced; the clipboard apply
+        // references ImagePath until the next clipboard change. The 1-day mtime grace must keep it.
+        using var fixture = ClipboardStoreFixture.Create();
+        var store = fixture.Store;
+
+        var orphanImg = Path.Combine(store.ImageDirectory, "just-imported.png");
+        await File.WriteAllBytesAsync(orphanImg, new byte[] { 1, 2, 3 }); // mtime = now
+
+        await store.CompactOrphanBlobsAsync();
+
+        Assert.True(File.Exists(orphanImg), "recently-imported unreferenced image must survive within the grace window (M2)");
+    }
+
     private static ClipboardItem NewTextItem(string id, string hash, DateTime createdUtc) => new()
     {
         Id = id,
