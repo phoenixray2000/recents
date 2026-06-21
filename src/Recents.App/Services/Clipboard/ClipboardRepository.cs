@@ -462,6 +462,31 @@ internal sealed class ClipboardRepository : IDisposable
         return paths;
     }
 
+    public IReadOnlyList<string> LoadRetainedManagedFilePaths(DateTime deletedCutoffUtc)
+    {
+        if (_conn is null) return Array.Empty<string>();
+
+        var paths = new List<string>();
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT f.path
+            FROM clipboard_files f
+            JOIN clipboard_items i ON i.id = f.item_id
+            WHERE i.is_deleted = 0
+               OR i.deleted_utc IS NULL
+               OR i.deleted_utc >= $cutoff;
+            """;
+        cmd.Parameters.AddWithValue("$cutoff", deletedCutoffUtc.ToString("O"));
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            if (!reader.IsDBNull(0))
+                paths.Add(reader.GetString(0));
+        }
+
+        return paths;
+    }
+
     public IReadOnlyList<string> SoftDeleteOverflowAndExpired(int maxItems, DateTime retentionCutoffUtc, DateTime deletedUtc)
     {
         if (_conn is null) return Array.Empty<string>();

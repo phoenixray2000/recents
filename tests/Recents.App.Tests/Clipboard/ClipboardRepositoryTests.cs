@@ -167,6 +167,42 @@ public sealed class ClipboardRepositoryTests
         Assert.Null(Assert.Single(repo.LoadFavorites()).FavoriteAlias);
     }
 
+    [Fact]
+    public void LoadRetainedManagedFilePaths_ReturnsFilePathsForRetainedItemsOnly()
+    {
+        using var fixture = RepositoryFixture.Create(); // mirror existing repo-test fixture helper
+        var repo = fixture.Repository;
+
+        var live = NewFilesItem("live", "hash-live", new[] { @"C:\data\files\a\x.txt", @"C:\data\files\a\y.txt" });
+        var deletedRecent = NewFilesItem("recent", "hash-recent", new[] { @"C:\data\files\b\z.txt" });
+        var deletedOld = NewFilesItem("old", "hash-old", new[] { @"C:\data\files\c\old.txt" });
+
+        repo.Upsert(live);
+        repo.Upsert(deletedRecent);
+        repo.Upsert(deletedOld);
+        repo.SoftDelete("recent", DateTime.UtcNow.AddMinutes(-1));
+        repo.SoftDelete("old", DateTime.UtcNow.AddDays(-30));
+
+        var cutoff = DateTime.UtcNow.AddDays(-7);
+        var retained = repo.LoadRetainedManagedFilePaths(cutoff);
+
+        Assert.Contains(@"C:\data\files\a\x.txt", retained);
+        Assert.Contains(@"C:\data\files\a\y.txt", retained);
+        Assert.Contains(@"C:\data\files\b\z.txt", retained); // recently deleted, within window
+        Assert.DoesNotContain(@"C:\data\files\c\old.txt", retained); // deleted long ago
+    }
+
+    private static ClipboardItem NewFilesItem(string id, string hash, string[] filePaths) => new()
+    {
+        Id = id,
+        Type = ClipboardPayloadType.Files,
+        CreatedUtc = DateTime.UtcNow,
+        LastUsedUtc = DateTime.UtcNow,
+        Hash = hash,
+        PreviewText = id,
+        FilePaths = filePaths.Select(p => new ClipboardFilePath { Path = p, ExistsAtCapture = true }).ToList(),
+    };
+
     private static ClipboardItem NewItem(string id, DateTime createdUtc, string hash, string blobName) => new()
     {
         Id = id,
