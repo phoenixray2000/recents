@@ -486,6 +486,7 @@ public sealed class ClipboardStoreService : IDisposable, IClipboardManagedStorag
                 TryDeleteDirectoryContents(BlobDirectory);
                 TryDeleteDirectoryContents(ImageDirectory);
                 TryDeleteDirectoryContents(ThumbnailDirectory);
+                TryDeleteDirectoryTrees(FilesDirectory);
                 Dispatch(() => Items.Clear());
             }
         });
@@ -948,6 +949,25 @@ public sealed class ClipboardStoreService : IDisposable, IClipboardManagedStorag
             Directory.CreateDirectory(directory);
             foreach (var file in Directory.EnumerateFiles(directory))
                 File.Delete(file);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "ClipboardStoreService: failed to clear {Directory}", LogPrivacy.Format(directory));
+        }
+    }
+
+    private static void TryDeleteDirectoryTrees(string directory)
+    {
+        try
+        {
+            Directory.CreateDirectory(directory);
+            foreach (var file in Directory.EnumerateFiles(directory))
+                TryDeleteFile(file);
+            foreach (var sub in Directory.EnumerateDirectories(directory))
+            {
+                try { Directory.Delete(sub, recursive: true); }
+                catch (Exception ex) { Log.Warning(ex, "ClipboardStoreService: failed to clear tree {Dir}", LogPrivacy.Format(sub)); }
+            }
         }
         catch (Exception ex)
         {

@@ -191,6 +191,33 @@ public sealed class ClipboardStoreServiceTests
         PlainText = id,
     };
 
+    [Fact]
+    public async Task ClearHistory_WipesManagedFiles_KeepsFavoriteFiles()
+    {
+        using var fixture = ClipboardStoreFixture.Create();
+        var store = fixture.Store;
+
+        var sub = Path.Combine(store.FilesDirectory, "imported");
+        Directory.CreateDirectory(sub);
+        var src = Path.Combine(sub, "doc.txt");
+        await File.WriteAllTextAsync(src, "x");
+        var item = new ClipboardItem
+        {
+            Id = "imp", Type = ClipboardPayloadType.Files, Hash = "imp-hash",
+            CreatedUtc = DateTime.UtcNow, LastUsedUtc = DateTime.UtcNow,
+            PreviewText = "doc.txt", PlainText = src,
+            FilePaths = [new ClipboardFilePath { Path = src, ExistsAtCapture = true }]
+        };
+        await store.IngestAsync(item);
+        await store.AddToFavoritesAsync("imp");
+        var favPath = Assert.Single(Assert.Single(store.Favorites).Item.FilePaths).Path;
+
+        await store.ClearHistoryAsync();
+
+        Assert.False(File.Exists(src), "managed files/ content must be wiped");
+        Assert.True(File.Exists(favPath), "favorite file copy must survive ClearHistory");
+    }
+
     private sealed class ClipboardStoreFixture : IDisposable
     {
         private readonly string _directory;
