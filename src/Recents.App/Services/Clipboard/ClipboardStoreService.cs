@@ -530,6 +530,45 @@ public sealed class ClipboardStoreService : IDisposable, IClipboardManagedStorag
     private ClipboardFavoriteItem CreateFavoriteSnapshot(ClipboardItem source)
     {
         var order = Favorites.Count > 0 ? Favorites.Max(v => v.Item.FavoriteOrder) + 1 : 1;
+
+        // Build the rewritten favorite FilePaths FIRST (R3-1: PlainText for Files favorites is
+        // derived from these rewritten paths, so they must exist before the initializer).
+        var favoriteFilePaths = source.FilePaths
+            .Select(f =>
+            {
+                var copied = CopyManagedFileDropForFavorite(f.Path, f.IsFolder, out var isManaged);
+                if (isManaged && copied is null)
+                {
+                    // R2-5/M6: managed copy failed. Do NOT omit (omitting shifts indices and
+                    // breaks the index-based parallel loop in TryRepairFavoriteSnapshotLocked).
+                    // Emit an index-aligned placeholder that never references the source managed
+                    // path; repair (m3) can later fill it from source.FilePaths[idx].
+                    return new ClipboardFilePath
+                    {
+                        Path = string.Empty,
+                        IsFolder = f.IsFolder,
+                        ExistsAtCapture = false
+                    };
+                }
+                return new ClipboardFilePath
+                {
+                    Path = copied ?? f.Path, // non-managed (user-real) path: metadata only
+                    IsFolder = f.IsFolder,
+                    ExistsAtCapture = f.ExistsAtCapture
+                };
+            })
+            .ToList(); // 1:1 with source.FilePaths — no .Where filter, indices preserved (R2-5)
+
+        // R3-1: for a Files favorite, rebuild PlainText from the rewritten NON-EMPTY favorite
+        // paths so CreateDataObject never emits the source files/ path as clipboard text. When
+        // every entry is an empty placeholder (all copies failed), clear PlainText. For non-Files
+        // favorites, keep source.PlainText unchanged (it is the actual text payload, not a path).
+        var favoritePlainText = source.Type == ClipboardPayloadType.Files
+            ? string.Join(
+                  Environment.NewLine,
+                  favoriteFilePaths.Select(f => f.Path).Where(p => !string.IsNullOrWhiteSpace(p)))
+            : source.PlainText;
+
         return new ClipboardFavoriteItem
         {
             Id = Guid.NewGuid().ToString("N"),
@@ -539,14 +578,9 @@ public sealed class ClipboardStoreService : IDisposable, IClipboardManagedStorag
             SourceCreatedUtc = source.CreatedUtc,
             Hash = source.Hash,
             PreviewText = source.PreviewText,
-            PlainText = source.PlainText,
+            PlainText = favoritePlainText,
             TextLength = source.TextLength,
-            FilePaths = source.FilePaths.Select(f => new ClipboardFilePath
-            {
-                Path = f.Path,
-                IsFolder = f.IsFolder,
-                ExistsAtCapture = f.ExistsAtCapture
-            }).ToList(),
+            FilePaths = favoriteFilePaths,
             BlobPath = CopySnapshotFile(source.BlobPath, FavoriteBlobDirectory),
             HtmlBlobPath = CopySnapshotFile(source.HtmlBlobPath, FavoriteBlobDirectory),
             RtfBlobPath = CopySnapshotFile(source.RtfBlobPath, FavoriteBlobDirectory),
@@ -576,6 +610,31 @@ public sealed class ClipboardStoreService : IDisposable, IClipboardManagedStorag
         favorite.RtfBlobPath = RestoreSnapshotFile(favorite.RtfBlobPath, source.RtfBlobPath, FavoriteBlobDirectory, ref changed);
         favorite.ImagePath = RestoreSnapshotFile(favorite.ImagePath, source.ImagePath, FavoriteImageDirectory, ref changed);
         favorite.ThumbnailPath = RestoreSnapshotFile(favorite.ThumbnailPath, source.ThumbnailPath, FavoriteThumbnailDirectory, ref changed);
+
+        // m3 + R2-5: restore managed file-drop copies from the source item by index when the
+        // favorite copy is missing OR is an empty placeholder (copy-failure). Index alignment with
+        // source.FilePaths is guaranteed by CreateFavoriteSnapshot (no omission on failure).
+        if (favorite.FilePaths.Count > 0)
+        {
+            var favRoot = Path.GetFullPath(FavoriteFilesDirectory) + Path.DirectorySeparatorChar;
+            for (var idx = 0; idx < favorite.FilePaths.Count && idx < source.FilePaths.Count; idx++)
+            {
+                var favFp = favorite.FilePaths[idx];
+                var full = string.IsNullOrWhiteSpace(favFp.Path) ? null : Path.GetFullPath(favFp.Path);
+                var isManagedFav = full is not null && full.StartsWith(favRoot, StringComparison.OrdinalIgnoreCase);
+                var missing = full is null || (isManagedFav && !File.Exists(full) && !Directory.Exists(full));
+                if (!missing)
+                    continue;
+
+                var srcFp = source.FilePaths[idx];
+                var restored = CopyManagedFileDropForFavorite(srcFp.Path, srcFp.IsFolder, out var srcIsManaged);
+                if (srcIsManaged && restored is not null)
+                {
+                    favFp.Path = restored;
+                    changed = true;
+                }
+            }
+        }
 
         if (changed)
             _repo.UpsertFavorite(favorite);
@@ -607,13 +666,81 @@ public sealed class ClipboardStoreService : IDisposable, IClipboardManagedStorag
         return target;
     }
 
-    private static void DeleteFavoriteFiles(ClipboardFavoriteItem item)
+    private string? CopyManagedFileDropForFavorite(string sourcePath, bool isFolder, out bool isManaged)
+    {
+        isManaged = false;
+        if (string.IsNullOrWhiteSpace(sourcePath))
+            return sourcePath;
+
+        var full = Path.GetFullPath(sourcePath);
+        var filesRoot = Path.GetFullPath(FilesDirectory) + Path.DirectorySeparatorChar;
+        if (!full.StartsWith(filesRoot, StringComparison.OrdinalIgnoreCase))
+            return sourcePath; // user-real path: metadata only, never copied
+
+        isManaged = true;
+        Directory.CreateDirectory(FavoriteFilesDirectory);
+        var destSub = Path.Combine(FavoriteFilesDirectory, Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            Directory.CreateDirectory(destSub);
+            if (isFolder && Directory.Exists(full))
+            {
+                var dest = Path.Combine(destSub, Path.GetFileName(full.TrimEnd(Path.DirectorySeparatorChar)));
+                CopyDirectoryRecursive(full, dest);
+                return dest;
+            }
+
+            if (File.Exists(full))
+            {
+                var dest = Path.Combine(destSub, Path.GetFileName(full));
+                File.Copy(full, dest, overwrite: true);
+                return dest;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "ClipboardStoreService: failed to copy managed file drop into favorite");
+        }
+
+        // Managed copy failed (source missing or copy threw): clean the empty dest and signal failure.
+        try { if (Directory.Exists(destSub)) Directory.Delete(destSub, recursive: true); } catch { }
+        return null; // M6: never return the source managed path
+    }
+
+    private static void CopyDirectoryRecursive(string sourceDir, string destDir)
+    {
+        Directory.CreateDirectory(destDir);
+        foreach (var dir in Directory.GetDirectories(sourceDir, "*", SearchOption.AllDirectories))
+            Directory.CreateDirectory(dir.Replace(sourceDir, destDir));
+        foreach (var file in Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories))
+            File.Copy(file, file.Replace(sourceDir, destDir), overwrite: true);
+    }
+
+    private void DeleteFavoriteFiles(ClipboardFavoriteItem item)
     {
         foreach (var path in new[] { item.BlobPath, item.HtmlBlobPath, item.RtfBlobPath, item.ImagePath, item.ThumbnailPath }
                      .Where(p => !string.IsNullOrWhiteSpace(p))
                      .Distinct(StringComparer.OrdinalIgnoreCase))
         {
             TryDeleteFile(path!);
+        }
+
+        var favRoot = Path.GetFullPath(FavoriteFilesDirectory) + Path.DirectorySeparatorChar;
+        foreach (var fp in item.FilePaths)
+        {
+            if (string.IsNullOrWhiteSpace(fp.Path))
+                continue;
+            var full = Path.GetFullPath(fp.Path);
+            if (!full.StartsWith(favRoot, StringComparison.OrdinalIgnoreCase))
+                continue; // user-real path: never delete
+            var rel = full.Substring(favRoot.Length);
+            var firstSeg = rel.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(firstSeg))
+                continue;
+            var subtree = Path.Combine(FavoriteFilesDirectory, firstSeg);
+            try { if (Directory.Exists(subtree)) Directory.Delete(subtree, recursive: true); }
+            catch (Exception ex) { Log.Debug(ex, "ClipboardStoreService: favorite file subtree delete failed {Dir}", LogPrivacy.Format(subtree)); }
         }
     }
 
